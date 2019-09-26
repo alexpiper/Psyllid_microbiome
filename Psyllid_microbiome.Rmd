@@ -1,0 +1,1309 @@
+---
+title: "Psyllid_microbiome"
+author: "Alexander Piper"
+date: "14/08/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# Knitr global setup - change eval to true to run code
+
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE, eval=FALSE, message=FALSE,error=FALSE,fig.show = "hold", fig.keep = "all")
+opts_knit$set(root.dir = 'C:/Users/ap0y/Dropbox/workprojects/Agriculture Victoria/Psyllid_microbiome')
+setwd('C:/Users/ap0y/Dropbox/workprojects/Agriculture Victoria/Psyllid_microbiome')
+opts_chunk$set(dev = 'png')
+```
+
+# Introduction 
+
+
+## Load packages 
+
+```{r install & Load packages} 
+#Set required packages
+.cran_packages <- c("ggplot2", "gridExtra","tidyverse","scales","stringdist","patchwork","vegan","ggpubr","seqinr","viridis","ape")
+.bioc_packages <- c("dada2", "phyloseq", "DECIPHER","Biostrings","ShortRead","psadd","microbiome","philr")
+#.github_packages <- c("metacal", "taxreturn", "piperline","speedyseq")
+
+#.inst <- .cran_packages %in% installed.packages()
+#if(any(!.inst)) {
+#   install.packages(.cran_packages[!.inst])
+#}
+#.inst <- .bioc_packages %in% installed.packages()
+#if(any(!.inst)) {
+#  if (!requireNamespace("BiocManager", quietly = TRUE))
+#    install.packages("BiocManager")
+#  BiocManager::install(.bioc_packages[!.inst], ask = F)
+#}
+#
+#Load all packages
+sapply(c(.cran_packages,.bioc_packages), require, character.only = TRUE)
+
+#Load helper functions 
+source('R/helper_functions.R')
+
+#devtools::install_github("benjjneb/dada2")
+#devtools::install_github("mikemc/speedyseq")
+#devtools::install_github("alexpiper/taxreturn")
+#library(taxreturn)
+
+options(stringsAsFactors = FALSE)
+
+```
+
+# Quality Control
+
+## Split files by seqrun
+```{r}
+samdf <- read.csv("sample_data/sample_info.csv")
+
+run1 <- samdf %>%
+  filter(seqrun==1) %>%
+  pull(SampleID) %>%
+  as.character()
+write_lines(run1,path="Run1.txt")
+
+run2 <- samdf %>%
+  filter(seqrun==2) %>%
+  pull(SampleID) %>%
+  as.character()
+write_lines(run2,path="Run2.txt")
+
+run3 <- samdf %>%
+  filter(seqrun==3) %>%
+  pull(SampleID) %>%
+  as.character()
+write_lines(run3,path="Run3.txt")
+
+```
+
+
+```{bash split files}
+
+mkdir run_1
+cat Run1.txt | while read i; do
+payload=$(ls | grep $i)
+echo $payload
+mv $payload run_1
+done
+
+mkdir run_2
+cat Run2.txt | while read i; do
+payload=$(ls | grep $i)
+echo $payload
+mv $payload run_2
+done
+
+mkdir run_3
+cat Run3.txt | while read i; do
+payload=$(ls | grep $i)
+echo $payload
+mv $payload run_3
+done
+
+```
+
+## Sequencer IDs for different runs
+
+run_1 - @M01895:3:000000000-AFED3:1:1101:11856:1005 1:N:0:89
+run_2 - @M00598:140:000000000-ALTW6:1:1104:15177:9425 2:N:0:120
+run_3 - @M00933:9:000000000-BFR4B:1:1101:13542:1780 1:N:0:86
+
+
+## Sequence quality control
+
+```{r Pooling of libraries}
+library(ShortRead)
+
+runs <- dir("data/", pattern="run_")
+
+for (i in seq(along=runs)){
+path <- paste0("data/",runs[i]) # CHANGE ME to the directory containing your demultiplexed forward-read fastq files
+
+  #path <- paste0("data/",runs[i])
+
+#Plot number of reads
+dat <- as.data.frame(countLines(dirPath=path, pattern=".fastq")) %>%
+  rownames_to_column()  %>%
+   `colnames<-`(c("Sample", "Reads")) %>%
+  filter(str_detect(Sample,"R1"))
+
+#Plot pooling
+
+gg.pooling <- ggplot(data=dat, aes(x=Sample,y=Reads),stat="identity") + 
+  geom_bar(aes(fill=Reads),stat="identity")  + 
+  scale_fill_viridis(name = "Reads", begin=0.1) + 
+  theme(axis.text.x = element_text(angle=90, hjust=1), plot.title=element_text(hjust = 0.5), plot.subtitle =element_text(hjust = 0.5))+ 
+  geom_hline(aes(yintercept = mean(Reads)))  +
+  xlab("sample name")+
+  ylab("Number of reads") + 
+  labs(title= paste0("Pooling for : ", runs[i]), subtitle = paste0("Total Reads: ", sum(dat$Reads), " Average reads: ",  sprintf("%.0f",mean(dat$Reads))," Standard deviation: ", sprintf("%.0f",sd(dat$Reads)))) +
+  coord_flip()
+
+plot(gg.pooling)
+}
+```
+
+
+## Trim primers
+
+DADA2 requires Non-biological nucleotides i.e. primers, adapters, linkers, etc to be removed. Prior to begining this workflow, samples were demultiplexed and illumina adapters were removed by the MiSeq software, however primer sequences still remain in the reads and must be removed prior to use with the DADA2 algorithm.
+
+ Primer sequences - 
+16S F CCTACGGGNGGCWGCAG
+16S R GACTACHVGGGTATCTAATCC
+
+All reads were trimmed to 300bp, then primers were removed. All reads for which primers were not detected were removed using the maxlength function.
+
+```{r trim primers,message=FALSE}
+#Install bbmap
+#bbmap_install()
+
+#Problem - maxlength is removing run 2 - Why tf is this over 300bp reads??
+
+#Loop over runs - Maxlength set to remove any untrimmed reads
+runs <- dir("data/", pattern="run_")
+
+for (i in seq(along=runs)){
+path <- paste0("data/",runs[i]) # CHANGE ME to the directory containing your demultiplexed forward-read fastq files
+
+#Trim forward primers - Set a maxlength to remove all those that werent trimemd
+fastqFs <- sort(list.files(path, pattern="_R1", full.names = TRUE))
+fastqRs <- sort(list.files(path, pattern="_R2_", full.names = TRUE))
+
+bbtools_trim(install="bin/bbmap", fwd=fastqFs,rev=fastqRs, primers=c("CCTACGGGNGGCWGCAG","GACTACHVGGGTATCTAATCC"), copyundefined=TRUE, outpath="trimmed",ktrim="l", ordered=TRUE,mink=FALSE, hdist=2, overwrite=TRUE, samelength=TRUE, forcetrimright = 300, maxlength = 285)
+}
+
+```
+
+## Plot read quality
+
+
+```{r QA plot, eval = TRUE, cache= TRUE}
+runs <- dir("data/", pattern="run_")
+
+##Post filtering plotting
+for (i in seq(along=runs)){
+ path <- paste0("data/",runs[i],"/trimmed" )# CHANGE ME to the directory containing your demultiplexed forward-read fastq files
+
+  filtFs <- sort(list.files(path, pattern="_R1_", full.names = TRUE))
+  filtRs <- sort(list.files(path, pattern="_R1_", full.names = TRUE))
+  p1 <- plotQualityProfile(filtFs[1:6]) + ggtitle(paste0(runs[i]," Forward Reads")) #, aggregate = TRUE
+  p2 <- plotQualityProfile(filtRs[1:6]) + ggtitle(paste0(runs[i]," Reverse Reads"))
+  print(p1+p2)
+}
+
+```
+
+The max expected error function is used as the primary quality filter, and all reads containing N bases were removed
+
+In order to reduce the amount of  reverse reads violating the MaxEE filter, the reverse reads were truncated at 230bp to remove the quality crash that is typical of illumina sequencers
+
+Total amplicon = 465bp 
+Sequencing = 2x300bp = 600bp
+Primers = 17bp + 21bp = 38bp
+Read overlap = 600 - 465 - 38 = 97bp
+
+```{r filter and trim}
+runs <- dir("data/", pattern="run_")
+filtered_out <- list()
+
+for (i in seq(along=runs)){
+  path <- paste0("data/",runs[i],"/trimmed/") # CHANGE ME to the directory containing your demultiplexed forward-read fastq files
+  filtpath <- file.path(path, "filtered") # Filtered forward files go into the path/filtered/ subdirectory
+  dir.create(filtpath)
+  fastqFs <- sort(list.files(path, pattern="R1_001.*"))
+  fastqRs <- sort(list.files(path, pattern="R2_001.*"))
+  
+  if(length(fastqFs) != length(fastqRs)) stop(paste0("Forward and reverse files for ",runs[i]," do not match."))
+  
+  filtered_out[[i]] <- (filterAndTrim(fwd=file.path(path, fastqFs), filt=file.path(filtpath, fastqFs),
+                                      rev=file.path(path, fastqRs), filt.rev=file.path(filtpath, fastqRs),
+                                      maxEE=c(3,4),truncQ = 2,truncLen=c(280,230), maxN = 0,  rm.phix=TRUE, compress=TRUE, verbose=TRUE))
+}
+print(filtered_out)
+
+```
+
+
+
+## Post filtering error plotting
+
+sanity check to see the effects of the filter and trim step
+
+```{r Post filter plot, eval = TRUE}
+runs <- dir("data/", pattern="run_")
+
+##Post filtering plotting
+for (i in seq(along=runs)){
+ path <- paste0("data/",runs[i],"/trimmed/" )# CHANGE ME to the directory containing your demultiplexed forward-read fastq files
+  filtpath <- file.path(path, "filtered") # Filtered forward files go into the path/filtered/ subdirectory
+  
+  filtFs <- sort(list.files(filtpath, pattern="R1_001.*", full.names = TRUE))
+  filtRs <- sort(list.files(filtpath, pattern="R2_001.*", full.names = TRUE))
+  p1 <- plotQualityProfile(filtFs[1:6]) + ggtitle(paste0(runs[i]," Filtered Forward Reads"))
+  p2 <- plotQualityProfile(filtRs[1:6]) + ggtitle(paste0(runs[i]," Filtered Reverse Reads"))
+  print(p1+p2)
+}
+
+```
+
+# DADA2 Analysis
+
+
+## Infer sequence variants for each run
+
+Every amplicon dataset has a different set of error rates and the DADA2 algorithm makes use of a parametric error model (err) to model this and infer real biological sequence variation from error. Following error model learning, all identical sequencing reads are dereplicated into into “Exact sequence variants” with a corresponding abundance equal to the number of reads with that unique sequence. The forward and reverse reads are then merged together by aligning the denoised forward reads with the reverse-complement of the corresponding reverse reads, and then constructing the merged “contig” sequences. Following this step, a sequence variant table is constructed and saved as an RDS file.
+
+For this analysis we will use all the reads to estimate error rate, and plot the error model for each run as a sanity check
+
+The purpose of priors is to increase sensitivity to a restricted set of sequences, including singleton detection, without increasing false-positives from the unrestricted set of all possible amplicon sequences that must be considered by the naive algorithm
+
+```{r Learn error rates }
+runs <- dir("data/", pattern="run_")
+set.seed(100)
+
+for (i in seq(along=runs)){
+ path <- paste0("data/",runs[i],"/trimmed/" )# CHANGE ME to the directory containing your demultiplexed forward-read fastq files
+  filtpath <- file.path(path, "filtered") # Filtered forward files go into the path/filtered/ subdirectory
+  
+  filtFs <- list.files(filtpath, pattern="R1_001.*", full.names = TRUE)
+  filtRs <- list.files(filtpath, pattern="R2_001.*", full.names = TRUE)
+  
+    # Learn error rates from samples
+  # nread tells the function how many reads to use in error learning, this can be increased for more accuracy at the expense of runtime
+  
+  errF <- learnErrors(filtFs, multithread=TRUE, randomize=TRUE)
+  errR <- learnErrors(filtRs, multithread=TRUE, randomize=TRUE)
+  
+  ##Print error plots to see how well the algorithm modelled the errors in the different runs
+  print(plotErrors(errF, nominalQ=TRUE)+ ggtitle(paste0(runs[i]," Forward Reads")))
+  print(plotErrors(errR, nominalQ=TRUE)+ ggtitle(paste0(runs[i]," Reverse Reads")))
+  
+  #Error inference and merger of reads - Using pseudo pooling for increased sensitivity
+
+  dadaFs <- dada(filtFs, err=errF, multithread=TRUE, pool="pseudo")
+  dadaRs <- dada(filtRs, err=errR, multithread=TRUE, pool="pseudo")
+ 
+  mergers <- mergePairs(dadaFs, filtFs, dadaRs, filtRs, verbose=TRUE)
+  
+# Construct sequence table
+
+seqtab <- makeSequenceTable(mergers)
+
+saveRDS(seqtab, paste0(path,"/seqtab.rds")) # CHANGE ME to where you want sequence table saved
+}
+```
+
+## Merge Runs, Remove Chimeras
+
+Now that the sequence tables are created for each run, they need to be merged into a larger table representing the entire study.
+
+Looking at the length of the sequences, we see some off target amplification. There are 3 large peaks, the first one at 280, second at 493, and third at 425, which is the expected size. We will cut the sequences to between 400 and 450, which should take into account any length variation.  Following this, chimeric sequences are identified and removed using removeBimeraDenovo
+```{r merge runs and remove chimeras}
+runs <- dir("data/", pattern="run_")
+stlist <- vector()
+
+for (i in seq(along=runs)){
+  path <- paste0("data/",runs[i],"/trimmed/" )
+  seqs <- list.files(path, pattern="seqtab.rds", full.names = TRUE)
+  
+  assign(paste("st", i, sep = ""),readRDS(seqs))
+  stlist <- append(stlist, paste("st", i, sep = ""), after=length(seqs))
+}
+
+st.all <- mergeSequenceTables(st1, st2, st3)
+
+#Test collapsed
+st.all <- collapseNoMismatch(st.all, minOverlap = 20, orderBy = "abundance",
+                                   vec = TRUE, verbose = TRUE)
+
+#Remove chimeras
+seqtab.nochim <- removeBimeraDenovo(st.all, method="consensus", multithread=FALSE, verbose=TRUE)
+
+#Check output of chimera removal
+print(paste(sum(seqtab.nochim)/sum(st.all),"of the abundance remaining after chimera removal"))
+
+#Check complexity
+hist(seqComplexity(seqtab.nochim), 100)
+
+
+#Look at seqlengths
+plot(table(nchar(getSequences(seqtab.nochim))))
+
+backup <- seqtab.nochim
+
+#cut to expected size
+seqtab.nochim <- seqtab.nochim[,nchar(colnames(seqtab.nochim)) %in% 420:435]
+
+#Check output of chimera removal
+plot(table(nchar(getSequences(seqtab.nochim))))
+print(paste(sum(seqtab.nochim)/sum(st.all),"of the abundance remaining after cutting"))
+
+#Check maintained abundance at each cut
+
+
+#Fix names -removing read name, sample number etcc
+rownames(seqtab.nochim) <- rownames(seqtab.nochim) %>% 
+  str_split_fixed("_",n=Inf) %>%
+    as_tibble() %>%
+  unite(col=SampleID, c("V1","V2"),sep="_") %>%
+  pull(SampleID)
+
+dir.create("output/rds/")
+saveRDS(seqtab.nochim, "output/rds/seqtab_final_CUT.rds") # CHANGE ME to where you want sequence table saved
+
+```
+
+# Assign taxonomy 
+
+Would be good to compare taxonomies here, what has the best representation for insect associated bacteria?
+  *GreenGenes
+  *RDP
+  *SILVA
+  *Refseq + RDP
+  *GenomeTaxonomyDAtabase
+
+
+### Evaluate taxonomic coverage of reference databases
+
+```{r ref eval}
+
+set.seed(100)
+
+#Greengenes
+greengenes <- read.fasta("reference/gg_13_8_train_set_97.fa.gz")
+
+cars_gg <- names(greengenes) %>%
+  str_split_fixed(pattern=";",n=7) %>%
+  as_tibble() %>%
+  filter(str_detect(V6,pattern="Carsonella"))
+rm(greengenes)
+
+#SILVA
+silva <- read.fasta("reference/silva_nr_v132_train_set.fa.gz")
+
+cars_silv <- names(silva) %>%
+  str_split_fixed(pattern=";",n=7) %>%
+  as_tibble() %>%
+  filter(str_detect(V6,pattern="Carsonella"))
+rm(silva)
+
+#RDP
+rdp <- read.fasta("reference/rdp_train_set_16.fa.gz")
+
+cars_rdp <- names(rdp) %>%
+  str_split_fixed(pattern=";",n=7) %>%
+  as_tibble() %>%
+  filter(str_detect(V6,pattern="Carsonella"))
+rm(rdp)
+
+#Refseq
+refseq <- read.fasta("reference/RefSeq-RDP16S_v2_May2018.fa.gz")
+
+cars_refseq <- names(refseq) %>%
+  str_split_fixed(pattern=";",n=7) %>%
+  as_tibble() %>%
+  filter(str_detect(V6,pattern="Carsonella"))
+rm(refseq)
+
+#Genome taxonomy database
+gtdb <- read.fasta("reference/GTDB_bac-arc_ssu_r86.fa.gz")
+
+cars_gtdb <- names(gtdb) %>%
+  str_split_fixed(pattern=";",n=7) %>%
+  as_tibble() %>%
+  filter(str_detect(V6,pattern="Carsonella"))
+rm(gtdb)
+
+
+```
+
+
+Do a search for carsonella in each of these, and perhaps just do an asignment with the different datasets
+
+We will use the IDTAXA algorithm of Murali et al 2018 - https://doi.org/10.1186/s40168-018-0521-5
+
+This requires training on a curated reference database - The pre-trained file can be found in the reference folder, alternatively see the taxreturn scripts to curate a reference database and train a new classifier.
+
+Folllowing assignment with IDTAXA, we will also use exact matching with a reference database to assign more sequences (including the synthetic positive controls) to species level
+
+### Assign Taxonomy using RDP
+
+```{r assign taxonomy}
+seqtab.nochim <- readRDS("output/rds/seqtab_final_CUT.rds")
+
+# Assign Kingdom:Genus taxonomy using RDP classifier
+tax <- assignTaxonomy(seqtab.nochim, "reference/silva_nr_v132_train_set.fa.gz", multithread=TRUE, minBoot=60, outputBootstraps=FALSE)
+colnames(tax) <- c("Root", "Phylum", "Class", "Order", "Family", "Genus")
+
+##add species to taxtable using exact matching
+tax_plus <- addSpecies(tax, "reference/silva_species_assignment_v132.fa.gz", allowMultiple=TRUE)
+
+
+##join genus and species name in species rank column - need to make this part of addspecies
+sptrue <- !is.na(tax_plus[,7])
+tax_plus[sptrue,7] <- paste(tax_plus[sptrue,6],tax_plus[sptrue,7], sep=" ")
+
+tax_plus <- propagate_tax(tax_plus,from="Phylum")
+
+#add Genus_SPP
+#for(col in seq(7,ncol(tax_plus))) { 
+# propagate <- is.na(tax_plus[,col]) & !is.na(tax_plus[,col-1])
+#  tax_plus[propagate,col:ncol(tax_plus)] <-  "spp."
+#}
+
+#Check Output
+taxa.print <- tax_plus # Removing sequence rownames for display only
+rownames(taxa.print) <- NULL
+head(taxa.print)
+
+
+# Write taxonomy table to disk
+saveRDS(tax_plus, "output/rds/tax_RDP_final_CUT.rds") 
+```
+
+## Create phylogenetic tree
+
+```{r phylogenetic tree}
+seqtab.nochim <- readRDS("output/rds/seqtab_final_CUT.rds")
+
+seqs <- getSequences(seqtab.nochim)
+names(seqs) <- seqs # This propagates to the tip labels of the tree
+alignment <- AlignSeqs(DNAStringSet(seqs), anchor=NA)
+
+library(phangorn)
+phang.align <- phyDat(as(alignment, "matrix"), type="DNA")
+dm <- dist.ml(phang.align)
+treeNJ <- NJ(dm) # Note, tip order != sequence order
+fit = pml(treeNJ, data=phang.align)
+
+## negative edges length changed to 0!
+
+fitGTR <- update(fit, k=4, inv=0.2)
+fitGTR <- optim.pml(fitGTR, model="GTR", optInv=TRUE, optGamma=TRUE,
+                      rearrangement = "stochastic", control = pml.control(trace = 0))
+detach("package:phangorn", unload=TRUE)
+
+# Write taxonomy table to disk
+saveRDS(fitGTR, "output/rds/phytree.rds") 
+
+```
+
+## Make Phyloseq object
+
+Following taxonomic assignment, the sequence table and taxonomic table are merged into a single phyloseq object alongside the sample info csv.
+
+We then make a plot to evaluate the effectiveness of taxonomic assignment to each rank
+
+```{r create PS, eval = FALSE}
+seqtab.nochim <- readRDS("output/rds/seqtab_final_CUT.rds")
+tax_plus <- readRDS("output/rds/tax_RDP_final_CUT.rds") 
+fitGTR <- readRDS("output/rds/phytree.rds") 
+
+#Load sample information
+## ---- samdat ----
+samdf <- read.csv("sample_data/Sample_info.csv", header=TRUE) 
+samdf <- samdf %>%
+  dplyr::filter(!duplicated(SampleID)) %>%
+  mutate(replicated = Sample.Name %in% ( samdf %>% group_by(Sample.Name) %>% # Flag replicated samples
+                                           filter(n()>1) %>% 
+                                           pull(Sample.Name))) %>%
+  set_rownames(.$SampleID) %>%
+  dplyr::select(c("SampleID", "Sample.Name", "seqrun", "psyllid_spp", "psyllid_genus", "psyllid_family", "hostplant_spp","Collection","Collection.Date","replicated"))
+
+#Display samDF
+head(samdf)
+
+
+## ---- phyloseq ----
+ps <- phyloseq(tax_table(tax_plus), sample_data(samdf),
+               otu_table(seqtab.nochim, taxa_are_rows = FALSE),
+               phy_tree(fitGTR$tree))
+
+if(nrow(seqtab.nochim) > nrow(sample_data(ps))){warning("Warning: All samples not included in phyloseq object, check sample names match the sample metadata")}
+
+##save phyloseq object
+saveRDS(ps, "output/rds/ps_rdp.rds")
+
+##Summarise taxonomic assignment
+
+#Fraction of reads assigned to each taxonomic rank
+sum_reads <- speedyseq::psmelt(ps) %>%
+  gather("Rank","Name",rank_names(ps)) %>%
+  group_by(Rank) %>% 
+  mutate(Name = replace(Name, str_detect(Name, "__"),NA)) %>% # This line turns the "__" we added to lower ranks back to NA's
+  summarize(Reads_classified = sum(Abundance * !is.na(Name))) %>%
+  mutate(Frac_reads = Reads_classified / sum(sample_sums(ps))) %>%
+  mutate(Rank = factor(Rank, rank_names(ps))) %>%
+  arrange(Rank)
+
+#Fraction of ASV's assigned to each taxonomic rank
+sum_otu <- tax_table(ps) %>%
+  as("matrix") %>%
+  as_tibble(rownames="OTU") %>%
+  gather("Rank","Name",rank_names(ps)) %>%
+  group_by(Rank) %>%
+  mutate(Name = replace(Name, str_detect(Name, "__"),NA)) %>% # This line turns the "__" we added to lower ranks back to NA's
+  summarize(OTUs_classified = sum(!is.na(Name))) %>%
+  mutate(Frac_OTUs = OTUs_classified / ntaxa(ps)) %>%
+  mutate(Rank = factor(Rank, rank_names(ps))) %>%
+  arrange(Rank)
+
+#Plot Assignment to each rank
+library(data.table)
+assign_ranks <- fast_melt(ps) %>% 
+  select(c("taxaID","Root","Phylum","Class","Order","Family","Genus","Species")) %>%
+  distinct()%>%
+  gather(key="Rank", value="Taxon", -taxaID) %>%
+  drop_na()
+
+gg.ranks <- ggplot(data=assign_ranks, aes(x=Rank, fill=Rank)) + 
+        geom_bar(position="dodge") +
+  scale_fill_brewer(palette="Spectral") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust=0)) +
+  scale_x_discrete(limits=c("Root","Phylum","Class","Order","Family","Genus","Species"))+
+  ggtitle("ASVs sucessfully assigned using IDTAXA + Exact matching")+
+  ylab("Number of ASVs")+
+  xlab("Taxonomic rank")
+  
+#Output tables of results
+
+dir.create("output/csv")
+dir.create("output/csv/unfiltered/")
+
+##Export raw csv
+export <- speedyseq::psmelt(ps)
+write.csv(export, file = "output/csv/rawdata.csv")
+
+#Summary export
+sp_summary <- summarize_taxa(ps, "Species", "SampleID")
+sp_summary <- spread(sp_summary, key="SampleID", value="totalRA")
+write.csv(sp_summary, file = "output/csv/unfiltered/spp_sum.csv")
+
+gen_summary <- summarize_taxa(ps, "Genus", "SampleID")
+gen_summary <- spread(gen_summary, key="SampleID", value="totalRA")
+write.csv(gen_summary, file = "output/csv/unfiltered/gen_sum.csv")
+
+```
+
+
+# Dataset filtering
+
+## Detect and remove outlier & Low read samples
+
+Detecting and potentially removing samples outliers (those samples with underlying data that do not conform to experimental or biological expectations) can be useful for minimizing technical variance. In this case we remove samples with lower than expected read counts
+
+
+```{r sample-removal-identification}
+## Remove mocks
+rm_mocks <- c("mockA_S51","MockEven_S193","Mock_S192","PCRctrl_S191","MockStaggered_S194", "PCRctrl_S191" )
+nsamples(ps)
+ps0 <- ps %>% subset_samples(!sample_names(ps) %in% rm_mocks) %>% #Remove mocks
+       
+        filter_taxa(function(x) mean(x) > 0, TRUE) #Drop missing taxa from table 
+nsamples(ps0)
+
+# Format a data table to combine sample summary data with sample variable data - change this to tidyverse code
+ss <- sample_sums(ps0)
+sd <- as.data.frame(sample_data(ps0))
+ss.df <- merge(sd, data.frame("ASV" = ss), by ="row.names")
+
+
+# Plot the data by the psyllid Species sequenced, setting a minimum read threshold
+threshold = 1000
+
+p.ss.boxplot <- ggplot(ss.df, aes(x= psyllid_spp, y = ASV, color = psyllid_spp, shape=replicated)) + 
+  geom_boxplot(outlier.colour="NA", position = position_dodge(width = 0.8)) +
+  geom_jitter(size = 2, alpha = 0.6) +
+  scale_y_log10() +
+  geom_hline(yintercept = threshold, lty = 2) +
+  theme(axis.text.x = element_text(angle=90, vjust=1))
+
+p.ss.boxplot
+
+#Remove all samples under the minimum read threshold
+ps1 <- prune_samples(sample_sums(ps0)>=threshold, ps0) # Drop empty samples
+ps1 <- filter_taxa(ps1, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
+
+print(paste(nsamples(ps) - nsamples(ps1), " Samples and ", ntaxa(ps) - ntaxa(ps1), " taxa Dropped"))
+```
+
+## Process Replicates
+
+### Compare reproducibilty of replicates
+
+Rarify to common read depth - then explore aitchinson and kulzynsski distance 
+
+```{r replicate reproducibility}
+#Subset to replicated samples
+ps.reps <- subset_samples(ps1, replicated == TRUE)
+
+#Plot read differences between replicates
+#Look at read differences between reps
+gg.reps <- plot_bar(ps.reps, x="Sample", y="Abundance", fill="Phylum") +
+  facet_grid(~Sample.Name, drop=TRUE, scales="free_x") +
+  geom_hline(yintercept=1000)
+
+
+#Plot rarefaction curve
+rarecurve(otu_table(ps.reps), step=50, cex=0.5)
+
+#Rarefy replicates to same read depth
+nspec <- specnumber(otu_table(ps.reps)) # observed number of species
+raremax <- min(rowSums(otu_table(ps.reps)))
+rare <- rrarefy(otu_table(ps.reps),raremax)
+
+
+#PCA of rarefied samples
+raredist <- vegan::vegdist(rare, method="euclidean")
+
+r.pcx <- prcomp(raredist)
+
+pc_samp <- data.frame(SampleID = rownames(r.pcx$x), r.pcx$x[, 1:2])%>%
+  left_join(samdf, by="SampleID")
+pc_otu <- data.frame(OTU = rownames(r.pcx$rotation), r.pcx$rotation[, 1:2])
+
+# calculate percent variance explained for the axis labels
+pc1 <- round(r.pcx$sdev[1]^2/sum(r.pcx$sdev^2),2)
+pc2 <- round(r.pcx$sdev[2]^2/sum(r.pcx$sdev^2),2)
+pc_xlab <- paste("PC1: ", pc1, sep="")
+pc_ylab <- paste("PC2: ", pc2, sep="")
+
+library(ggplot2)
+gg.reps <- ggplot(data=pc_samp, aes(x=PC1, y=PC2, colour=SampleID, label=SampleID)) + 
+  geom_point(alpha=0.5, size=3) +
+  geom_text() +
+  #geom_point(data=pc_otu,aes(PC1, PC2)) +
+  theme_bw() + 
+  geom_hline(yintercept = 0, linetype=2) +  
+  geom_vline(xintercept = 0, linetype=2) +
+  xlab(pc_xlab) + 
+  ylab(pc_ylab) +
+  theme(legend.position = "none")+
+  coord_fixed(ratio=pc2/pc1) # Scale plot by variance explained
+
+```
+
+### Merge technical replicates
+
+With only 16 samples replicated i dont think there is a way to explicitly take into account replicate variability, therefore all replicates were merged
+
+```{r replicates}
+# Merge replicates
+ps.merged <- ps0 %>%
+    merge_samples(group = "Sample.Name")
+
+#This loses the sample metadata - Need to add it agian
+samdf <- read.csv("sample_data/Sample_info.csv", header=TRUE) %>%
+  filter(!duplicated(Sample.Name)) %>%
+  set_rownames(.$Sample.Name) %>%
+  dplyr::select(c("SampleID", "Sample.Name", "seqrun", "psyllid_spp", "psyllid_genus", "psyllid_family", "hostplant_spp","Collection","Collection.Date"))
+
+sample_data(ps.merged) <- samdf
+ps.merged <- filter_taxa(ps.merged, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
+
+```
+
+## Remove off-target taxa
+
+The following R chunk removes taxa not-typically part of a bacterial microbiome analysis.
+
+We also remove all taxa contained within the blank sample from other samples
+
+```{r taxon-cleaning}
+get_taxa_unique(ps.merged, "Root")
+get_taxa_unique(ps.merged, "Class")
+
+ps.merged # Check the number of taxa prior to removal
+ps2 <- ps.merged %>%
+  subset_taxa(
+    Root == "Bacteria" & #This is probably the only required one
+    Family  != "mitochondria" &
+    Class   != "Chloroplast" &
+    Phylum != "Cyanobacteria/Chloroplast"
+  )
+ps2 # Confirm that the taxa were removed
+get_taxa_unique(ps2, "Root")
+get_taxa_unique(ps2, "Class")
+
+```
+
+
+## Minimum abundance threshold
+
+These samples were sequenced using combinatorial indexes. Therefore this data will contain index switching. We therefore need to select an optimal filtering threshold to remove switched taxa, but not real taxa. We will optimise our filtering threshold by relying on assumption that all psyllid species should contain only one (or few very closely related ASVs) of Carsonella.
+
+```{r thresholds}
+#filter threshold to ge
+top_carson <-  transform_sample_counts(ps2, fun = proportions) %>%
+  speedyseq::psmelt() %>%
+  filter(Genus=="Candidatus_Carsonella") %>%
+  group_by(Sample) %>%
+  top_n(1, wt=Abundance) %>%
+  mutate(top = TRUE)  %>%
+  filter(Abundance > 0)
+  
+carson <-  transform_sample_counts(ps2, fun = proportions) %>%
+  speedyseq::psmelt() %>%
+  filter(Genus=="Candidatus_Carsonella") %>%
+  left_join(top_carson) %>%
+  mutate(top = case_when(
+    is.na(top) ~ FALSE,
+    !is.na(top) ~ top
+  ))
+
+thresholds <- seq(0,0.05,0.0001)
+df <- data.frame(thresh = thresholds, TP= thresholds, FP = thresholds)
+for(i in 1:length(thresholds)){
+  filt <- carson %>%
+    filter(Abundance > thresholds[i]) %>%
+    group_by(top) %>%
+    summarise(sum=n())
+  df$FP[i] <- filt$sum[1]
+  df$TP[i] <- filt$sum[2]
+}
+
+gg.filt <- df %>%
+  gather(key=type, value=n, -thresh) %>%
+  ggplot(aes(x=thresh, y=n, fill=type)) + 
+  geom_density(stat="identity", alpha=0.5) + 
+  scale_x_continuous(breaks=seq(0,0.05,0.001)) +
+  theme(axis.text.x = element_text(angle=45,hjust=1)) + 
+  geom_vline(xintercept = 0.0045)
+
+print(gg.filt)
+```
+
+
+## Prevalance & Core Microbiome
+
+Could do one analysis for the diversity, where things are agglomerated, and then something else for the association, as we will want to do the association on non-agglomerated taxa
+
+The problem with prevalence filtering for our dataset is that we dont have many replicates of each psyllid species, and therefore there are some high abundance but low prevalence OTUs we dont want to lose. We should however check to see if these look like common contaminants
+
+This depends on latter as well - may be worth doing the filtering after the diveristy estimates
+For example, if testing differential abundance, low prevalence taxa will never have enough statistical evidence to be called significant, so all they do is cost power by increasing the number of hypotheses. Therefore it makes sense to do an independent filtering step that removes all low-prevalence taxa.
+
+
+Identification of taxa that are poorly represented in an unsupervised manner can identify taxa that will have little to no effect on downstream analysis. Sufficient removal of these "low prevalance" features can enhance many analysis by focusing statistical testing on taxa common throughout the data.
+
+This approach is frequently poorly documented or justified in methods sections of manuscripts, but will typically read something like, "Taxa present in fewer than 3% of all of the samples within the study population and less than 5% relative abundance were removed from all subsequent analysis.".
+
+As the ultimate selection criteria can still be subjective, This code will produce a plot of all of the Phyla present in your samples along with information about their prevelance (fraction of samples they are present in) and total abundance across all samples.
+
+In this example we drew a dashed horizontal line to cross at the 5% prevalance level (present in > 5% of all of the samples in the study). If you set a threshold to remove taxa below that level you can visually see how many and what types of taxa will be removed. 
+
+```{r prevalence-assessment}
+# Calculate taxon prevalence across the data set
+prevdf <- apply(X = otu_table(ps2),MARGIN = ifelse(taxa_are_rows(ps2), yes = 1, no = 2),FUN = function(x){sum(x > 0)})
+
+# Add taxonomy and total read counts to prevdf - change this to tidyverse code
+prevdf <- data.frame(Prevalence = prevdf, TotalAbundance = taxa_sums(ps2), tax_table(ps2))
+
+#Prevalence plot
+gg.prev <- subset(prevdf, Phylum %in% get_taxa_unique(ps0, "Phylum")) %>%
+  ggplot(aes(TotalAbundance, Prevalence / nsamples(ps2),color=Genus)) +
+  geom_hline(yintercept = 0.0045, alpha = 0.5, linetype = 2) +
+  geom_point(size = 3, alpha = 0.7) +
+  scale_x_log10() +
+  xlab("Total Abundance") + ylab("Prevalence [Frac. Samples]") +
+  facet_wrap(~Phylum) +
+  theme(legend.position="none") +
+  ggtitle("Phylum Prevalence in All Samples\nColored by Family")
+
+gg.prev
+
+# Define which taxa fall within the prevalence threshold
+keepTaxa <- rownames(prevdf)[(prevdf$Prevalence >= prevalenceThreshold)]
+ntaxa(ps2)
+
+# Remove those taxa
+ps2.prev <- prune_taxa(keepTaxa, ps2)
+ntaxa(ps2.prev)
+
+#Check how many reads are left - we want to make sure we arent removing the bulk of the reads in some samples
+frac_reads_kept <- sample_sums(ps2.prev) / sample_sums(ps2)
+summary(frac_reads_kept)
+
+
+##Prevalence after filtering
+# Calculate taxon prevalence across the data set
+prevfilt <- apply(X = otu_table(ps2.prev),MARGIN = ifelse(taxa_are_rows(ps2.prev), yes = 1, no = 2),FUN = function(x){sum(x > 0)})
+
+# Add taxonomy and total read counts to prevdf - change this to tidyverse code
+prevfilt <- data.frame(Prevalence = prevfilt, TotalAbundance = taxa_sums(ps2.prev), tax_table(ps2.prev))
+
+#Prevalence plot
+gg.prevfilt <- subset(prevfilt, Phylum %in% get_taxa_unique(ps2.prev, "Phylum")) %>%
+  ggplot(aes(TotalAbundance, Prevalence / nsamples(ps2),color=Genus)) +
+  geom_hline(yintercept = 0.01, alpha = 0.5, linetype = 2) +
+  geom_point(size = 3, alpha = 0.7) +
+  scale_x_log10() +
+  xlab("Total Abundance") + ylab("Prevalence [Frac. Samples]") +
+  facet_wrap(~Phylum) +
+  theme(legend.position="none") +
+  ggtitle("Phylum Prevalence in All Samples\nColored by Family")
+
+gg.prevfilt
+
+```
+
+
+I think for core analysis - we do a plot with genera ranked according to prevalence? or tip agglomed OTU's  - 
+
+It will be a good comparison - ie the first bar plot shows by relative abundance, the next shows ranked by prevalence - revealing the 'Core' microbiome of carsonella
+
+We then subset to carsonella and the other core microbiome members and do phylogenetics etc 
+
+## philR transformation
+
+Need to decide on this
+
+Many analysis in community ecology and hypothesis testing benefit from data transformation. Many microbiome data sets do not fit to a normal distribution, but transforming them towards normality may enable more appropriate data for specific statistical tests. 
+
+
+philr phylogenetic transform (and R package) based on balances (binary partitions) along an evolutionary tree (Silverman et al., 2017) that is a replacement for the familiar UniFrac distance metric.Distances determined by phylogenetic transforms have the advantage that the binary partitions chosen have a simple interpretation and the correlation structure of the data is fully accounted for. However, the disadvantage is that only the relationships between the chosen partitions can be examined.# Figure 1: Community composition analysis
+
+Beta diversity enables you to view overall relationships between samples. These relationships are calculated using a distance metric calcuation (of which there are many) and these multi-dimensional relationships are evaluated and viewed in the two dimensions which explain the majority of their variance. Additioanl dimensions can be explored to evaluate how samples are related to one another.
+
+## philr analysis
+
+Interestingly, all samples form 2 major clusters on whether wolbachia is present or not - i wonder how it looks if i remove them?
+
+```{r}
+library(compositions)
+library(zCompositions)
+library(CoDaSeq)
+#ps.coda <- ps2
+ps.coda <- ps2.prev #Prevalence filter
+ps.coda <- tax_glom(ps.coda, taxrank = "Genus")
+
+#Rename taxa
+taxa_names(ps.coda) <- paste0("SV", seq(ntaxa(ps.coda)),"-",tax_table(ps.coda)[,6])
+
+ps2.philr <- transform_sample_counts(ps.coda, function(x) x+1)
+
+ape::is.rooted(phy_tree(ps2.philr))
+ape::is.binary.tree(phy_tree(ps2.philr))
+
+phy_tree(ps2.philr) <- multi2di(phy_tree(ps2.philr))
+phy_tree(ps2.philr) <- makeNodeLabel(phy_tree(ps2.philr), method="number", prefix='n')
+
+name.balance(phy_tree(ps2.philr), tax_table(ps2.philr), 'n1')
+
+#Transpose
+otu.table <- otu_table(ps2.philr)
+tree <- phy_tree(ps2.philr)
+metadata <- as(sample_data(ps2.philr), "data.frame")
+tax <- tax_table(ps2.philr)
+gp.philr <- philr(otu.table, tree,
+                  part.weights='enorm.x.gm.counts',
+                  ilr.weights='blw.sqrt')
+
+gp.dist <- dist(gp.philr, method="euclidean")
+
+# perform a singular value decomposition of CLR
+f.pcx <- prcomp(gp.philr)
+pcx <- f.pcx 
+
+#Name balances
+
+pcnames <-  sapply(rownames(pcx$rotation), function(x) name.balance(tree, tax, x))
+pcnames <- make.unique(pcnames, sep = ".")
+
+rownames(pcx$rotation) <- pcnames
+fviz_pca_biplot(pcx) 
+
+#Extract biplot objects
+pc_samp <- data.frame(Sample.Name = rownames(pcx$x), pcx$x[, 1:2]) %>%
+  left_join(samdf, by="Sample.Name")
+pc_otu <- data.frame(OTU = rownames(pcx$rotation), pcx$rotation[, 1:2])
+
+# calculate percent variance explained for the axis labels
+pc1 <- round(pcx$sdev[1]^2/sum(pcx$sdev^2),2)
+pc2 <- round(pcx$sdev[2]^2/sum(pcx$sdev^2),2)
+pc_xlab <- paste("PC1: ", pc1, sep="")
+pc_ylab <- paste("PC2: ", pc2, sep="")
+
+library(ggplot2)
+gg.biplot <- ggplot(pc_samp, aes(PC1, PC2, label=psyllid_spp, colour=psyllid_spp)) + 
+  geom_point(alpha=0.5, size=3) +
+  #geom_text(size=3) +
+  #geom_segment(data=pc_otu, aes(PC1, PC2, xend=0, yend=0), col="red") +
+  #geom_text(data=pc_otu, aes(PC1, PC2, label=OTU), col="red") +
+  geom_point(data=pc_otu,aes(PC1, PC2, label=OTU), col="red") +
+  theme_bw() + 
+  geom_hline(yintercept = 0, linetype=2) +  
+  geom_vline(xintercept = 0, linetype=2) +
+  xlab(pc_xlab) + 
+  ylab(pc_ylab) +
+  theme(legend.position = "none")# +
+ # coord_fixed(ratio=pc2/pc1) # Scale plot by variance explained
+
+#Plot just OTU loadings
+
+gg.loadings <- ggplot(pc_otu, aes(PC1, PC2, label=OTU)) + 
+  geom_point(alpha=0.5, size=3) +
+  geom_text(size=3, vjust=0.5) +
+  theme_bw() + 
+  geom_hline(yintercept = 0, linetype=2) +  
+  geom_vline(xintercept = 0, linetype=2) + 
+  xlab(pc_xlab) + 
+  ylab(pc_ylab) +
+  theme(legend.position = "none") +
+  coord_fixed(ratio=pc2/pc1) # Scale plot by variance explained
+
+# Make compositional scree plot
+
+layout(matrix(c(1,2),1,2, byrow=T), widths=c(6,4), heights=c(6,4))
+par(mgp=c(2,0.5,0))
+screeplot(f.pcx, type = "lines", main="Scree plot")
+screeplot(f.pcx, type = "barplot", main="Scree plot")
+
+#make compositional dendrogram
+library(ggdendro)
+library(dendextend)
+hc <- hclust(gp.dist, method="ward.D2")
+dend <- as.dendrogram(hc)
+
+#get cluster stat
+
+
+#How to calculate how many significant clusters there are?? a Scree plot?
+#Can then label with the K we want
+#dend2 <- color_branches(dend, k = 9, groupLabels = TRUE)
+
+#Replace labels
+samdf <- samdf %>%
+  mutate(labels = paste0(psyllid_spp,"-",Sample.Name,"-",hostplant_spp))
+
+lab <- as.data.frame(labels(dend)) %>%
+    dplyr::rename(Sample.Name = `labels(dend)`) %>%
+    left_join(samdf, by="Sample.Name") %>%
+    pull(labels)
+
+labels(dend) <- lab
+
+# Rectangular lines
+ddata <- dendro_data(dend, type = "rectangle")
+gg.dend <- ggplot(segment(ddata)) + 
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend))  + 
+  scale_y_reverse(expand = c(0, 0)) +
+  theme_void()+
+  scale_x_discrete(expand=c(0.001,0.001))+
+  coord_flip()
+
+ps2_bar <- ps2 %>%
+  speedyseq::tax_glom(taxrank = "Order") %>%           # agglomerate at Order level
+  transform_sample_counts(function(x) {x/sum(x)} ) %>% # Transform to rel. abundance
+  speedyseq::psmelt() %>%
+  #mutate(Order = case_when(
+  #  Abundance >= 0.01 ~ Order, # Change this to whatever taxrank we want
+  #  Abundance < 0.01 ~ "Other"
+  #  )) %>%
+  filter(Abundance > 0.01) %>% # Could instead mutate this to just be "Low abundance"
+  mutate(labels = paste0(psyllid_spp,"-",Sample.Name,"-",hostplant_spp)) %>%
+  mutate(labels = factor(labels, levels=labels(dend)))
+
+library(RColorBrewer)
+col <- colorRampPalette(brewer.pal(11, "Spectral"))(41)
+
+gg.bar <- ggplot(ps2_bar, aes(x = labels, y = Abundance, fill = Order)) + 
+  geom_bar(stat = "identity", width = 0.8) +
+  theme_minimal()+
+  theme(axis.title = element_blank(),
+        axis.ticks = element_blank(),
+        legend.position = "right",
+        plot.margin=unit(c(-2,-1,10,0),unit="cm")) +
+  scale_x_discrete(expand=c(0,0),position="top")+
+  scale_y_discrete(expand=c(0,0))+
+  scale_fill_manual(values=col) +
+  guides(fill=guide_legend(ncol=1)) +
+  coord_flip() 
+
+#plot together
+
+Fig1 <- gg.dend + gg.bar + plot_layout(ncol = 2, widths = c(1,3))
+
+```
+
+
+
+## ADONIS TEST
+The ADONIS approach was performed only on the species with more than two samples present in the dataset for greater robustness. The p-value of 0.001 indicates that at an alpha of 0.05, the grouping of bacteria by psyllid taxonomy is statistically significant. The R2 value 0.6332 indicated that approximately 63.3% of the microflora community groupings can be ascribed to the insect species (Table 4). 
+
+```{r adonis}
+
+library(vegan)
+
+adonis(gp.dist ~ psyllid_spp,
+       data = metadata)
+
+
+#ano <- anosim(gp.dist, permutations=999)
+```
+
+
+## Alpha diversity plotting
+
+Is it best to do this before prevalence filtering?
+
+See https://github.com/adw96/breakaway and  https://github.com/adw96/DivNet packages
+
+Alpha diversity is a standard tool researchers can use to calcuate the number of bacterial taxa present in a study or study group and the relationships between relative abundance and how evenly taxa are distributed. These are classic representations of species number and diversity in a study which provide useful summary information about the numbers and relative abundances of bacterial taxa within your study.
+
+
+```{r alpha-diverstiy-plots}
+alpha.div <- estimate_richness(ps2, measures = c("Observed", "Shannon"))
+sd.1 <- as.data.frame(sample_data(ps2)) # Can not use original sd as samples have been removed
+ps2.rich <- cbind(sd.1, alpha.div) # Bind alpha diversity columns to sample data
+
+# Richness
+p.rich <- ggplot(ps2.rich, aes(x = SampleID, y = Observed, color = psyllid_spp, group = psyllid_spp)) +
+  stat_smooth(method = "loess") +
+  labs(y = "Richness", color = "Treatment", x = "") +
+  geom_jitter(size = 2, alpha = 0.5, width = 0.2) 
+  #scale_color_manual(values = c("black", "chocolate", "green", "purple"))
+
+# Shannon diversity
+
+p.sd <- ggplot(ps2.rich, aes(x = SampleID, y = Observed, color = psyllid_spp, group = psyllid_spp)) +
+  stat_smooth(method = "loess") +
+  geom_jitter(size = 2, alpha = 0.5, width = 0.2) 
+
+p.rich + p.sd
+```
+
+# Figure 3: Endosymbiont analysis
+
+
+
+You will frequently find that you want to analyze a subset of your total data set. There are typically commands that will allow you to do this for each individual analysis, but similar to variable reordering it can sometimes be more convenient to do this towards the beginning of your analysis. This should be done after removal of outlier samples and taxa. If you wish to create transformed versions of each subset you can either subset the transformed data you just generated, or alternatively retransform your subsetted data. The R chunk below is an example subsetting of the example data by treatment.
+
+Subsetting away samples can create a situation where taxa are present as empty rows. This is because not every sample has every taxa. These can be removed as shown in the R chunk below.
+
+Creating individual subsets like this can be particularly useful when assessing differential abundance using DESeq2.
+
+```{r subsetting}
+library(plotly)
+
+#filter threshold to ge
+ps2.carson <- transform_sample_counts(ps2, fun = proportions, thresh=0.0045)
+
+ps2.carson <- subset_taxa(ps2.carson, Genus == "Candidatus_Carsonella")
+ps2.carson <- filter_taxa(ps2.carson, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
+ps2.carson <- prune_samples(sample_sums(ps2.carson)>0, ps2.carson) # Drop empty samples
+
+gg.carson <- plot_tree(ps2.carson, ladderize="left",  color="psyllid_spp")
+
+#Co
+
+```
+
+
+## Functional profiling of core microbiome
+
+
+
+
+## Mantel test OR cannonical correlation analysis
+
+See https://f1000research.com/articles/5-1492/v2 multitable techniques section
+
+https://fukamilab.github.io/BIO202/06-C-matrix-comparison.html
+
+Test for associations between 2 distance matrices
+
+Distance matrices should be-
+
+Phylogenetic distances between psyllids
+Phylogenetic distances between host-plants
+Geographic distances between collection locations
+
+## Tanglegram
+
+```{r tanglegram}
+#Tanglegram
+library(dendextend)
+dend_list <- dendlist(as.dendrogram (hc), as.dendrogram (gp.hc))
+
+dend_list <- untangle(dend_list, method="step1side")
+tanglegram(dend_list)
+
+
+dend_diff(dend_list)
+
+#Look at adonis  
+
+library(vegan)
+
+```
+
+```{r session-info}
+# Display current R session information
+sessionInfo()
+```
+
+
+
+##OLD 
+## CLR analysis
+
+```{r}
+library(compositions)
+library(zCompositions)
+library(CoDaSeq)
+#ps.coda <- ps2
+ps.coda <- ps2.prev #Prevalence filter
+ps.coda <- tax_glom(ps.coda, taxrank = "Genus")
+
+#Rename taxa
+taxa_names(ps.coda) <- paste0("SV", seq(ntaxa(ps.coda)),"-",tax_table(ps.coda)[,6])
+#ps.coda <- transform_sample_counts(ps.coda, function(x) x+1) # Check how much is explained by the pseudocount
+
+f <- t(abundances(ps.coda))
+
+#Replace zero values
+f.0 <- cmultRepl(f, method="CZM")
+
+f.clr <- codaSeq.clr(f.0)
+
+#perb.all <- perb(f.0, ivar="iqlr")
+
+### Compositional Biplot
+
+# perform a singular value decomposition of CLR
+f.pcx <- prcomp(f.clr)
+pcx <- f.pcx 
+  
+#Extract biplot objects
+pc_samp <- data.frame(Sample.Name = rownames(pcx$x), pcx$x[, 1:2]) %>%
+  left_join(samdf, by="Sample.Name")
+pc_otu <- data.frame(OTU = rownames(pcx$rotation), pcx$rotation[, 1:2])
+
+# calculate percent variance explained for the axis labels
+pc1 <- round(pcx$sdev[1]^2/sum(pcx$sdev^2),2)
+pc2 <- round(pcx$sdev[2]^2/sum(pcx$sdev^2),2)
+pc_xlab <- paste("PC1: ", pc1, sep="")
+pc_ylab <- paste("PC2: ", pc2, sep="")
+
+library(ggplot2)
+gg.biplot <- ggplot(pc_samp, aes(PC1, PC2, label=psyllid_spp, colour=psyllid_spp)) + 
+  geom_point(alpha=0.5, size=3) +
+  geom_text(size=3) +
+  #geom_segment(data=pc_otu, aes(PC1, PC2, xend=0, yend=0), col="red") +
+  #geom_text(data=pc_otu, aes(PC1, PC2, label=OTU), col="red") +
+  geom_point(data=pc_otu,aes(PC1, PC2, label=OTU), col="red") +
+  theme_bw() + 
+  geom_hline(yintercept = 0, linetype=2) +  
+  geom_vline(xintercept = 0, linetype=2) +
+  xlab(pc_xlab) + 
+  ylab(pc_ylab) +
+  theme(legend.position = "none") +
+  coord_fixed(ratio=pc2/pc1) # Scale plot by variance explained
+
+
+##Fivz
+library(factoextra)
+fviz_pca_biplot(pcx) 
+#fviz_contrib(pcx, choice="ind")
+#fviz_screeplot(pcx)
+
+
+#Plot just OTU loadings
+
+gg.loadings <- ggplot(pc_otu, aes(PC1, PC2, label=OTU)) + 
+  geom_point(alpha=0.5, size=3) +
+  geom_text(size=3, vjust=0.5) +
+  theme_bw() + 
+  geom_hline(yintercept = 0, linetype=2) +  
+  geom_vline(xintercept = 0, linetype=2) + 
+  xlab(pc_xlab) + 
+  ylab(pc_ylab) +
+  theme(legend.position = "none") +
+  coord_fixed(ratio=pc2/pc1) # Scale plot by variance explained
+
+# Make compositional scree plot
+
+layout(matrix(c(1,2),1,2, byrow=T), widths=c(6,4), heights=c(6,4))
+par(mgp=c(2,0.5,0))
+screeplot(f.pcx, type = "lines", main="Scree plot")
+screeplot(f.pcx, type = "barplot", main="Scree plot")
+
+# anosim between groups using Aitchison distance
+dist.clr <- dist(f.clr)
+#
+#ano <- anosim(dist.clr, permutations=999)
+## coloring from https://rpubs.com/gaston/dendrograms
+#adonis(dist.clr ~ psyllid_spp,
+#       data = metadata)
+
+
+#make compositional dendrogram
+library(ggdendro)
+hc <- hclust(dist.clr, method="ward.D2")
+dend <- as.dendrogram(hc)
+
+
+#
+#test <- gp.philr %>% NbClust(distance = "euclidean",
+#          min.nc = 2, max.nc = 20, 
+#          method = "Ward ", index ="kl") 
+
+#How to calculate how many significant clusters there are?? a Scree plot?
+#Can then label with the K we want
+#dend2 <- color_branches(dend, k = 9, groupLabels = TRUE)
+
+#Replace labels
+samdf <- samdf %>%
+  mutate(labels = paste0(psyllid_spp,"-",Sample.Name,"-",hostplant_spp))
+
+labels(dend) <- as.data.frame(labels(dend)) %>%
+    dplyr::rename(Sample.Name = `labels(dend)`) %>%
+    left_join(samdf, by="Sample.Name") %>%
+    pull(labels)
+
+# Rectangular lines
+ddata <- dendro_data(dend, type = "rectangle")
+gg.dend <- ggplot(segment(ddata)) + 
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend))  + 
+  scale_y_reverse(expand = c(0, 0)) +
+  theme_bw()+
+  scale_x_discrete(expand=c(0.001,0.001))+
+  coord_flip()
+
+#Create a barchart using the original compositions and arrange them by the hc clustered clr values
+
+#Think it would be better to tip_glom here! - try and get it close to agglomerating at genus, but not merging the lots of Entrerobacidae ASV's
+ps2_bar <- ps2 %>%
+  #speedyseq::tax_glom(taxrank = "Genus") %>%           # agglomerate at Order level
+  transform_sample_counts(function(x) {x/sum(x)} ) %>% # Transform to rel. abundance
+  speedyseq::psmelt() %>%                                         
+  filter(Abundance > 0.01) %>% # Could instead mutate this to just be "Low abundance"
+  mutate(labels = paste0(psyllid_spp,"-",Sample.Name,"-",hostplant_spp)) %>%
+  mutate(labels = factor(labels, levels=labels(dend)))
+
+library(RColorBrewer)
+col <- colorRampPalette(brewer.pal(11, "Spectral"))(38)
+
+gg.bar <- ggplot(ps2_bar, aes(x = labels, y = Abundance, fill = Order)) + 
+  geom_bar(stat = "identity", width = 0.8) +
+  theme_minimal()+
+  theme(axis.title = element_blank(),
+        axis.ticks = element_blank(),
+        legend.position = "right",
+        plot.margin=unit(c(-2,-1,10,0),unit="cm"),
+        axis.text.x = element_text(colour = a)) +
+  scale_x_discrete(expand=c(0,0),position="top")+
+  scale_y_discrete(expand=c(0,0))+
+  scale_fill_manual(values=col) +
+  guides(fill=guide_legend(ncol=1)) +
+  coord_flip() 
+
+#plot together
+
+Fig1 <- gg.dend + gg.bar + plot_layout(ncol = 2, widths = c(1,3))
+```
+
