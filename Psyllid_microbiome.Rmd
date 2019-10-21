@@ -11,7 +11,7 @@ output: html_document
 library(knitr)
 knitr::opts_chunk$set(echo = TRUE, eval=FALSE, message=FALSE,error=FALSE,fig.show = "hold", fig.keep = "all")
 opts_knit$set(root.dir = 'C:/Users/ap0y/Dropbox/workprojects/Agriculture Victoria/Psyllid_microbiome')
-setwd('C:/Users/ap0y/Dropbox/workprojects/Agriculture Victoria/Psyllid_microbiome')
+setwd("C:/Users/ap0y/Dropbox/workprojects/PHD/Metabarcoding/Psyllid_microbiome")
 opts_chunk$set(dev = 'png')
 ```
 
@@ -22,7 +22,7 @@ opts_chunk$set(dev = 'png')
 
 ```{r install & Load packages} 
 #Set required packages
-.cran_packages <- c("ggplot2", "gridExtra","tidyverse","scales","stringdist","patchwork","vegan","ggpubr","seqinr","viridis","ape")
+.cran_packages <- c("ggplot2", "gridExtra", "tidyverse", "scales", "stringdist", "patchwork", "vegan", "ggpubr", "seqinr", "viridis","ape", "data.table")
 .bioc_packages <- c("dada2", "phyloseq", "DECIPHER","Biostrings","ShortRead","psadd","microbiome","philr")
 #.github_packages <- c("metacal", "taxreturn", "piperline","speedyseq")
 
@@ -177,39 +177,54 @@ bbtools_trim(install="bin/bbmap", fwd=fastqFs,rev=fastqRs, primers=c("CCTACGGGNG
 
 ```
 
-## Plot read quality
+## Plot read quality & lengths
 
+Note - something is going wierd with run 3
 
+Run2 reverse, most reads drop off early
+
+Run1 reversse are pretty awful, drop below Q20 at about 200
 ```{r QA plot, eval = TRUE, cache= TRUE}
 runs <- dir("data/", pattern="run_")
+readcounts <- vector("list", length=length(runs))
 
-##Post filtering plotting
 for (i in seq(along=runs)){
  path <- paste0("data/",runs[i],"/trimmed" )# CHANGE ME to the directory containing your demultiplexed forward-read fastq files
 
   filtFs <- sort(list.files(path, pattern="_R1_", full.names = TRUE))
-  filtRs <- sort(list.files(path, pattern="_R1_", full.names = TRUE))
-  p1 <- plotQualityProfile(filtFs[1:6]) + ggtitle(paste0(runs[i]," Forward Reads")) #, aggregate = TRUE
-  p2 <- plotQualityProfile(filtRs[1:6]) + ggtitle(paste0(runs[i]," Reverse Reads"))
-  print(p1+p2)
-}
+  filtRs <- sort(list.files(path, pattern="_R2_", full.names = TRUE))
+  p1 <- plotQualityProfile(filtFs, aggregate = TRUE) + ggtitle(paste0(runs[i]," Forward Reads")) 
+  p2 <- plotQualityProfile(filtRs, aggregate = TRUE) + ggtitle(paste0(runs[i]," Reverse Reads"))
+  
+  #output plots
+  dir.create("output/figures/")
+  pdf(paste0("output/figures/",runs[i],"_prefilt_quality.pdf"), width = 11, height = 8 , paper="a4r")
+  plot(p1+p2)
+  dev.off()
+  
+  #Get lengths
+  readcounts[[i]] <- cbind(width(readFastq(file.path(path, fastqFs))), width(readFastq(file.path(path, fastqRs))))
 
+}
 ```
 
 The max expected error function is used as the primary quality filter, and all reads containing N bases were removed
 
-In order to reduce the amount of  reverse reads violating the MaxEE filter, the reverse reads were truncated at 230bp to remove the quality crash that is typical of illumina sequencers
+In order to reduce the amount of  reverse reads violating the MaxEE filter, the reverse reads were truncated at 200 to remove the quality crash that is typical of illumina sequencers
 
 Total amplicon = 465bp 
 Sequencing = 2x300bp = 600bp
 Primers = 17bp + 21bp = 38bp
 Read overlap = 600 - 465 - 38 = 97bp
 
+reverse should potentiall be reduced further - (from 230 to 200)
+
 ```{r filter and trim}
 runs <- dir("data/", pattern="run_")
-filtered_out <- list()
+filtered_out <- vector("list", length=length(runs))
+readlengths <- vector("list", length=length(runs))
 
-for (i in seq(along=runs)){
+for (i in 1:length(runs)){
   path <- paste0("data/",runs[i],"/trimmed/") # CHANGE ME to the directory containing your demultiplexed forward-read fastq files
   filtpath <- file.path(path, "filtered") # Filtered forward files go into the path/filtered/ subdirectory
   dir.create(filtpath)
@@ -220,37 +235,31 @@ for (i in seq(along=runs)){
   
   filtered_out[[i]] <- (filterAndTrim(fwd=file.path(path, fastqFs), filt=file.path(filtpath, fastqFs),
                                       rev=file.path(path, fastqRs), filt.rev=file.path(filtpath, fastqRs),
-                                      maxEE=c(3,4),truncQ = 2,truncLen=c(280,230), maxN = 0,  rm.phix=TRUE, compress=TRUE, verbose=TRUE))
+                                      maxEE=c(2,3),truncQ = 0,truncLen=c(280,200), maxN = 0,  rm.phix=TRUE, compress=TRUE, verbose=TRUE))
+  
+  # post filtering plot
+  filtFs <- sort(list.files(filtpath, pattern="R1_001.*", full.names = TRUE))
+  filtRs <- sort(list.files(filtpath, pattern="R2_001.*", full.names = TRUE))
+  p1 <- plotQualityProfile(filtFs, aggregate = TRUE) + ggtitle(paste0(runs[i]," Forward Reads")) 
+  p2 <- plotQualityProfile(filtRs, aggregate = TRUE) + ggtitle(paste0(runs[i]," Reverse Reads"))
+  
+  #output plots
+  dir.create("output/figures/")
+  pdf(paste0("output/figures/",runs[i],"_postfilt_quality.pdf"), width = 11, height = 8 , paper="a4r")
+  plot(p1+p2)
+  dev.off()
+  
+  #Get lengths post filter
+  readlengths[[i]] <- cbind(width(readFastq(file.path(filtFs))), width(readFastq(file.path(filtRs))))
 }
+  
 print(filtered_out)
 
 ```
 
 
 
-## Post filtering error plotting
-
-sanity check to see the effects of the filter and trim step
-
-```{r Post filter plot, eval = TRUE}
-runs <- dir("data/", pattern="run_")
-
-##Post filtering plotting
-for (i in seq(along=runs)){
- path <- paste0("data/",runs[i],"/trimmed/" )# CHANGE ME to the directory containing your demultiplexed forward-read fastq files
-  filtpath <- file.path(path, "filtered") # Filtered forward files go into the path/filtered/ subdirectory
-  
-  filtFs <- sort(list.files(filtpath, pattern="R1_001.*", full.names = TRUE))
-  filtRs <- sort(list.files(filtpath, pattern="R2_001.*", full.names = TRUE))
-  p1 <- plotQualityProfile(filtFs[1:6]) + ggtitle(paste0(runs[i]," Filtered Forward Reads"))
-  p2 <- plotQualityProfile(filtRs[1:6]) + ggtitle(paste0(runs[i]," Filtered Reverse Reads"))
-  print(p1+p2)
-}
-
-```
-
-# DADA2 Analysis
-
+# Sequence processing
 
 ## Infer sequence variants for each run
 
@@ -286,7 +295,7 @@ for (i in seq(along=runs)){
   dadaFs <- dada(filtFs, err=errF, multithread=TRUE, pool="pseudo")
   dadaRs <- dada(filtRs, err=errR, multithread=TRUE, pool="pseudo")
  
-  mergers <- mergePairs(dadaFs, filtFs, dadaRs, filtRs, verbose=TRUE)
+  mergers <- mergePairs(dadaFs, filtFs, dadaRs, filtRs, verbose=TRUE, minOverlap = 20)
   
 # Construct sequence table
 
@@ -298,9 +307,9 @@ saveRDS(seqtab, paste0(path,"/seqtab.rds")) # CHANGE ME to where you want sequen
 
 ## Merge Runs, Remove Chimeras
 
-Now that the sequence tables are created for each run, they need to be merged into a larger table representing the entire study.
+Now that the sequence tables are created for each run, they need to be merged into a larger table representing the entire study. Looking at the length of the sequences, we see some off target amplification. There are 3 large peaks, the first one at 280, second at 402bp, and third at 427. The 427bp peak contains the majority of the sequences and is the expected size, while the 402bp peak contains wolbachia which have a 24bp deletion. We will cut the sequences to between 400 and 450, which should take into account any length variation, and remove the 280bp peak (which is the length of the forward read and most likely artefactual). Following this, chimeric sequences are identified and removed using removeBimeraDenovo
 
-Looking at the length of the sequences, we see some off target amplification. There are 3 large peaks, the first one at 280, second at 493, and third at 425, which is the expected size. We will cut the sequences to between 400 and 450, which should take into account any length variation.  Following this, chimeric sequences are identified and removed using removeBimeraDenovo
+
 ```{r merge runs and remove chimeras}
 runs <- dir("data/", pattern="run_")
 stlist <- vector()
@@ -316,8 +325,9 @@ for (i in seq(along=runs)){
 st.all <- mergeSequenceTables(st1, st2, st3)
 
 #Test collapsed
-st.all <- collapseNoMismatch(st.all, minOverlap = 20, orderBy = "abundance",
-                                   vec = TRUE, verbose = TRUE)
+#st.all <- collapseNoMismatch(st.all, minOverlap = 20, orderBy = "abundance",
+#                                   vec = TRUE, verbose = TRUE)
+
 
 #Remove chimeras
 seqtab.nochim <- removeBimeraDenovo(st.all, method="consensus", multithread=FALSE, verbose=TRUE)
@@ -335,14 +345,10 @@ plot(table(nchar(getSequences(seqtab.nochim))))
 backup <- seqtab.nochim
 
 #cut to expected size
-seqtab.nochim <- seqtab.nochim[,nchar(colnames(seqtab.nochim)) %in% 420:435]
+seqtab.nochim <- seqtab.nochim[,nchar(colnames(seqtab.nochim)) %in% 400:435]
 
-#Check output of chimera removal
 plot(table(nchar(getSequences(seqtab.nochim))))
 print(paste(sum(seqtab.nochim)/sum(st.all),"of the abundance remaining after cutting"))
-
-#Check maintained abundance at each cut
-
 
 #Fix names -removing read name, sample number etcc
 rownames(seqtab.nochim) <- rownames(seqtab.nochim) %>% 
@@ -352,7 +358,7 @@ rownames(seqtab.nochim) <- rownames(seqtab.nochim) %>%
   pull(SampleID)
 
 dir.create("output/rds/")
-saveRDS(seqtab.nochim, "output/rds/seqtab_final_CUT.rds") # CHANGE ME to where you want sequence table saved
+saveRDS(seqtab.nochim, "output/rds/seqtab_final.rds") # CHANGE ME to where you want sequence table saved
 
 ```
 
@@ -432,7 +438,7 @@ Folllowing assignment with IDTAXA, we will also use exact matching with a refere
 ### Assign Taxonomy using RDP
 
 ```{r assign taxonomy}
-seqtab.nochim <- readRDS("output/rds/seqtab_final_CUT.rds")
+seqtab.nochim <- readRDS("output/rds/seqtab_final.rds")
 
 # Assign Kingdom:Genus taxonomy using RDP classifier
 tax <- assignTaxonomy(seqtab.nochim, "reference/silva_nr_v132_train_set.fa.gz", multithread=TRUE, minBoot=60, outputBootstraps=FALSE)
@@ -440,7 +446,6 @@ colnames(tax) <- c("Root", "Phylum", "Class", "Order", "Family", "Genus")
 
 ##add species to taxtable using exact matching
 tax_plus <- addSpecies(tax, "reference/silva_species_assignment_v132.fa.gz", allowMultiple=TRUE)
-
 
 ##join genus and species name in species rank column - need to make this part of addspecies
 sptrue <- !is.na(tax_plus[,7])
@@ -461,13 +466,13 @@ head(taxa.print)
 
 
 # Write taxonomy table to disk
-saveRDS(tax_plus, "output/rds/tax_RDP_final_CUT.rds") 
+saveRDS(tax_plus, "output/rds/tax_RDP_final.rds") 
 ```
 
 ## Create phylogenetic tree
 
 ```{r phylogenetic tree}
-seqtab.nochim <- readRDS("output/rds/seqtab_final_CUT.rds")
+seqtab.nochim <- readRDS("output/rds/seqtab_final.rds")
 
 seqs <- getSequences(seqtab.nochim)
 names(seqs) <- seqs # This propagates to the tip labels of the tree
@@ -490,6 +495,8 @@ detach("package:phangorn", unload=TRUE)
 saveRDS(fitGTR, "output/rds/phytree.rds") 
 
 ```
+
+# Analysis
 
 ## Make Phyloseq object
 
@@ -516,7 +523,6 @@ samdf <- samdf %>%
 #Display samDF
 head(samdf)
 
-
 ## ---- phyloseq ----
 ps <- phyloseq(tax_table(tax_plus), sample_data(samdf),
                otu_table(seqtab.nochim, taxa_are_rows = FALSE),
@@ -527,8 +533,27 @@ if(nrow(seqtab.nochim) > nrow(sample_data(ps))){warning("Warning: All samples no
 ##save phyloseq object
 saveRDS(ps, "output/rds/ps_rdp.rds")
 
-##Summarise taxonomic assignment
+#Output tables of results
+dir.create("output/csv")
+dir.create("output/csv/unfiltered/")
 
+##Export raw csv
+export <- speedyseq::psmelt(ps)
+write.csv(export, file = "output/csv/rawdata.csv")
+
+#Summary export
+sp_summary <- summarize_taxa(ps, "Species", "SampleID")
+sp_summary <- spread(sp_summary, key="SampleID", value="totalRA")
+write.csv(sp_summary, file = "output/csv/unfiltered/spp_sum.csv")
+
+gen_summary <- summarize_taxa(ps, "Genus", "SampleID")
+gen_summary <- spread(gen_summary, key="SampleID", value="totalRA")
+write.csv(gen_summary, file = "output/csv/unfiltered/gen_sum.csv")
+```
+
+### Summarise taxonomic assignment
+
+```{r sum taxa}
 #Fraction of reads assigned to each taxonomic rank
 sum_reads <- speedyseq::psmelt(ps) %>%
   gather("Rank","Name",rank_names(ps)) %>%
@@ -552,9 +577,9 @@ sum_otu <- tax_table(ps) %>%
   arrange(Rank)
 
 #Plot Assignment to each rank
-library(data.table)
+
 assign_ranks <- fast_melt(ps) %>% 
-  select(c("taxaID","Root","Phylum","Class","Order","Family","Genus","Species")) %>%
+  dplyr::select(c("taxaID","Root","Phylum","Class","Order","Family","Genus","Species")) %>%
   distinct()%>%
   gather(key="Rank", value="Taxon", -taxaID) %>%
   drop_na()
@@ -567,85 +592,65 @@ gg.ranks <- ggplot(data=assign_ranks, aes(x=Rank, fill=Rank)) +
   ggtitle("ASVs sucessfully assigned using IDTAXA + Exact matching")+
   ylab("Number of ASVs")+
   xlab("Taxonomic rank")
-  
-#Output tables of results
 
-dir.create("output/csv")
-dir.create("output/csv/unfiltered/")
-
-##Export raw csv
-export <- speedyseq::psmelt(ps)
-write.csv(export, file = "output/csv/rawdata.csv")
-
-#Summary export
-sp_summary <- summarize_taxa(ps, "Species", "SampleID")
-sp_summary <- spread(sp_summary, key="SampleID", value="totalRA")
-write.csv(sp_summary, file = "output/csv/unfiltered/spp_sum.csv")
-
-gen_summary <- summarize_taxa(ps, "Genus", "SampleID")
-gen_summary <- spread(gen_summary, key="SampleID", value="totalRA")
-write.csv(gen_summary, file = "output/csv/unfiltered/gen_sum.csv")
-
+print(gg.ranks)
 ```
 
 
-# Dataset filtering
+## Detect and remove outlier Samples
 
-## Detect and remove outlier & Low read samples
-
-Detecting and potentially removing samples outliers (those samples with underlying data that do not conform to experimental or biological expectations) can be useful for minimizing technical variance. In this case we remove samples with lower than expected read counts
-
+Detecting and potentially removing samples outliers (those samples with underlying data that do not conform to experimental or biological expectations) can be useful for minimizing technical variance. This can be caused by a number of reasons, including low-reads assigned to that sample. In this case we remove all samples below 1000 reads, as these include all samples contributing to lower than usual ASV counts.
 
 ```{r sample-removal-identification}
 ## Remove mocks
-rm_mocks <- c("mockA_S51","MockEven_S193","Mock_S192","PCRctrl_S191","MockStaggered_S194", "PCRctrl_S191" )
+rm_mocks <- c("mockA_S51", "MockEven_S193", "Mock_S192", "PCRctrl_S191", "MockStaggered_S194", "PCRctrl_S191", "91_S167")
 nsamples(ps)
 ps0 <- ps %>% subset_samples(!sample_names(ps) %in% rm_mocks) %>% #Remove mocks
        
         filter_taxa(function(x) mean(x) > 0, TRUE) #Drop missing taxa from table 
 nsamples(ps0)
 
-# Format a data table to combine sample summary data with sample variable data - change this to tidyverse code
-ss <- sample_sums(ps0)
-sd <- as.data.frame(sample_data(ps0))
-ss.df <- merge(sd, data.frame("ASV" = ss), by ="row.names")
+# Format a data table to combine sample summary data with sample variable data
+ss.df <- merge(as.data.frame(sample_data(ps0)), data.frame("ASV" = sample_sums(ps0)), by ="row.names")
 
-
-# Plot the data by the psyllid Species sequenced, setting a minimum read threshold
+# Plot Count of ASVs and read s
 threshold = 1000
 
-p.ss.boxplot <- ggplot(ss.df, aes(x= psyllid_spp, y = ASV, color = psyllid_spp, shape=replicated)) + 
-  geom_boxplot(outlier.colour="NA", position = position_dodge(width = 0.8)) +
+gg.asv.boxplot <- merge(as.data.frame(sample_data(ps0)), data.frame("Reads" = sample_sums(ps0)), by ="row.names") %>%
+  ggplot( aes(x= Sample.Name, y = Reads, color = Sample.Name, shape=replicated)) + 
+  geom_boxplot(outlier.colour="RED", position = position_dodge(width = 0.8)) +
   geom_jitter(size = 2, alpha = 0.6) +
   scale_y_log10() +
   geom_hline(yintercept = threshold, lty = 2) +
-  theme(axis.text.x = element_text(angle=90, vjust=1))
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle=90, vjust=1))
 
-p.ss.boxplot
+print(gg.asv.boxplot)
+## Plot richness
 
-#Remove all samples under the minimum read threshold
-ps1 <- prune_samples(sample_sums(ps0)>=threshold, ps0) # Drop empty samples
+gg.rich <- plot_richness(ps0, measures="Observed")
+
+#Remove all samples under the minimum read threshold 
+ps1 <- prune_samples(sample_sums(ps0)>=threshold, ps0) # 
 ps1 <- filter_taxa(ps1, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
-
 print(paste(nsamples(ps) - nsamples(ps1), " Samples and ", ntaxa(ps) - ntaxa(ps1), " taxa Dropped"))
+
 ```
+
 
 ## Process Replicates
 
 ### Compare reproducibilty of replicates
 
-Rarify to common read depth - then explore aitchinson and kulzynsski distance 
-
+Rarefaction curves are useful	to	assess	sensitivity	of	sample	size	to	observed	alpha-diversity estimates.
 ```{r replicate reproducibility}
 #Subset to replicated samples
 ps.reps <- subset_samples(ps1, replicated == TRUE)
 
 #Plot read differences between replicates
-#Look at read differences between reps
 gg.reps <- plot_bar(ps.reps, x="Sample", y="Abundance", fill="Phylum") +
   facet_grid(~Sample.Name, drop=TRUE, scales="free_x") +
   geom_hline(yintercept=1000)
-
 
 #Plot rarefaction curve
 rarecurve(otu_table(ps.reps), step=50, cex=0.5)
@@ -654,7 +659,6 @@ rarecurve(otu_table(ps.reps), step=50, cex=0.5)
 nspec <- specnumber(otu_table(ps.reps)) # observed number of species
 raremax <- min(rowSums(otu_table(ps.reps)))
 rare <- rrarefy(otu_table(ps.reps),raremax)
-
 
 #PCA of rarefied samples
 raredist <- vegan::vegdist(rare, method="euclidean")
@@ -688,7 +692,7 @@ gg.reps <- ggplot(data=pc_samp, aes(x=PC1, y=PC2, colour=SampleID, label=SampleI
 
 ### Merge technical replicates
 
-With only 16 samples replicated i dont think there is a way to explicitly take into account replicate variability, therefore all replicates were merged
+With only 16 samples replicated, and only on the first 2 sequencing runs i dont think there is a way to explicitly take into account replicate variability, therefore all replicates were merged
 
 ```{r replicates}
 # Merge replicates
@@ -706,7 +710,8 @@ ps.merged <- filter_taxa(ps.merged, function(x) mean(x) > 0, TRUE) #Drop missing
 
 ```
 
-## Remove off-target taxa
+
+## Taxon Filtering
 
 The following R chunk removes taxa not-typically part of a bacterial microbiome analysis.
 
@@ -730,70 +735,10 @@ get_taxa_unique(ps2, "Class")
 
 ```
 
+## Prevalence assesment
 
-## Minimum abundance threshold
+Identification of taxa that are poorly represented in an unsupervised manner can identify taxa that will have little to no effect on downstream analysis. Sufficient removal of these "low prevalance" features can enhance many analysis by focusing statistical testing on taxa common throughout the data. However, for our dataset the problem with prevalence filtering for our dataset is that we dont have many replicates of each psyllid species, and therefore there are some high abundance but low prevalence ASV's we dont want to lose.
 
-These samples were sequenced using combinatorial indexes. Therefore this data will contain index switching. We therefore need to select an optimal filtering threshold to remove switched taxa, but not real taxa. We will optimise our filtering threshold by relying on assumption that all psyllid species should contain only one (or few very closely related ASVs) of Carsonella.
-
-```{r thresholds}
-#filter threshold to ge
-top_carson <-  transform_sample_counts(ps2, fun = proportions) %>%
-  speedyseq::psmelt() %>%
-  filter(Genus=="Candidatus_Carsonella") %>%
-  group_by(Sample) %>%
-  top_n(1, wt=Abundance) %>%
-  mutate(top = TRUE)  %>%
-  filter(Abundance > 0)
-  
-carson <-  transform_sample_counts(ps2, fun = proportions) %>%
-  speedyseq::psmelt() %>%
-  filter(Genus=="Candidatus_Carsonella") %>%
-  left_join(top_carson) %>%
-  mutate(top = case_when(
-    is.na(top) ~ FALSE,
-    !is.na(top) ~ top
-  ))
-
-thresholds <- seq(0,0.05,0.0001)
-df <- data.frame(thresh = thresholds, TP= thresholds, FP = thresholds)
-for(i in 1:length(thresholds)){
-  filt <- carson %>%
-    filter(Abundance > thresholds[i]) %>%
-    group_by(top) %>%
-    summarise(sum=n())
-  df$FP[i] <- filt$sum[1]
-  df$TP[i] <- filt$sum[2]
-}
-
-gg.filt <- df %>%
-  gather(key=type, value=n, -thresh) %>%
-  ggplot(aes(x=thresh, y=n, fill=type)) + 
-  geom_density(stat="identity", alpha=0.5) + 
-  scale_x_continuous(breaks=seq(0,0.05,0.001)) +
-  theme(axis.text.x = element_text(angle=45,hjust=1)) + 
-  geom_vline(xintercept = 0.0045)
-
-print(gg.filt)
-```
-
-
-## Prevalance & Core Microbiome
-
-Could do one analysis for the diversity, where things are agglomerated, and then something else for the association, as we will want to do the association on non-agglomerated taxa
-
-The problem with prevalence filtering for our dataset is that we dont have many replicates of each psyllid species, and therefore there are some high abundance but low prevalence OTUs we dont want to lose. We should however check to see if these look like common contaminants
-
-This depends on latter as well - may be worth doing the filtering after the diveristy estimates
-For example, if testing differential abundance, low prevalence taxa will never have enough statistical evidence to be called significant, so all they do is cost power by increasing the number of hypotheses. Therefore it makes sense to do an independent filtering step that removes all low-prevalence taxa.
-
-
-Identification of taxa that are poorly represented in an unsupervised manner can identify taxa that will have little to no effect on downstream analysis. Sufficient removal of these "low prevalance" features can enhance many analysis by focusing statistical testing on taxa common throughout the data.
-
-This approach is frequently poorly documented or justified in methods sections of manuscripts, but will typically read something like, "Taxa present in fewer than 3% of all of the samples within the study population and less than 5% relative abundance were removed from all subsequent analysis.".
-
-As the ultimate selection criteria can still be subjective, This code will produce a plot of all of the Phyla present in your samples along with information about their prevelance (fraction of samples they are present in) and total abundance across all samples.
-
-In this example we drew a dashed horizontal line to cross at the 5% prevalance level (present in > 5% of all of the samples in the study). If you set a threshold to remove taxa below that level you can visually see how many and what types of taxa will be removed. 
 
 ```{r prevalence-assessment}
 # Calculate taxon prevalence across the data set
@@ -805,7 +750,6 @@ prevdf <- data.frame(Prevalence = prevdf, TotalAbundance = taxa_sums(ps2), tax_t
 #Prevalence plot
 gg.prev <- subset(prevdf, Phylum %in% get_taxa_unique(ps0, "Phylum")) %>%
   ggplot(aes(TotalAbundance, Prevalence / nsamples(ps2),color=Genus)) +
-  geom_hline(yintercept = 0.0045, alpha = 0.5, linetype = 2) +
   geom_point(size = 3, alpha = 0.7) +
   scale_x_log10() +
   xlab("Total Abundance") + ylab("Prevalence [Frac. Samples]") +
@@ -814,71 +758,340 @@ gg.prev <- subset(prevdf, Phylum %in% get_taxa_unique(ps0, "Phylum")) %>%
   ggtitle("Phylum Prevalence in All Samples\nColored by Family")
 
 gg.prev
+```
 
-# Define which taxa fall within the prevalence threshold
-keepTaxa <- rownames(prevdf)[(prevdf$Prevalence >= prevalenceThreshold)]
-ntaxa(ps2)
+# Whole microbiome analyses
 
-# Remove those taxa
-ps2.prev <- prune_taxa(keepTaxa, ps2)
-ntaxa(ps2.prev)
+## Alpha Diversity
 
-#Check how many reads are left - we want to make sure we arent removing the bulk of the reads in some samples
-frac_reads_kept <- sample_sums(ps2.prev) / sample_sums(ps2)
-summary(frac_reads_kept)
+Because there is high correlation between observed richness and sequencing depth, we need to take this into account in our richness estimates
+
+https://github.com/adw96/stamps2018/blob/master/estimation/diversity-lab.R
+
+On plot plot observed richness (geom_point), estimated richness (geom_point, higher), and confidence intervals. facet by species?
+
+This really breaks after filtering due to removal of low abundance taxa that are important for the estimates in breakaway. Breakaway relies on low abundance counts to model unobserved taxa and there
+
+See this workflow: https://maggimars.github.io/OkinawaTroughProtists/OTprotists.html#2_sequence_analysis
+
+While measurement error in microbiome studies affects all analyses of microbiome data, alpha diversity is particularly affected because commonly used estimates of alpha diversity are heavily biased compared to other estimation problems in microbial ecology (such as estimating relative abundances). Instead of using tradional diversity metrics which only tell us about the diversity in our sample (not the actual environment), we will use the breakaway package which adjust the sample diversity of each ecosystem by adding to it an estimate of the number of unobserved species,estimate the variance in the total diversity estimate, and compare the diversities relative to these errors. This option has the advantages of leveraging all observed reads, comparing estimates of the actual parameter of interest (total diversity), and accounting for experimental noise. Note that these estimates account for different sequencing depths! breakaway estimates the number of missing species based on the sequence depth and  number of rare taxa in the data
 
 
-##Prevalence after filtering
-# Calculate taxon prevalence across the data set
-prevfilt <- apply(X = otu_table(ps2.prev),MARGIN = ifelse(taxa_are_rows(ps2.prev), yes = 1, no = 2),FUN = function(x){sum(x > 0)})
+As this study was a survey across many species with not many replicates, i t is unsuprising that significant differences were not found. Therefore there is only limited assertions we can make make about underlying richness.
 
-# Add taxonomy and total read counts to prevdf - change this to tidyverse code
-prevfilt <- data.frame(Prevalence = prevfilt, TotalAbundance = taxa_sums(ps2.prev), tax_table(ps2.prev))
+We use the betta model of Willis, A. and Bunge, J. (2015). Estimating diversity via frequency ratios. Biometrics. which works like regression but takes into account uncertainty in diversirty estimates betta accounts for strains that are present in the environment but not observed in the samples due to incomplete sampling. The number of unobserved strains is estimated based on the number of strains that are observed and their abundances. The total strain diversity was estimated using breakaway 
 
-#Prevalence plot
-gg.prevfilt <- subset(prevfilt, Phylum %in% get_taxa_unique(ps2.prev, "Phylum")) %>%
-  ggplot(aes(TotalAbundance, Prevalence / nsamples(ps2),color=Genus)) +
-  geom_hline(yintercept = 0.01, alpha = 0.5, linetype = 2) +
-  geom_point(size = 3, alpha = 0.7) +
-  scale_x_log10() +
-  xlab("Total Abundance") + ylab("Prevalence [Frac. Samples]") +
-  facet_wrap(~Phylum) +
-  theme(legend.position="none") +
-  ggtitle("Phylum Prevalence in All Samples\nColored by Family")
 
-gg.prevfilt
+Further problem is that the index switching is different between batches, so we expect batch 2 to have higher diversity - Or not? 
+
+This should come before merging technical replicates as well. Technical replicate merg
+
+```{r alpha diversity}
+## Plot observed richness, as a function of sequencing (sampling) depth
+library(breakaway)
+gg.richdepth <- data.frame("observed_richness" = (sample_richness(ps2) %>% summary)$estimate,
+               "depth" = phyloseq::sample_sums(ps2), 
+               "type" = ps2 %>% sample_data %>% get_variable("psyllid_spp")) %>%
+      ggplot(aes(x = depth, y = observed_richness, color = type)) +
+      geom_point() +
+      geom_smooth(aes(x = depth, y = observed_richness),method="lm", inherit.aes = FALSE) +
+      xlab("Sequencing Depth") + 
+      ylab("Observed richness") +
+      ggtitle("Observed richness by sequencing depth")
+
+gg.richrun <- data.frame("observed_richness" = (sample_richness(ps2) %>% summary)$estimate, 
+               "type" = ps2 %>% sample_data %>% get_variable("seqrun")) %>%
+      mutate(type = as.factor(type)) %>%
+      ggplot(aes(x = type, y=observed_richness, color = type)) +
+      geom_boxplot(outlier.alpha = 0) +
+      geom_jitter() +
+      xlab("Sequencing Run") + 
+      ylab("Observed richness") +
+      ggtitle("Observed richness by sequencing run")
+
+print(gg.richdepth)
+print(gg.richrun)
+
+#Model richness for all samples by psyllid spp
+ba <- breakaway(ps2) # Leaving cutoff at NA ruins hte error estimates?  -what does hte cutoff mean?
+#ba 
+plot(ba, ps2, color = "psyllid_spp") + theme(legend.position="none")
+
+## Check the specification of the model
+betta_pic(summary(ba)$estimate, summary(ba)$error)
+
+## PROBLEM SEEMS TO BE THE CUTOFF?- changign to cutoff2 seems to work?
+## Massive breakaway scores are occuring when sample is dominated by a single taxa, with others at really low number - need to filter this
+ps_bad <- ps0 %>% subset_samples(SampleID == "116b_S96") %>% filter_taxa( function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
+
+taxa_names(ps_bad) <- paste0("SV", seq(ntaxa(ps_bad)),"-",tax_table(ps_bad)[,7])
+
+fc_bad <- ps_bad %>% otu_table() %>% t() %>% make_frequency_count_table
+
+# Let's fit the breakaway to this sample - 
+ba_bad <- breakaway(fc_bad, cutoff=3)
+
+
+ba_estimates <- summary(ba) %>%
+      add_column("SampleID" = ps2 %>% otu_table %>% sample_names) %>%
+      left_join(samdf, by = "SampleID")
+
+library(RColorBrewer)
+col <- colorRampPalette(brewer.pal(11, "Spectral"))(74)
+
+gg.barichnes <- ggplot(ba_estimates, aes(x=psyllid_spp, y=estimate, fill=psyllid_spp)) + # Should i add a hline for the intercept?
+  geom_boxplot(outlier.alpha = 0) +
+  geom_jitter(aes(colour=psyllid_spp), colour="black", pch=21) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle=90, vjust=0, hjust=1),
+        legend.position = "none") +
+  scale_fill_manual(values=col) +
+  scale_colour_manual(values=col) +
+  ylab("Richness Estimate")
+
+
+##It might be nice to model richness at different taxonomic ranks!
+
+
+#Model richness taking into account the variance in sampling depth
+bt <- betta(summary(ba)$estimate,
+            summary(ba)$error,
+            make_design_matrix(ps2, "psyllid_spp"))
+bt$table
+
+
+#Model richness for all samples by host plant
+plot(ba, ps2, color = "hostplant_spp") + theme(legend.position="none")
+
+ba_estimates <- summary(ba) %>%
+      add_column("Sample.Name" = ps2 %>% otu_table %>% sample_names) %>%
+      left_join(samdf, by = "Sample.Name")
+
+gg.plantrich <- ggplot(ba_estimates, aes(x=hostplant_spp, y=estimate, fill=hostplant_spp)) + # Should i add a hline for the intercept?
+  geom_boxplot(outlier.alpha = 0) +
+  geom_jitter( aes(colour=hostplant_spp)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle=90, vjust=0, hjust=1),
+        legend.position = "none") +
+  ylab("Richness Estimate")
+
+## Check the specification of the model
+betta_pic(summary(ba)$estimate, summary(ba)$error)
+
+#Model diversity taking into account the variance in sampling depth
+bt <- betta(summary(ba)$estimate,
+            summary(ba)$error,
+            make_design_matrix(ps2, "hostplant_spp"))
+bt$table
+
+
+## Try with divnet
+
+library(DivNet)
+
+ps_test <- ps1 %>%
+  speedyseq::tax_glom(taxrank="Genus") %>%
+  filter_taxa(function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
+
+taxa_names(ps_test) <- paste0("SV", seq(ntaxa(ps_test)),"-",tax_table(ps_test)[,6])
+
+
+divnet_asv <- ps_test %>%
+  divnet(X = "psyllid_spp", base="SV13-Candidatus_Carsonella", ncores=2)
+
+
+library(ggplot2)
+divnet_asv$shannon %>% 
+  plot(ps_test, color = "psyllid_spp") +
+  xlab("psyllid_spp") +
+  ylab("Shannon diversity estimate\n(phylum level)") +
+  coord_cartesian(ylim = c(0,5))
+
 
 ```
 
 
-I think for core analysis - we do a plot with genera ranked according to prevalence? or tip agglomed OTU's  - 
+## Minimum abundance threshold
 
-It will be a good comparison - ie the first bar plot shows by relative abundance, the next shows ranked by prevalence - revealing the 'Core' microbiome of carsonella
+Maybe this should be done just for carsonella tree
 
-We then subset to carsonella and the other core microbiome members and do phylogenetics etc 
+These samples were sequenced using combinatorial indexes. Therefore this data will contain index switching. We therefore need to select an optimal filtering threshold to remove switched taxa, but not real taxa. We will optimise our filtering threshold by relying on assumption that all psyllid species should contain only one (or few very closely related ASVs) of Carsonella.
+
+```{r thresholds}
+#Flag top abundance carsonella
+top_carson <-  ps2 %>%
+  transform_sample_counts(function (x) x/sum(x)) %>%
+  speedyseq::psmelt() %>%
+  filter(Genus=="Candidatus_Carsonella") %>%
+  group_by(Sample) %>%
+  top_n(1, wt=Abundance) %>%
+  mutate(top = TRUE)  %>%
+  filter(Abundance > 0)
+  
+#Flag lower abundance carsonella
+carson <-  ps2 %>%
+  transform_sample_counts(function (x) x/sum(x)) %>%
+  speedyseq::psmelt() %>%
+  filter(Genus=="Candidatus_Carsonella") %>%
+  left_join(top_carson) %>%
+  mutate(top = case_when(
+    is.na(top) ~ FALSE,
+    !is.na(top) ~ top
+  ))
+
+carson <- carson %>%
+  left_join(carson %>%
+    filter(Abundance > 0) %>%
+    dplyr::select(OTU, top, seqrun) %>%
+    unique() %>%
+    group_by(OTU, seqrun) %>%
+    add_tally() %>%
+    mutate(switched = case_when(
+      n>1 & top== FALSE ~ TRUE,
+      n>1 & top== TRUE ~ FALSE,
+      n==1 ~ FALSE,
+    )) %>%
+  dplyr::select(-n)
+  )
+
+## Plot true and false carsonellas by run - this shows may need to filter seperately by run, as seqrun2 has much higher than others.
+gg.switch <- carson %>% 
+  group_by(seqrun, switched) %>%
+  filter(!is.na(switched)) %>%
+  filter(Abundance > 0) %>%
+  summarise(n = n()) %>%
+  mutate(freq = n / sum(n)) %>%
+  ggplot(aes(x=seqrun, y=freq, group=switched, fill=switched)) +
+  geom_bar(stat="identity")
+
+
+#to check if index switching could explain the multiple OTU's check if top=FALSE carsonella exist as top in another sample in the same run
+
+thresholds <- seq(0,0.05,0.0001)
+out <- vector("list", length=3)
+for (r in 1:3) {
+  df <- data.frame(thresh = thresholds, TP= thresholds, FP = thresholds, seqrun = r)
+  for(i in 1:length(thresholds)){
+    filt <- carson %>%
+      filter(seqrun==r) %>%
+      filter(Abundance > thresholds[i]) %>%
+      group_by(top) %>%
+      summarise(sum=n())
+    df$FP[i] <- filt$sum[1]
+    df$TP[i] <- filt$sum[2]
+  }
+  out[[r]] <- df
+}
+
+gg.filt <- out %>%
+  bind_rows() %>%
+  gather(key=type, value=n, -thresh, -seqrun) %>%
+  ggplot(aes(x=thresh, y=n, fill=type)) + 
+  geom_density(stat="identity", alpha=0.5) + 
+  scale_x_continuous(breaks=seq(0,0.05,0.001)) +
+  facet_grid(~seqrun) +
+  theme(axis.text.x = element_text(angle=45,hjust=1)) + 
+  geom_vline(xintercept = 0.0035)+ 
+  geom_vline(xintercept = 0.001)
+
+print(gg.filt)
+
+## Filter run 2 
+run2_ps <- ps2 %>% 
+  subset_samples(seqrun==2)
+
+run2_pass <- run2_ps %>%
+    transform_sample_counts(function (x) x/sum(x)) %>%  # Convert to proportions
+    transform_sample_counts(function (x) (x > 0.0035) * 1)
+
+newotu1 <- otu_table(run2_ps) * otu_table(run2_pass)
+
+run2_newps <- run2_ps
+otu_table(run2_newps) <- otu_table(newotu1, taxa_are_rows = FALSE) 
+
+#Filter run 1 and 3 
+  
+run13_ps <- ps2 %>%
+    subset_samples(!seqrun == 2)
+                   
+run13_pass <- run13_ps %>%
+    transform_sample_counts(function (x) x/sum(x)) %>%  # Convert to proportions
+    transform_sample_counts(function (x) (x > 0.001) * 1)
+
+newotu2  <- otu_table(run13_ps) * otu_table(run13_pass)
+
+run13_newps <- run13_ps
+otu_table(run13_newps) <- otu_table(newotu2, taxa_are_rows = FALSE) 
+
+# Create new phyloseq and drop missing taxa
+ps3 <- merge_phyloseq(run2_newps, run13_newps) %>%
+  filter_taxa(function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
+ps3 <- prune_samples(sample_sums(ps3) >0 , ps3) # Drop empty samples
+
+#Count number of overall taxa pre and post filtering
+print(paste(ntaxa(ps2) - ntaxa(ps3), " taxa Dropped when using filtering threshold of: ", 0.0035, " for run 2 and ", 0.001, "for run 1 and 3"))
+
+# Count number of carsonella OTU's per sample pre and post filtering
+n_carson <- speedyseq::psmelt(ps2) %>% 
+  filter(Genus == "Candidatus_Carsonella") %>%
+  filter(Abundance > 0) %>%
+  dplyr::select(Sample.Name, OTU) %>%
+  group_by(Sample.Name) %>%
+  add_tally() %>%
+  dplyr::select(-OTU) %>%
+  unique() %>%
+  mutate(type = "pre") %>%
+  bind_rows(.,speedyseq::psmelt(ps3) %>% 
+  filter(Genus == "Candidatus_Carsonella") %>%
+  filter(Abundance > 0) %>%
+  dplyr::select(Sample.Name, OTU) %>%
+  group_by(Sample.Name) %>%
+  add_tally() %>%
+  dplyr::select(-OTU) %>%
+  unique() %>%
+  mutate(type = "post"))
+
+gg.ncarson <- ggplot(n_carson, aes(x=reorder(Sample.Name, -n), y=n)) + 
+  geom_bar(stat="identity") +
+  facet_grid(~type) + 
+  xlab("Sample.Name") +
+  ylab("Number of carsonella OTU's per sample") +
+  theme(axis.text.x = element_text(angle=90, hjust = 1, vjust=0))
+
+print(gg.ncarson)
+
+#check if any samples dont have carsonella
+table(!n_carson$Sample.Name %in% speedyseq::psmelt(ps2)$Sample.Name)
+
+```
+
+## Beta diversity
+
 
 ## philR transformation
 
-Need to decide on this
+To find the Aitchison distance a
+centered log-ratio (clr) transformation was performed on ASV count data with the R
+165 package CoDaSeq (30) before computing the Euclidean distance between samples with
+the R package vegan (31). The Aitchison distance was then used in Permutational
+It is made available under a CC-BY-ND 4.0 International license.
+was not peer-reviewed) is the author/funder, who has granted bioRxiv a license to display the preprint in perpetuity.
+bioRxiv preprint first posted online Jul. 25, 2019; doi: http://dx.doi.org/10.1101/714816. The copyright holder for this preprint (which
+6
+Multivariate Analyses of Variance (PERMANOVA, 999 permutations) with the vegan
+function adonis to test whether community composition was significantly different by
+water mass in the four depth layers or by vent presence/absence in the bottom
+170 samples. If
 
 Many analysis in community ecology and hypothesis testing benefit from data transformation. Many microbiome data sets do not fit to a normal distribution, but transforming them towards normality may enable more appropriate data for specific statistical tests. 
 
-
-philr phylogenetic transform (and R package) based on balances (binary partitions) along an evolutionary tree (Silverman et al., 2017) that is a replacement for the familiar UniFrac distance metric.Distances determined by phylogenetic transforms have the advantage that the binary partitions chosen have a simple interpretation and the correlation structure of the data is fully accounted for. However, the disadvantage is that only the relationships between the chosen partitions can be examined.# Figure 1: Community composition analysis
-
-Beta diversity enables you to view overall relationships between samples. These relationships are calculated using a distance metric calcuation (of which there are many) and these multi-dimensional relationships are evaluated and viewed in the two dimensions which explain the majority of their variance. Additioanl dimensions can be explored to evaluate how samples are related to one another.
-
-## philr analysis
-
-Interestingly, all samples form 2 major clusters on whether wolbachia is present or not - i wonder how it looks if i remove them?
+philr phylogenetic transform is based on balances (binary partitions) along an evolutionary tree (Silverman et al., 2017) that is a replacement for the familiar UniFrac distance metric. Distances determined by phylogenetic transforms have the advantage that the binary partitions chosen have a simple interpretation and the correlation structure of the data is fully accounted for. However, the disadvantage is that only the relationships between the chosen partitions can be examined.# Figure 1: Community composition analysis
 
 ```{r}
-library(compositions)
-library(zCompositions)
-library(CoDaSeq)
-#ps.coda <- ps2
-ps.coda <- ps2.prev #Prevalence filter
-ps.coda <- tax_glom(ps.coda, taxrank = "Genus")
+ps.coda <- ps3
+#ps.coda <- subset_taxa(ps3, !Family == "Enterobacteriaceae")
+
+#ps.coda <- tax_glom(ps.coda, taxrank = "Genus")
 
 #Rename taxa
 taxa_names(ps.coda) <- paste0("SV", seq(ntaxa(ps.coda)),"-",tax_table(ps.coda)[,6])
@@ -891,8 +1104,6 @@ ape::is.binary.tree(phy_tree(ps2.philr))
 phy_tree(ps2.philr) <- multi2di(phy_tree(ps2.philr))
 phy_tree(ps2.philr) <- makeNodeLabel(phy_tree(ps2.philr), method="number", prefix='n')
 
-name.balance(phy_tree(ps2.philr), tax_table(ps2.philr), 'n1')
-
 #Transpose
 otu.table <- otu_table(ps2.philr)
 tree <- phy_tree(ps2.philr)
@@ -901,7 +1112,9 @@ tax <- tax_table(ps2.philr)
 gp.philr <- philr(otu.table, tree,
                   part.weights='enorm.x.gm.counts',
                   ilr.weights='blw.sqrt')
+```
 
+```{r beta plots}
 gp.dist <- dist(gp.philr, method="euclidean")
 
 # perform a singular value decomposition of CLR
@@ -914,7 +1127,7 @@ pcnames <-  sapply(rownames(pcx$rotation), function(x) name.balance(tree, tax, x
 pcnames <- make.unique(pcnames, sep = ".")
 
 rownames(pcx$rotation) <- pcnames
-fviz_pca_biplot(pcx) 
+#fviz_pca_biplot(pcx) 
 
 #Extract biplot objects
 pc_samp <- data.frame(Sample.Name = rownames(pcx$x), pcx$x[, 1:2]) %>%
@@ -995,22 +1208,27 @@ gg.dend <- ggplot(segment(ddata)) +
   scale_x_discrete(expand=c(0.001,0.001))+
   coord_flip()
 
-ps2_bar <- ps2 %>%
-  speedyseq::tax_glom(taxrank = "Order") %>%           # agglomerate at Order level
+ps3_bar <- #subset_taxa(ps3, !Family == "Enterobacteriaceae") %>%
+            ps3 %>%
+  speedyseq::tax_glom(taxrank = "Genus") %>%           # agglomerate at Order level
   transform_sample_counts(function(x) {x/sum(x)} ) %>% # Transform to rel. abundance
   speedyseq::psmelt() %>%
-  #mutate(Order = case_when(
-  #  Abundance >= 0.01 ~ Order, # Change this to whatever taxrank we want
-  #  Abundance < 0.01 ~ "Other"
+  #mutate(Family = case_when(
+  #  Abundance >= 0.01 ~ Genus, # Change this to whatever taxrank we want
+  #  Abundance < 0.01 ~ "NA"
   #  )) %>%
-  filter(Abundance > 0.01) %>% # Could instead mutate this to just be "Low abundance"
+  mutate(plot_level = case_when(
+    Family == "Enterobacteriaceae" | Genus == "Candidatus_Carsonella" ~ paste0("G-",Genus),
+    TRUE  ~ paste0("P-", Phylum),
+    )) %>%
+  #filter(Abundance > 0.01) %>% # Could instead mutate this to just be "Low abundance"
   mutate(labels = paste0(psyllid_spp,"-",Sample.Name,"-",hostplant_spp)) %>%
   mutate(labels = factor(labels, levels=labels(dend)))
 
 library(RColorBrewer)
-col <- colorRampPalette(brewer.pal(11, "Spectral"))(41)
+col <- colorRampPalette(brewer.pal(11, "Spectral"))(28)
 
-gg.bar <- ggplot(ps2_bar, aes(x = labels, y = Abundance, fill = Order)) + 
+gg.bar <- ggplot(ps3_bar, aes(x = labels, y = Abundance, fill = plot_level)) + 
   geom_bar(stat = "identity", width = 0.8) +
   theme_minimal()+
   theme(axis.title = element_blank(),
@@ -1025,14 +1243,28 @@ gg.bar <- ggplot(ps2_bar, aes(x = labels, y = Abundance, fill = Order)) +
 
 #plot together
 
-Fig1 <- gg.dend + gg.bar + plot_layout(ncol = 2, widths = c(1,3))
+Fig1 <- gg.dend + gg.bar + plot_layout(ncol = 2, widths = c(1,3)) + plot_annotation(title="Microbial diversity of New Zealand psyllids", subtitle="Run1 & Run3 0.01% threshold, Run 2 0.035% filtering threshold. PhilR transformation, Ward d2 Heirarchial clustering", tag_levels="A")
 
 ```
 
 
+# Test for differences between groups
 
-## ADONIS TEST
 The ADONIS approach was performed only on the species with more than two samples present in the dataset for greater robustness. The p-value of 0.001 indicates that at an alpha of 0.05, the grouping of bacteria by psyllid taxonomy is statistically significant. The R2 value 0.6332 indicated that approximately 63.3% of the microflora community groupings can be ascribed to the insect species (Table 4). 
+
+
+Mantel test - 
+See https://f1000research.com/articles/5-1492/v2 multitable techniques section
+
+https://fukamilab.github.io/BIO202/06-C-matrix-comparison.html
+
+Test for associations between 2 distance matrices
+
+Distance matrices should be-
+
+Phylogenetic distances between psyllids
+Phylogenetic distances between host-plants
+Geographic distances between collection locations
 
 ```{r adonis}
 
@@ -1045,82 +1277,57 @@ adonis(gp.dist ~ psyllid_spp,
 #ano <- anosim(gp.dist, permutations=999)
 ```
 
+# Endosymbiont analysis
 
-## Alpha diversity plotting
-
-Is it best to do this before prevalence filtering?
-
-See https://github.com/adw96/breakaway and  https://github.com/adw96/DivNet packages
-
-Alpha diversity is a standard tool researchers can use to calcuate the number of bacterial taxa present in a study or study group and the relationships between relative abundance and how evenly taxa are distributed. These are classic representations of species number and diversity in a study which provide useful summary information about the numbers and relative abundances of bacterial taxa within your study.
-
-
-```{r alpha-diverstiy-plots}
-alpha.div <- estimate_richness(ps2, measures = c("Observed", "Shannon"))
-sd.1 <- as.data.frame(sample_data(ps2)) # Can not use original sd as samples have been removed
-ps2.rich <- cbind(sd.1, alpha.div) # Bind alpha diversity columns to sample data
-
-# Richness
-p.rich <- ggplot(ps2.rich, aes(x = SampleID, y = Observed, color = psyllid_spp, group = psyllid_spp)) +
-  stat_smooth(method = "loess") +
-  labs(y = "Richness", color = "Treatment", x = "") +
-  geom_jitter(size = 2, alpha = 0.5, width = 0.2) 
-  #scale_color_manual(values = c("black", "chocolate", "green", "purple"))
-
-# Shannon diversity
-
-p.sd <- ggplot(ps2.rich, aes(x = SampleID, y = Observed, color = psyllid_spp, group = psyllid_spp)) +
-  stat_smooth(method = "loess") +
-  geom_jitter(size = 2, alpha = 0.5, width = 0.2) 
-
-p.rich + p.sd
-```
-
-# Figure 3: Endosymbiont analysis
-
-
-
-You will frequently find that you want to analyze a subset of your total data set. There are typically commands that will allow you to do this for each individual analysis, but similar to variable reordering it can sometimes be more convenient to do this towards the beginning of your analysis. This should be done after removal of outlier samples and taxa. If you wish to create transformed versions of each subset you can either subset the transformed data you just generated, or alternatively retransform your subsetted data. The R chunk below is an example subsetting of the example data by treatment.
-
-Subsetting away samples can create a situation where taxa are present as empty rows. This is because not every sample has every taxa. These can be removed as shown in the R chunk below.
-
-Creating individual subsets like this can be particularly useful when assessing differential abundance using DESeq2.
 
 ```{r subsetting}
 library(plotly)
 
 #filter threshold to ge
-ps2.carson <- transform_sample_counts(ps2, fun = proportions, thresh=0.0045)
+#ps2.carson <- transform_sample_counts(ps2, fun = proportions, thresh=0.0045)
 
-ps2.carson <- subset_taxa(ps2.carson, Genus == "Candidatus_Carsonella")
-ps2.carson <- filter_taxa(ps2.carson, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
-ps2.carson <- prune_samples(sample_sums(ps2.carson)>0, ps2.carson) # Drop empty samples
+#ps2.carson <- subset_taxa(ps2.carson, Genus == "Candidatus_Carsonella")
+#ps2.carson <- filter_taxa(ps2.carson, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
+#ps2.carson <- prune_samples(sample_sums(ps2.carson)>0, ps2.carson) # Drop empty samples
 
-gg.carson <- plot_tree(ps2.carson, ladderize="left",  color="psyllid_spp")
+library(RColorBrewer)
+col <- colorRampPalette(brewer.pal(11, "Spectral"))(72)
 
-#Co
+
+ps3.carson <- subset_taxa(ps3, Genus == "Candidatus_Carsonella")
+gg.carson <- plot_tree(ps3.carson, ladderize="left",  color="psyllid_spp", label.tips="psyllid_spp") +   theme(legend.position = "none") + 
+    scale_colour_manual(values=col) +
+  ggtitle("Carsonella 16S gene tree")
+
+
+#Write out fasta
+
+carson_out <- speedyseq::psmelt(ps3.carson) %>%
+  filter(Abundance > 0) %>%
+  select(OTU, Sample.Name, psyllid_spp, Species) %>%
+  group_by(OTU, Species) %>%
+  summarize(samples = paste(Sample.Name, collapse=";"),
+            psyllid_spp = paste(unique(psyllid_spp), collapse=";")
+            ) %>%
+  rownames_to_column() %>%
+  unite(seqname, c("Species","rowname","psyllid_spp","samples"), sep="|")
+
+carson_fasta <- DNAStringSet(carson_out$OTU)
+names(carson_fasta) <- carson_out$seqname
+
+writeXStringSet(carson_fasta, "carsonella_seqs.fa")
+
+
+## S-Symbionts
+ps3.carson <- subset_taxa(ps3, Family == "Enterobacteriaceae")
+taxa_names(ps3.carson) <- paste0("SV", seq(ntaxa(ps3.carson)),"-",tax_table(ps3.carson)[,7])
+
+gg.entero <- plot_tree(ps3.carson, ladderize="left",  color="psyllid_spp", label.tips="taxa_names") +   theme(legend.position = "none") +     #scale_colour_manual(values=col) +
+  ggtitle("Enterobacidae 16S gene tree")
+
+#, label.tips="psyllid_spp
 
 ```
-
-
-## Functional profiling of core microbiome
-
-
-
-
-## Mantel test OR cannonical correlation analysis
-
-See https://f1000research.com/articles/5-1492/v2 multitable techniques section
-
-https://fukamilab.github.io/BIO202/06-C-matrix-comparison.html
-
-Test for associations between 2 distance matrices
-
-Distance matrices should be-
-
-Phylogenetic distances between psyllids
-Phylogenetic distances between host-plants
-Geographic distances between collection locations
 
 ## Tanglegram
 
@@ -1141,169 +1348,17 @@ library(vegan)
 
 ```
 
+
+# Core microbiome
+
+## Subset to core microbiome
+
+## Functional profiling
+
+PICRUST2
+
+
 ```{r session-info}
 # Display current R session information
 sessionInfo()
 ```
-
-
-
-##OLD 
-## CLR analysis
-
-```{r}
-library(compositions)
-library(zCompositions)
-library(CoDaSeq)
-#ps.coda <- ps2
-ps.coda <- ps2.prev #Prevalence filter
-ps.coda <- tax_glom(ps.coda, taxrank = "Genus")
-
-#Rename taxa
-taxa_names(ps.coda) <- paste0("SV", seq(ntaxa(ps.coda)),"-",tax_table(ps.coda)[,6])
-#ps.coda <- transform_sample_counts(ps.coda, function(x) x+1) # Check how much is explained by the pseudocount
-
-f <- t(abundances(ps.coda))
-
-#Replace zero values
-f.0 <- cmultRepl(f, method="CZM")
-
-f.clr <- codaSeq.clr(f.0)
-
-#perb.all <- perb(f.0, ivar="iqlr")
-
-### Compositional Biplot
-
-# perform a singular value decomposition of CLR
-f.pcx <- prcomp(f.clr)
-pcx <- f.pcx 
-  
-#Extract biplot objects
-pc_samp <- data.frame(Sample.Name = rownames(pcx$x), pcx$x[, 1:2]) %>%
-  left_join(samdf, by="Sample.Name")
-pc_otu <- data.frame(OTU = rownames(pcx$rotation), pcx$rotation[, 1:2])
-
-# calculate percent variance explained for the axis labels
-pc1 <- round(pcx$sdev[1]^2/sum(pcx$sdev^2),2)
-pc2 <- round(pcx$sdev[2]^2/sum(pcx$sdev^2),2)
-pc_xlab <- paste("PC1: ", pc1, sep="")
-pc_ylab <- paste("PC2: ", pc2, sep="")
-
-library(ggplot2)
-gg.biplot <- ggplot(pc_samp, aes(PC1, PC2, label=psyllid_spp, colour=psyllid_spp)) + 
-  geom_point(alpha=0.5, size=3) +
-  geom_text(size=3) +
-  #geom_segment(data=pc_otu, aes(PC1, PC2, xend=0, yend=0), col="red") +
-  #geom_text(data=pc_otu, aes(PC1, PC2, label=OTU), col="red") +
-  geom_point(data=pc_otu,aes(PC1, PC2, label=OTU), col="red") +
-  theme_bw() + 
-  geom_hline(yintercept = 0, linetype=2) +  
-  geom_vline(xintercept = 0, linetype=2) +
-  xlab(pc_xlab) + 
-  ylab(pc_ylab) +
-  theme(legend.position = "none") +
-  coord_fixed(ratio=pc2/pc1) # Scale plot by variance explained
-
-
-##Fivz
-library(factoextra)
-fviz_pca_biplot(pcx) 
-#fviz_contrib(pcx, choice="ind")
-#fviz_screeplot(pcx)
-
-
-#Plot just OTU loadings
-
-gg.loadings <- ggplot(pc_otu, aes(PC1, PC2, label=OTU)) + 
-  geom_point(alpha=0.5, size=3) +
-  geom_text(size=3, vjust=0.5) +
-  theme_bw() + 
-  geom_hline(yintercept = 0, linetype=2) +  
-  geom_vline(xintercept = 0, linetype=2) + 
-  xlab(pc_xlab) + 
-  ylab(pc_ylab) +
-  theme(legend.position = "none") +
-  coord_fixed(ratio=pc2/pc1) # Scale plot by variance explained
-
-# Make compositional scree plot
-
-layout(matrix(c(1,2),1,2, byrow=T), widths=c(6,4), heights=c(6,4))
-par(mgp=c(2,0.5,0))
-screeplot(f.pcx, type = "lines", main="Scree plot")
-screeplot(f.pcx, type = "barplot", main="Scree plot")
-
-# anosim between groups using Aitchison distance
-dist.clr <- dist(f.clr)
-#
-#ano <- anosim(dist.clr, permutations=999)
-## coloring from https://rpubs.com/gaston/dendrograms
-#adonis(dist.clr ~ psyllid_spp,
-#       data = metadata)
-
-
-#make compositional dendrogram
-library(ggdendro)
-hc <- hclust(dist.clr, method="ward.D2")
-dend <- as.dendrogram(hc)
-
-
-#
-#test <- gp.philr %>% NbClust(distance = "euclidean",
-#          min.nc = 2, max.nc = 20, 
-#          method = "Ward ", index ="kl") 
-
-#How to calculate how many significant clusters there are?? a Scree plot?
-#Can then label with the K we want
-#dend2 <- color_branches(dend, k = 9, groupLabels = TRUE)
-
-#Replace labels
-samdf <- samdf %>%
-  mutate(labels = paste0(psyllid_spp,"-",Sample.Name,"-",hostplant_spp))
-
-labels(dend) <- as.data.frame(labels(dend)) %>%
-    dplyr::rename(Sample.Name = `labels(dend)`) %>%
-    left_join(samdf, by="Sample.Name") %>%
-    pull(labels)
-
-# Rectangular lines
-ddata <- dendro_data(dend, type = "rectangle")
-gg.dend <- ggplot(segment(ddata)) + 
-  geom_segment(aes(x = x, y = y, xend = xend, yend = yend))  + 
-  scale_y_reverse(expand = c(0, 0)) +
-  theme_bw()+
-  scale_x_discrete(expand=c(0.001,0.001))+
-  coord_flip()
-
-#Create a barchart using the original compositions and arrange them by the hc clustered clr values
-
-#Think it would be better to tip_glom here! - try and get it close to agglomerating at genus, but not merging the lots of Entrerobacidae ASV's
-ps2_bar <- ps2 %>%
-  #speedyseq::tax_glom(taxrank = "Genus") %>%           # agglomerate at Order level
-  transform_sample_counts(function(x) {x/sum(x)} ) %>% # Transform to rel. abundance
-  speedyseq::psmelt() %>%                                         
-  filter(Abundance > 0.01) %>% # Could instead mutate this to just be "Low abundance"
-  mutate(labels = paste0(psyllid_spp,"-",Sample.Name,"-",hostplant_spp)) %>%
-  mutate(labels = factor(labels, levels=labels(dend)))
-
-library(RColorBrewer)
-col <- colorRampPalette(brewer.pal(11, "Spectral"))(38)
-
-gg.bar <- ggplot(ps2_bar, aes(x = labels, y = Abundance, fill = Order)) + 
-  geom_bar(stat = "identity", width = 0.8) +
-  theme_minimal()+
-  theme(axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        legend.position = "right",
-        plot.margin=unit(c(-2,-1,10,0),unit="cm"),
-        axis.text.x = element_text(colour = a)) +
-  scale_x_discrete(expand=c(0,0),position="top")+
-  scale_y_discrete(expand=c(0,0))+
-  scale_fill_manual(values=col) +
-  guides(fill=guide_legend(ncol=1)) +
-  coord_flip() 
-
-#plot together
-
-Fig1 <- gg.dend + gg.bar + plot_layout(ncol = 2, widths = c(1,3))
-```
-
