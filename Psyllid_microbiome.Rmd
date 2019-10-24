@@ -17,6 +17,12 @@ opts_chunk$set(dev = 'png')
 
 # Introduction 
 
+Potential sturcture:
+1- Richness - is alpha diversity related to psyllid Identity, or phylogeny
+2- Clustering & Beta diversity - CLR /PhilR
+3- Random forest - Is whole microbiome predictive of host identity
+4- Mantel tests, PGLMM - is whole microbiome related to host phylogeny?
+5- Core microbiome (endosymbiont) analysis - Is host phylogeny predicted by phylogeny of certain endosymbionts or core micorbiome members?
 
 ## Load packages 
 
@@ -745,35 +751,15 @@ gg.prev <- subset(prevdf, Phylum %in% get_taxa_unique(ps0, "Phylum")) %>%
 gg.prev
 ```
 
-# Whole microbiome analyses
+# Alpha Diversity
 
-## Alpha Diversity
+The first question we wish to ask is there a relationship between alpha diversity (richness) of microbial taxa and either psyllid identity or psyllid phylogeny.
 
-Because there is high correlation between observed richness and sequencing depth, we need to take this into account in our richness estimates
+While measurement error in microbiome studies affects all analyses of microbiome data, alpha diversity is particularly affected because commonly used estimates of alpha diversity are heavily biased compared to other estimation problems in microbial ecology. One major bias is the high correlation between observed richness and sequencing depth, as we can see in the below plots.
 
-https://github.com/adw96/stamps2018/blob/master/estimation/diversity-lab.R
-
-On plot plot observed richness (geom_point), estimated richness (geom_point, higher), and confidence intervals. facet by species?
-
-This really breaks after filtering due to removal of low abundance taxa that are important for the estimates in breakaway. Breakaway relies on low abundance counts to model unobserved taxa and there
-
-See this workflow: https://maggimars.github.io/OkinawaTroughProtists/OTprotists.html#2_sequence_analysis
-
-While measurement error in microbiome studies affects all analyses of microbiome data, alpha diversity is particularly affected because commonly used estimates of alpha diversity are heavily biased compared to other estimation problems in microbial ecology (such as estimating relative abundances). Instead of using tradional diversity metrics which only tell us about the diversity in our sample (not the actual environment), we will use the breakaway package which adjust the sample diversity of each ecosystem by adding to it an estimate of the number of unobserved species,estimate the variance in the total diversity estimate, and compare the diversities relative to these errors. This option has the advantages of leveraging all observed reads, comparing estimates of the actual parameter of interest (total diversity), and accounting for experimental noise. Note that these estimates account for different sequencing depths! breakaway estimates the number of missing species based on the sequence depth and  number of rare taxa in the data
-
-
-As this study was a survey across many species with not many replicates, i t is unsuprising that significant differences were not found. Therefore there is only limited assertions we can make make about underlying richness.
-
-We use the betta model of Willis, A. and Bunge, J. (2015). Estimating diversity via frequency ratios. Biometrics. which works like regression but takes into account uncertainty in diversirty estimates betta accounts for strains that are present in the environment but not observed in the samples due to incomplete sampling. The number of unobserved strains is estimated based on the number of strains that are observed and their abundances. The total strain diversity was estimated using breakaway 
-
-
-Further problem is that the index switching is different between batches, so we expect batch 2 to have higher diversity - Or not? 
-
-This should come before merging technical replicates as well. Technical replicate merg
-
-```{r alpha diversity}
-## Plot observed richness, as a function of sequencing (sampling) depth
+```{r richness diagnostics}
 library(breakaway)
+## Plot observed richness, as a function of sequencing (sampling) depth
 gg.richdepth <- data.frame("observed_richness" = (sample_richness(ps2) %>% summary)$estimate,
                "depth" = phyloseq::sample_sums(ps2), 
                "type" = ps2 %>% sample_data %>% get_variable("psyllid_spp")) %>%
@@ -782,7 +768,8 @@ gg.richdepth <- data.frame("observed_richness" = (sample_richness(ps2) %>% summa
       geom_smooth(aes(x = depth, y = observed_richness),method="lm", inherit.aes = FALSE) +
       xlab("Sequencing Depth") + 
       ylab("Observed richness") +
-      ggtitle("Observed richness by sequencing depth")
+      ggtitle("Observed richness by sequencing depth") +
+      theme(legend.position = "none")
 
 gg.richrun <- data.frame("observed_richness" = (sample_richness(ps2) %>% summary)$estimate, 
                "type" = ps2 %>% sample_data %>% get_variable("seqrun")) %>%
@@ -797,34 +784,30 @@ gg.richrun <- data.frame("observed_richness" = (sample_richness(ps2) %>% summary
 print(gg.richdepth)
 print(gg.richrun)
 
+```
+
+
+Due to these biases, instead of using traditional plug-in diversity estiamtors, which only tell us about the diversity of our samples (observed richness), instead of the actual environment (actual richness), we will use the breakaway package which uses biological replicates to estimate the total diversity in the environment. Breakaway estimates the number of missing species based on the sequence depth and  number of rare taxa in the data, and accounts for experimental noise such as the correlation between observed richness and the sequencing depth.
+
+Following the initial estimate of diversity and variance using the breakaway package, we use the betta model of Willis, A. and Bunge, J. (2015) which works like regression but takes into account uncertainty in diversirty estimates betta accounts for strains that are present in the environment but not observed in the samples due to incomplete sampling.. Some of the samples in the initial estimates had large standard errors, indicating that we cannot precisely estimate the total species richness in those sample. In the betta model these samples will be given less weight in the regression than samples with small standard errors on their richness estimates. This is the behaviour we want, because while that sample contains some information, the standard error is telling us that the richness estimate may not be as reliable as other samples' estimates, and we should downweight the importance of that observation relative to observations would smaller standard errors on their richness estimates.
+
+## Estimate richness
+
+May be interesting to model richness at different taxonomic ranks?
+
+```{r estimate richness}
 #Model richness for all samples by psyllid spp
-ba <- breakaway(ps2) # Leaving cutoff at NA ruins hte error estimates?  -what does hte cutoff mean?
-#ba 
-plot(ba, ps2, color = "psyllid_spp") + theme(legend.position="none")
+ba <- breakaway(ps2) 
 
 ## Check the specification of the model
 betta_pic(summary(ba)$estimate, summary(ba)$error)
 
-## PROBLEM SEEMS TO BE THE CUTOFF?- changign to cutoff2 seems to work?
-## Massive breakaway scores are occuring when sample is dominated by a single taxa, with others at really low number - need to filter this
-ps_bad <- ps0 %>% subset_samples(SampleID == "116b_S96") %>% filter_taxa( function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
-
-taxa_names(ps_bad) <- paste0("SV", seq(ntaxa(ps_bad)),"-",tax_table(ps_bad)[,7])
-
-fc_bad <- ps_bad %>% otu_table() %>% t() %>% make_frequency_count_table
-
-# Let's fit the breakaway to this sample - 
-ba_bad <- breakaway(fc_bad, cutoff=3)
-
-
 ba_estimates <- summary(ba) %>%
-      add_column("SampleID" = ps2 %>% otu_table %>% sample_names) %>%
-      left_join(samdf, by = "SampleID")
+      add_column("Sample.Name" = ps2 %>% otu_table %>% sample_names) %>%
+      left_join(samdf, by = "Sample.Name")
 
-library(RColorBrewer)
-col <- colorRampPalette(brewer.pal(11, "Spectral"))(74)
-
-gg.barichnes <- ggplot(ba_estimates, aes(x=psyllid_spp, y=estimate, fill=psyllid_spp)) + # Should i add a hline for the intercept?
+## Plot the richness estimates from each sample
+gg.barichnes <- ggplot(ba_estimates, aes(x=psyllid_spp, y=estimate, fill=psyllid_spp)) + 
   geom_boxplot(outlier.alpha = 0) +
   geom_jitter(aes(colour=psyllid_spp), colour="black", pch=21) +
   theme_bw() +
@@ -835,41 +818,97 @@ gg.barichnes <- ggplot(ba_estimates, aes(x=psyllid_spp, y=estimate, fill=psyllid
   ylab("Richness Estimate")
 
 
-##It might be nice to model richness at different taxonomic ranks!
+#Model richness with psyllid_spp as a fixed effect
+bt_spp <- betta(chats = ba_estimates$estimate,
+                      ses = ba_estimates$error,
+                      X = model.matrix(~psyllid_spp, data = ba_estimates)) 
+
+bt_spp$table
+
+bt_sppdf <- as_tibble(bt_spp$table, rownames="psyllid_spp")%>% 
+                mutate_at(2:4, as.numeric) %>%
+              magrittr::set_colnames(c("Estimates", "SE", "P"))
+
+#Model richness with hostplant_spp as a fixed effect
+bt_host <- betta(chats = ba_estimates$estimate,
+                      ses = ba_estimates$error,
+                      X = model.matrix(~hostplant_spp, data = ba_estimates)) 
+
+bt_hostdf <- as_tibble(bt_host$table, rownames="psyllid_spp")%>% 
+                mutate_at(2:4, as.numeric) %>%
+              magrittr::set_colnames(c("Estimates", "SE", "P"))
+
+## Model with psyllid_spp as a fixed effect and host_plant spp as a random effect
+bt_sppfixed_hostrandom <- betta_random(chats = ba_estimates$estimate,
+                                  ses = ba_estimates$error,
+                                  X = model.matrix(~psyllid_spp, data = ba_estimates), # Set fixed effects
+                                  groups=ba_estimates$hostplant_spp) # Set random effects
+
+#Would you also add seqrun as a random effect? collection date?  
+
+#Our intercept term is one that is left out
+intercept <- unique(ba_estimates$psyllid_spp[which(!ba_estimates$psyllid_spp %in% bt_randomdf$psyllid_spp)])
+
+bt_randomdf <- as_tibble(bt_sppfixed_hostrandom$table, rownames="psyllid_spp")%>% 
+                mutate(psyllid_spp = str_replace(psyllid_spp, pattern="psyllid_spp", replacement="")) %>%
+                magrittr::set_colnames(c("psyllid_spp", "Estimates", "SE", "P")) %>%
+                mutate(Estimates = case_when(
+                  psyllid_spp == "(Intercept)" ~ Estimates,
+                  !psyllid_spp == "(Intercept)" ~ Estimates + 
+                                      filter(., str_detect(psyllid_spp, "Intercept") ) %>% # Rescale by intercept
+                                      pull(Estimates)
+                  
+                )) %>%
+                mutate(psyllid_spp = str_replace(psyllid_spp, pattern="(Intercept)", replacement = intercept)) %>%
+                mutate(significant = case_when(
+                  P < 0.05 ~ TRUE,
+                  P > 0.05 ~ FALSE
+                ))
 
 
-#Model richness taking into account the variance in sampling depth
-bt <- betta(summary(ba)$estimate,
-            summary(ba)$error,
-            make_design_matrix(ps2, "psyllid_spp"))
-bt$table
+library(RColorBrewer)
+col <- colorRampPalette(brewer.pal(11, "Spectral"))(75)
+
+gg.betarichness <- ggplot(bt_randomdf, aes(x=psyllid_spp, y=Estimates, fill=psyllid_spp)) + 
+  geom_point(aes(shape=significant, colour=psyllid_spp), size=3) + 
+  geom_errorbar(aes(x=psyllid_spp, ymin=Estimates-SE, ymax=Estimates+SE)) +
+  geom_hline(yintercept= bt_randomdf %>% filter(psyllid_spp == paste0("(",intercept,")") ) %>% pull(Estimates)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle=90, vjust=0, hjust=1),
+        legend.position = "none") +
+  scale_fill_manual(values=col) +
+  scale_colour_manual(values=col) +
+  ylab("Richness Estimate") + 
+  coord_flip()  + 
+  ggtitle("Estimated taxonomic richness of psyllid microbiomes")
+
+## Arrange this by phylogeny? then have the mantel and ID results?
+
+## How to test if you can predict richness by identity?
+
+# Richness by phylogeney? Mantel
+
+```
 
 
-#Model richness for all samples by host plant
-plot(ba, ps2, color = "hostplant_spp") + theme(legend.position="none")
+### Sanity check using chao bunge
+
+```{r chao bunge}
+cb <- breakaway(ps2 %>% subset_samples(SampleID=="88_S75")) 
+
+
+## Check the specification of the model
+betta_pic(summary(cb)$estimate, summary(cb)$error)
 
 ba_estimates <- summary(ba) %>%
       add_column("Sample.Name" = ps2 %>% otu_table %>% sample_names) %>%
       left_join(samdf, by = "Sample.Name")
 
-gg.plantrich <- ggplot(ba_estimates, aes(x=hostplant_spp, y=estimate, fill=hostplant_spp)) + # Should i add a hline for the intercept?
-  geom_boxplot(outlier.alpha = 0) +
-  geom_jitter( aes(colour=hostplant_spp)) +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle=90, vjust=0, hjust=1),
-        legend.position = "none") +
-  ylab("Richness Estimate")
 
-## Check the specification of the model
-betta_pic(summary(ba)$estimate, summary(ba)$error)
-
-#Model diversity taking into account the variance in sampling depth
-bt <- betta(summary(ba)$estimate,
-            summary(ba)$error,
-            make_design_matrix(ps2, "hostplant_spp"))
-bt$table
+```
 
 
+```{r divnet}
 ## Try with divnet
 
 library(DivNet)
@@ -895,162 +934,10 @@ divnet_asv$shannon %>%
 
 ```
 
-
-## Minimum abundance threshold
-
-Maybe this should be done just for carsonella tree
-
-These samples were sequenced using combinatorial indexes. Therefore this data will contain index switching. We therefore need to select an optimal filtering threshold to remove switched taxa, but not real taxa. We will optimise our filtering threshold by relying on assumption that all psyllid species should contain only one (or few very closely related ASVs) of Carsonella.
-
-```{r thresholds}
-#Flag top abundance carsonella
-top_carson <-  ps2 %>%
-  transform_sample_counts(function (x) x/sum(x)) %>%
-  speedyseq::psmelt() %>%
-  filter(Genus=="Candidatus_Carsonella") %>%
-  group_by(Sample) %>%
-  top_n(1, wt=Abundance) %>%
-  mutate(top = TRUE)  %>%
-  filter(Abundance > 0)
-  
-#Flag lower abundance carsonella
-carson <-  ps2 %>%
-  transform_sample_counts(function (x) x/sum(x)) %>%
-  speedyseq::psmelt() %>%
-  filter(Genus=="Candidatus_Carsonella") %>%
-  left_join(top_carson) %>%
-  mutate(top = case_when(
-    is.na(top) ~ FALSE,
-    !is.na(top) ~ top
-  ))
-
-carson <- carson %>%
-  left_join(carson %>%
-    filter(Abundance > 0) %>%
-    dplyr::select(OTU, top, seqrun) %>%
-    unique() %>%
-    group_by(OTU, seqrun) %>%
-    add_tally() %>%
-    mutate(switched = case_when(
-      n>1 & top== FALSE ~ TRUE,
-      n>1 & top== TRUE ~ FALSE,
-      n==1 ~ FALSE,
-    )) %>%
-  dplyr::select(-n)
-  )
-
-## Plot true and false carsonellas by run - this shows may need to filter seperately by run, as seqrun2 has much higher than others.
-gg.switch <- carson %>% 
-  group_by(seqrun, switched) %>%
-  filter(!is.na(switched)) %>%
-  filter(Abundance > 0) %>%
-  summarise(n = n()) %>%
-  mutate(freq = n / sum(n)) %>%
-  ggplot(aes(x=seqrun, y=freq, group=switched, fill=switched)) +
-  geom_bar(stat="identity")
+As this study was a survey across many species with not many replicates, it is unsuprising that significant differences were not found. Therefore there is only limited assertions we can make make about underlying richness.
 
 
-#to check if index switching could explain the multiple OTU's check if top=FALSE carsonella exist as top in another sample in the same run
-
-thresholds <- seq(0,0.05,0.0001)
-out <- vector("list", length=3)
-for (r in 1:3) {
-  df <- data.frame(thresh = thresholds, TP= thresholds, FP = thresholds, seqrun = r)
-  for(i in 1:length(thresholds)){
-    filt <- carson %>%
-      filter(seqrun==r) %>%
-      filter(Abundance > thresholds[i]) %>%
-      group_by(top) %>%
-      summarise(sum=n())
-    df$FP[i] <- filt$sum[1]
-    df$TP[i] <- filt$sum[2]
-  }
-  out[[r]] <- df
-}
-
-gg.filt <- out %>%
-  bind_rows() %>%
-  gather(key=type, value=n, -thresh, -seqrun) %>%
-  ggplot(aes(x=thresh, y=n, fill=type)) + 
-  geom_density(stat="identity", alpha=0.5) + 
-  scale_x_continuous(breaks=seq(0,0.05,0.001)) +
-  facet_grid(~seqrun) +
-  theme(axis.text.x = element_text(angle=45,hjust=1)) + 
-  geom_vline(xintercept = 0.0035)+ 
-  geom_vline(xintercept = 0.001)
-
-print(gg.filt)
-
-## Filter run 2 
-run2_ps <- ps2 %>% 
-  subset_samples(seqrun==2)
-
-run2_pass <- run2_ps %>%
-    transform_sample_counts(function (x) x/sum(x)) %>%  # Convert to proportions
-    transform_sample_counts(function (x) (x > 0.001) * 1)
-
-newotu1 <- otu_table(run2_ps) * otu_table(run2_pass)
-
-run2_newps <- run2_ps
-otu_table(run2_newps) <- otu_table(newotu1, taxa_are_rows = FALSE) 
-
-#Filter run 1 and 3 
-  
-run13_ps <- ps2 %>%
-    subset_samples(!seqrun == 2)
-                   
-run13_pass <- run13_ps %>%
-    transform_sample_counts(function (x) x/sum(x)) %>%  # Convert to proportions
-    transform_sample_counts(function (x) (x > 0.0005) * 1)
-
-newotu2  <- otu_table(run13_ps) * otu_table(run13_pass)
-
-run13_newps <- run13_ps
-otu_table(run13_newps) <- otu_table(newotu2, taxa_are_rows = FALSE) 
-
-# Create new phyloseq and drop missing taxa
-ps3 <- merge_phyloseq(run2_newps, run13_newps) %>%
-  filter_taxa(function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
-ps3 <- prune_samples(sample_sums(ps3) >0 , ps3) # Drop empty samples
-
-#Count number of overall taxa pre and post filtering
-print(paste(ntaxa(ps2) - ntaxa(ps3), " taxa Dropped when using filtering threshold of: ", 0.0035, " for run 2 and ", 0.001, "for run 1 and 3"))
-
-# Count number of carsonella OTU's per sample pre and post filtering
-n_carson <- speedyseq::psmelt(ps2) %>% 
-  filter(Genus == "Candidatus_Carsonella") %>%
-  filter(Abundance > 0) %>%
-  dplyr::select(Sample.Name, OTU) %>%
-  group_by(Sample.Name) %>%
-  add_tally() %>%
-  dplyr::select(-OTU) %>%
-  unique() %>%
-  mutate(type = "pre") %>%
-  bind_rows(.,speedyseq::psmelt(ps3) %>% 
-  filter(Genus == "Candidatus_Carsonella") %>%
-  filter(Abundance > 0) %>%
-  dplyr::select(Sample.Name, OTU) %>%
-  group_by(Sample.Name) %>%
-  add_tally() %>%
-  dplyr::select(-OTU) %>%
-  unique() %>%
-  mutate(type = "post"))
-
-gg.ncarson <- ggplot(n_carson, aes(x=reorder(Sample.Name, -n), y=n)) + 
-  geom_bar(stat="identity") +
-  facet_grid(~type) + 
-  xlab("Sample.Name") +
-  ylab("Number of carsonella OTU's per sample") +
-  theme(axis.text.x = element_text(angle=90, hjust = 1, vjust=0))
-
-print(gg.ncarson)
-
-#check if any samples dont have carsonella
-table(!n_carson$Sample.Name %in% speedyseq::psmelt(ps2)$Sample.Name)
-
-```
-
-## Beta diversity
+# Beta diversity
 
 
 ## philR transformation
@@ -1097,6 +984,7 @@ gp.philr <- philr(otu.table, tree,
                   part.weights='enorm.x.gm.counts',
                   ilr.weights='blw.sqrt')
 ```
+
 ### All samples beta
 
 ```{r beta plots}
@@ -1253,17 +1141,358 @@ Geographic distances between collection locations
 
 library(vegan)
 
-adonis(gp.dist ~ psyllid_spp,
+gp.dist <- dist(gp.philr, method="euclidean")
+metadata <- as(sample_data(ps2.philr), "data.frame")
+
+
+adonis(gp.dist ~ psyllid_spp, method = "euclidean",
        data = metadata)
 
+adonis(gp.dist ~ hostplant_spp, method = "euclidean",
+       data = metadata)
+
+#Pairwise permanova
+tst<-adonis_pairwise(x=meta, dd=vegdist(OTUsSCM10, method = "euclidean"), group.var="Region_SKN")
+tst$Adonis.tab
+
+#Interacitons
+adonis(gp.dist ~ psyllid_spp*hostplant_spp, method = "euclidean",
+       data = metadata)
+
+adonis(gp.dist ~ hostplant_spp*psyllid_spp,
+       data = metadata)
 
 #ano <- anosim(gp.dist, permutations=999)
 ```
 
+This suggests that species significantly cluster, and so do hostplants. However when accounting for species, hostplants are not significant. Therefore it should be justified to redo the barchart merging by species 
+
+
+### Merge species
+
+
+```{r replicates}
+# Merge replicates
+ps.sppmerged <- ps3 %>%
+    merge_samples(group = "psyllid_spp")
+
+#This loses the sample metadata - Need to add it agian
+samdf <- read.csv("sample_data/Sample_info.csv", header=TRUE) %>%
+  filter(!duplicated(psyllid_spp)) %>%
+  set_rownames(.$psyllid_spp) %>%
+  dplyr::select(c("SampleID", "Sample.Name", "seqrun", "psyllid_spp", "psyllid_genus", "psyllid_family", "hostplant_spp","Collection","Collection.Date"))
+
+sample_data(ps.sppmerged) <- samdf
+ps4 <- filter_taxa(ps.sppmerged, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
+
+```
+
 ### Species only beta
 
+```{r beta plots}
+ps4.coda <- ps4
+
+#Rename taxa
+taxa_names(ps4.coda) <- paste0("SV", seq(ntaxa(ps4.coda)),"-",tax_table(ps4.coda)[,6])
+
+ps4.philr <- transform_sample_counts(ps4.coda, function(x) x+1)
+
+ape::is.rooted(phy_tree(ps4.philr))
+ape::is.binary.tree(phy_tree(ps4.philr))
+
+phy_tree(ps4.philr) <- multi2di(phy_tree(ps4.philr))
+phy_tree(ps4.philr) <- makeNodeLabel(phy_tree(ps4.philr), method="number", prefix='n')
+
+#Transpose
+otu.table <- otu_table(ps4.philr)
+tree <- phy_tree(ps4.philr)
+metadata <- as(sample_data(ps4.philr), "data.frame")
+tax <- tax_table(ps4.philr)
+ps4.philr <- philr(otu.table, tree,
+                  part.weights='enorm.x.gm.counts',
+                  ilr.weights='blw.sqrt')
+
+gp.dist <- dist(ps4.philr, method="euclidean")
+
+
+# perform a singular value decomposition of CLR
+f.pcx <- prcomp(ps4.philr)
+pcx <- f.pcx 
+
+#Name balances
+
+pcnames <-  sapply(rownames(pcx$rotation), function(x) name.balance(tree, tax, x))
+pcnames <- make.unique(pcnames, sep = ".")
+
+rownames(pcx$rotation) <- pcnames
+#fviz_pca_biplot(pcx) 
+
+#Extract biplot objects
+pc_samp <- data.frame(psyllid_spp = rownames(pcx$x), pcx$x[, 1:2]) %>%
+  left_join(samdf, by="psyllid_spp")
+pc_otu <- data.frame(OTU = rownames(pcx$rotation), pcx$rotation[, 1:2])
+
+# calculate percent variance explained for the axis labels
+pc1 <- round(pcx$sdev[1]^2/sum(pcx$sdev^2),2)
+pc2 <- round(pcx$sdev[2]^2/sum(pcx$sdev^2),2)
+pc_xlab <- paste("PC1: ", pc1, sep="")
+pc_ylab <- paste("PC2: ", pc2, sep="")
+
+library(ggplot2)
+gg.biplot <- ggplot(pc_samp, aes(PC1, PC2, label=psyllid_spp, colour=psyllid_spp)) + 
+  geom_point(alpha=0.5, size=3) +
+  #geom_text(size=3) +
+  #geom_segment(data=pc_otu, aes(PC1, PC2, xend=0, yend=0), col="red") +
+  #geom_text(data=pc_otu, aes(PC1, PC2, label=OTU), col="red") +
+  geom_point(data=pc_otu,aes(PC1, PC2, label=OTU), col="red") +
+  theme_bw() + 
+  geom_hline(yintercept = 0, linetype=2) +  
+  geom_vline(xintercept = 0, linetype=2) +
+  xlab(pc_xlab) + 
+  ylab(pc_ylab) +
+  theme(legend.position = "none")# +
+ # coord_fixed(ratio=pc2/pc1) # Scale plot by variance explained
+
+#Plot just OTU loadings
+
+gg.loadings <- ggplot(pc_otu, aes(PC1, PC2, label=OTU)) + 
+  geom_point(alpha=0.5, size=3) +
+  geom_text(size=3, vjust=0.5) +
+  theme_bw() + 
+  geom_hline(yintercept = 0, linetype=2) +  
+  geom_vline(xintercept = 0, linetype=2) + 
+  xlab(pc_xlab) + 
+  ylab(pc_ylab) +
+  theme(legend.position = "none") +
+  coord_fixed(ratio=pc2/pc1) # Scale plot by variance explained
+
+# Make compositional scree plot
+
+layout(matrix(c(1,2),1,2, byrow=T), widths=c(6,4), heights=c(6,4))
+par(mgp=c(2,0.5,0))
+screeplot(f.pcx, type = "lines", main="Scree plot")
+screeplot(f.pcx, type = "barplot", main="Scree plot")
+
+#make compositional dendrogram
+library(ggdendro)
+library(dendextend)
+hc <- hclust(gp.dist, method="ward.D2")
+dend <- as.dendrogram(hc)
+
+#Replace labels
+
+# Rectangular lines
+ddata <- dendro_data(dend, type = "rectangle")
+gg.dend <- ggplot(segment(ddata)) + 
+  geom_segment(aes(x = x, y = y, xend = xend, yend = yend))  + 
+  scale_y_reverse(expand = c(0, 0)) +
+  theme_void()+
+  scale_x_discrete(expand=c(0.001,0.001))+
+  coord_flip()
+
+ps4_bar <- #subset_taxa(ps3, !Family == "Enterobacteriaceae") %>%
+            ps4 %>%
+  speedyseq::tax_glom(taxrank = "Order") %>%           # agglomerate at Order level
+  transform_sample_counts(function(x) {x/sum(x)} ) %>% # Transform to rel. abundance
+  speedyseq::psmelt() %>%
+  #mutate(Family = case_when(
+  #  Abundance >= 0.01 ~ Genus, # Change this to whatever taxrank we want
+  #  Abundance < 0.01 ~ "NA"
+  #  )) %>%
+  #mutate(plot_level = case_when(
+  #  Family == "Enterobacteriaceae" | Genus == "Candidatus_Carsonella" ~ paste0("G-",Genus),
+  #  TRUE  ~ paste0("P-", Phylum),
+  #  )) %>%
+  filter(Abundance > 0.01) %>% # Could instead mutate this to just be "Low abundance"
+    mutate(psyllid_spp = factor(psyllid_spp, levels=labels(dend)))
+
+library(RColorBrewer)
+col <- colorRampPalette(brewer.pal(11, "Spectral"))(26)
+
+gg.bar <- ggplot(ps4_bar, aes(x = psyllid_spp, y = Abundance, fill = Order)) + 
+  geom_bar(stat = "identity", width = 0.8) +
+  theme_minimal()+
+  theme(axis.title = element_blank(),
+        axis.ticks = element_blank(),
+        legend.position = "right",
+        plot.margin=unit(c(-2,-1,10,0),unit="cm")) +
+  scale_x_discrete(expand=c(0,0),position="top")+
+  scale_y_discrete(expand=c(0,0))+
+  scale_fill_manual(values=col) +
+  guides(fill=guide_legend(ncol=1)) +
+  coord_flip() 
+
+#plot together
+
+Fig2 <- gg.dend + gg.bar + plot_layout(ncol = 2, widths = c(1,3)) + plot_annotation(title="Microbial diversity of New Zealand psyllids, taxa >0.01", subtitle="Merged by species, PhilR transformation, Ward d2 Heirarchial clustering", tag_levels="A")
+
+```
+
+## Random forest
+
+## Mantel test
 
 # Endosymbiont analysis
+
+
+
+## Minimum abundance threshold
+
+Maybe this should be done just for carsonella tree
+
+These samples were sequenced using combinatorial indexes. Therefore this data will contain index switching. We therefore need to select an optimal filtering threshold to remove switched taxa, but not real taxa. We will optimise our filtering threshold by relying on assumption that all psyllid species should contain only one (or few very closely related ASVs) of Carsonella.
+
+```{r thresholds}
+#Flag top abundance carsonella
+top_carson <-  ps2 %>%
+  transform_sample_counts(function (x) x/sum(x)) %>%
+  speedyseq::psmelt() %>%
+  filter(Genus=="Candidatus_Carsonella") %>%
+  group_by(Sample) %>%
+  top_n(1, wt=Abundance) %>%
+  mutate(top = TRUE)  %>%
+  filter(Abundance > 0)
+  
+#Flag lower abundance carsonella
+carson <-  ps2 %>%
+  transform_sample_counts(function (x) x/sum(x)) %>%
+  speedyseq::psmelt() %>%
+  filter(Genus=="Candidatus_Carsonella") %>%
+  left_join(top_carson) %>%
+  mutate(top = case_when(
+    is.na(top) ~ FALSE,
+    !is.na(top) ~ top
+  ))
+
+## THis needs to be changed - things should be flagged as switched when less than 100* the top!, or combine both - ie 
+
+carson <- carson %>%
+  left_join(carson %>%
+    filter(Abundance > 0) %>%
+    dplyr::select(OTU, top, seqrun) %>%
+    unique() %>%
+    group_by(OTU, seqrun) %>%
+    add_tally() %>%
+    mutate(switched = case_when(
+      n>1 & top== FALSE ~ TRUE,
+      n>1 & top== TRUE ~ FALSE,
+      n==1 ~ FALSE,
+    )) %>%
+  dplyr::select(-n)
+  )
+
+## Plot true and false carsonellas by run - this shows may need to filter seperately by run, as seqrun2 has much higher than others.
+gg.switch <- carson %>% 
+  group_by(seqrun, switched) %>%
+  filter(!is.na(switched)) %>%
+  filter(Abundance > 0) %>%
+  summarise(n = n()) %>%
+  mutate(freq = n / sum(n)) %>%
+  ggplot(aes(x=seqrun, y=freq, group=switched, fill=switched)) +
+  geom_bar(stat="identity")
+
+
+#to check if index switching could explain the multiple OTU's check if top=FALSE carsonella exist as top in another sample in the same run
+
+thresholds <- seq(0,0.05,0.0001)
+out <- vector("list", length=3)
+for (r in 1:3) {
+  df <- data.frame(thresh = thresholds, TP= thresholds, FP = thresholds, seqrun = r)
+  for(i in 1:length(thresholds)){
+    filt <- carson %>%
+      filter(seqrun==r) %>%
+      filter(Abundance > thresholds[i]) %>%
+      group_by(top) %>%
+      summarise(sum=n())
+    df$FP[i] <- filt$sum[1]
+    df$TP[i] <- filt$sum[2]
+  }
+  out[[r]] <- df
+}
+
+gg.filt <- out %>%
+  bind_rows() %>%
+  gather(key=type, value=n, -thresh, -seqrun) %>%
+  ggplot(aes(x=thresh, y=n, fill=type)) + 
+  geom_density(stat="identity", alpha=0.5) + 
+  scale_x_continuous(breaks=seq(0,0.05,0.001)) +
+  facet_grid(~seqrun) +
+  theme(axis.text.x = element_text(angle=45,hjust=1)) + 
+  geom_vline(xintercept = 0.0035)+ 
+  geom_vline(xintercept = 0.001)
+
+print(gg.filt)
+
+## Filter run 2 
+run2_ps <- ps2 %>% 
+  subset_samples(seqrun==2)
+
+run2_pass <- run2_ps %>%
+    transform_sample_counts(function (x) x/sum(x)) %>%  # Convert to proportions
+    transform_sample_counts(function (x) (x > 0.001) * 1)
+
+newotu1 <- otu_table(run2_ps) * otu_table(run2_pass)
+
+run2_newps <- run2_ps
+otu_table(run2_newps) <- otu_table(newotu1, taxa_are_rows = FALSE) 
+
+#Filter run 1 and 3 
+  
+run13_ps <- ps2 %>%
+    subset_samples(!seqrun == 2)
+                   
+run13_pass <- run13_ps %>%
+    transform_sample_counts(function (x) x/sum(x)) %>%  # Convert to proportions
+    transform_sample_counts(function (x) (x > 0.0005) * 1)
+
+newotu2  <- otu_table(run13_ps) * otu_table(run13_pass)
+
+run13_newps <- run13_ps
+otu_table(run13_newps) <- otu_table(newotu2, taxa_are_rows = FALSE) 
+
+# Create new phyloseq and drop missing taxa
+ps3 <- merge_phyloseq(run2_newps, run13_newps) %>%
+  filter_taxa(function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
+ps3 <- prune_samples(sample_sums(ps3) >0 , ps3) # Drop empty samples
+
+#Count number of overall taxa pre and post filtering
+print(paste(ntaxa(ps2) - ntaxa(ps3), " taxa Dropped when using filtering threshold of: ", 0.0035, " for run 2 and ", 0.001, "for run 1 and 3"))
+
+# Count number of carsonella OTU's per sample pre and post filtering
+n_carson <- speedyseq::psmelt(ps2) %>% 
+  filter(Genus == "Candidatus_Carsonella") %>%
+  filter(Abundance > 0) %>%
+  dplyr::select(Sample.Name, OTU) %>%
+  group_by(Sample.Name) %>%
+  add_tally() %>%
+  dplyr::select(-OTU) %>%
+  unique() %>%
+  mutate(type = "pre") %>%
+  bind_rows(.,speedyseq::psmelt(ps3) %>% 
+  filter(Genus == "Candidatus_Carsonella") %>%
+  filter(Abundance > 0) %>%
+  dplyr::select(Sample.Name, OTU) %>%
+  group_by(Sample.Name) %>%
+  add_tally() %>%
+  dplyr::select(-OTU) %>%
+  unique() %>%
+  mutate(type = "post"))
+
+gg.ncarson <- ggplot(n_carson, aes(x=reorder(Sample.Name, -n), y=n)) + 
+  geom_bar(stat="identity") +
+  facet_grid(~type) + 
+  xlab("Sample.Name") +
+  ylab("Number of carsonella OTU's per sample") +
+  theme(axis.text.x = element_text(angle=90, hjust = 1, vjust=0))
+
+print(gg.ncarson)
+
+#check if any samples dont have carsonella
+table(!n_carson$Sample.Name %in% speedyseq::psmelt(ps2)$Sample.Name)
+
+## Get the name of taxa that dont have carsonella after filtering
+
+```
 
 
 ```{r subsetting}
@@ -1277,14 +1506,14 @@ library(plotly)
 #ps2.carson <- prune_samples(sample_sums(ps2.carson)>0, ps2.carson) # Drop empty samples
 
 library(RColorBrewer)
-col <- colorRampPalette(brewer.pal(11, "Spectral"))(72)
+col <- colorRampPalette(brewer.pal(11, "Spectral"))(74)
 
 
 ps3.carson <- subset_taxa(ps3, Genus == "Candidatus_Carsonella")
-gg.carson <- plot_tree(ps3.carson, ladderize="left",  color="psyllid_spp", label.tips="psyllid_spp") +   theme(legend.position = "none") + 
-    scale_colour_manual(values=col) +
+gg.carson <- plot_tree(ps3.carson, ladderize="left",  color="psyllid_spp") +   theme(legend.position = "none") + #
+    scale_colour_manual(values=col) + scale_fill_manual(values=col)
   ggtitle("Carsonella 16S gene tree")
-
+#gg.ncarson
 
 #Write out fasta
 
