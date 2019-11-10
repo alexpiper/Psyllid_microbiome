@@ -181,7 +181,7 @@ Model total diversity = a fixed but unknown parameter
 
 ```{r estimate richness}
 # Model richness for all samples by psyllid spp
-ba <- breakaway(ps2)
+ba <- breakaway(ps1)
 
 ## Check the specification of the model
 betta_pic(summary(ba)$estimate, summary(ba)$error)

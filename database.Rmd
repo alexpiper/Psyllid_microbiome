@@ -1,0 +1,283 @@
+---
+title: "Reference DB"
+author: "Alexander Piper"
+date: "10/11/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load packages}
+library(tidyverse)
+library(rentrez)
+library(biofiles)
+library(DECIPHER)
+library(Biostrings)
+library(insect)
+```
+
+# Introduction
+
+First we will determine which publicly available reference database has the best coverage of insect endosymbions
+
+```{r fetch training sequences}
+#Fetch SILVA training set 
+httr::GET("https://zenodo.org/record/1172783/files/silva_nr_v132_train_set.fa.gz?download=1", httr::write_disk("reference/silva_nr_v132_train_set.fa.gz", overwrite=TRUE))
+
+#Fetch GreenGenes training set 
+httr::GET("https://zenodo.org/record/158955/files/gg_13_8_train_set_97.fa.gz?download=1", httr::write_disk("reference/gg_13_8_train_set_97.fa.gz", overwrite=TRUE))
+
+#Fetch RDP training set 
+httr::GET("https://zenodo.org/record/801828/files/rdp_train_set_16.fa.gz?download=1", httr::write_disk("reference/rdp_train_set_16.fa.gz", overwrite=TRUE))
+
+#Fetch RefSEQ + RDP training set
+httr::GET("https://zenodo.org/record/2541239/files/RefSeq-RDP16S_v2_May2018.fa.gz?download=1", httr::write_disk("reference/RefSeq-RDP16S_v2_May2018.fa.gz", overwrite=TRUE))
+
+#Fetch Genome Taxonomy DB training set
+httr::GET("https://zenodo.org/record/2541239/files/GTDB_bac-arc_ssu_r86.fa.gz?download=1", httr::write_disk("reference/GTDB_bac-arc_ssu_r86.fa.gz", overwrite=TRUE))
+```
+
+
+### Evaluate taxonomic coverage of reference databases
+
+```{r ref eval}
+
+set.seed(100)
+
+#Greengenes
+greengenes <- read.fasta("reference/gg_13_8_train_set_97.fa.gz")
+
+cars_gg <- names(greengenes) %>%
+  str_split_fixed(pattern=";",n=7) %>%
+  as_tibble() %>%
+  filter(str_detect(V6,pattern="Carsonella"))
+rm(greengenes)
+
+#SILVA
+silva <- read.fasta("reference/silva_nr_v132_train_set.fa.gz")
+
+cars_silv <- names(silva) %>%
+  str_split_fixed(pattern=";",n=7) %>%
+  as_tibble() %>%
+  filter(str_detect(V6,pattern="Carsonella"))
+rm(silva)
+
+#RDP
+rdp <- read.fasta("reference/rdp_train_set_16.fa.gz")
+
+cars_rdp <- names(rdp) %>%
+  str_split_fixed(pattern=";",n=7) %>%
+  as_tibble() %>%
+  filter(str_detect(V6,pattern="Carsonella"))
+rm(rdp)
+
+#Refseq
+refseq <- read.fasta("reference/RefSeq-RDP16S_v2_May2018.fa.gz")
+
+cars_refseq <- names(refseq) %>%
+  str_split_fixed(pattern=";",n=7) %>%
+  as_tibble() %>%
+  filter(str_detect(V6,pattern="Carsonella"))
+rm(refseq)
+
+#Genome taxonomy database
+gtdb <- read.fasta("reference/GTDB_bac-arc_ssu_r86.fa.gz")
+
+cars_gtdb <- names(gtdb) %>%
+  str_split_fixed(pattern=";",n=7) %>%
+  as_tibble() %>%
+  filter(str_detect(V6,pattern="Carsonella"))
+rm(gtdb)
+
+
+```
+
+From this we can see that the SILVA database has the best coverage of our target groups
+
+## Supplement SILVA DB's with t
+
+We will proceed with the SILVA training sets, and supplement these with psyllid endosymbiont sequences generated from previous studies: 
+
+* Hall, A. A., Morrow, J. L., Fromont, C., Steinbauer, M. J., Taylor, G. S., Johnson, S. N., ... & Riegler, M. (2016). Codivergence of the primary bacterial endosymbiont of psyllids versus host switches and replacement of their secondary bacterial endosymbionts. Environmental Microbiology, 18(8), 2591-2603.
+* Thao, M. L., Moran, N. A., Abbot, P., Brennan, E. B., Burckhardt, D. H., & Baumann, P. (2000). Cospeciation of psyllids and their primary prokaryotic endosymbionts. Appl. Environ. Microbiol., 66(7), 2898-2905. 
+* Thao, M. L., Clark, M. A., Baumann, L., Brennan, E. B., Moran, N. A., & Baumann, P. (2000). Secondary endosymbionts of psyllids have been acquired multiple times. Current microbiology, 41(4), 300-304.
+
+```{r fetch symbiont seqs}
+#Fetch psyllid endosymbiont sequences from other studies
+acc <- read_csv("reference/16s_seqs.csv", col_names = FALSE) %>%
+  pull(X1) %>% 
+  unique
+
+#Search Genbank
+query <- paste(acc, collapse= "[ACCN] OR ")
+search <- entrez_search(db="nuccore", term=query, retmax=999999, use_history = TRUE)
+
+#Retrieve search hits
+dl <- entrez_fetch(db = "nuccore", web_history = search$web_history, rettype = "gb", retmax = 10000)
+gb <- gbRecord(rcd = textConnection(dl))
+
+#Reformat to same format as the SILVA set
+lineage <- biofiles::getTaxonomy(gb) %>%
+  str_replace(pattern="\\.", replacement="") %>%
+  str_split_fixed(pattern = ";", n = Inf) %>%
+  trimws(which = "both") %>%
+  as_tibble() %>% 
+  mutate_all(na_if, "")  %>%
+  magrittr::set_colnames(c("Kingdom", "Phylum", "Class", "Order", "Family", "Subfamily", "Genus")) %>%
+  mutate_all(str_replace_all, pattern=" ", replacement="_") %>%
+  mutate(Order = Order %>% 
+           str_replace(pattern= "Oceanospirillales", replacement="Gammaproteobacteria_Incertae_Sedis"))%>%
+  mutate(Family = Family %>%
+           str_replace(pattern= "Halomonadaceae", replacement="Unknown_Family") %>%
+           str_replace(pattern= "Yersiniaceae", replacement="Enterobacteriaceae") %>%
+           str_replace(pattern= "Pectobacteriaceae", replacement="Enterobacteriaceae") %>%
+           str_replace(pattern= "Morganellaceae", replacement="Enterobacteriaceae")        
+         ) %>%
+  mutate(Genus = case_when(
+    is.na(Genus) & !is.na(Subfamily) ~ Subfamily,
+    !is.na(Genus) ~ Genus,
+    Genus=="Serratia_symbiotica" ~ "Serratia" 	
+  ))  %>%
+  mutate(Species = biofiles::getOrganism(gb)  %>%
+           str_replace(pattern= "Candidatus ", replacement="")
+           ) %>%
+  mutate(rdp_trainset = paste0(Kingdom,";", Phylum,";", Class,";", Order,";", Family,";", Genus))
+
+rdp_species <-  paste(names(biofiles::getSequence(gb)),lineage$Species)
+names <- paste0(names(biofiles::getSequence(gb)), ";", lineage$names)
+
+#Output Kingdom:Genus FASTA
+genus_seqs <- biofiles::getSequence(gb)
+names(genus_seqs) <- lineage$rdp_trainset
+writeXStringSet(genus_seqs, "reference/psyllid_symbionts_trainset.fa.gz", format = "fasta", compress = "gzip", width = 20000, append = TRUE)
+
+#Output Species FASTA
+species_seqs <- biofiles::getSequence(gb)
+names(species_seqs) <- paste(names(biofiles::getSequence(gb)),lineage$Species)
+writeXStringSet(species_seqs, "reference/psyllid_symbionts_species.fa.gz", format = "fasta", compress = "gzip", width = 20000, append = TRUE)
+```
+
+
+# Merge databases
+
+```{r merge datasets}
+#Fetch SILVA training set 
+httr::GET("https://zenodo.org/record/1172783/files/silva_nr_v132_train_set.fa.gz?download=1", httr::write_disk("reference/silva_nr_v132_train_set.fa.gz", overwrite=TRUE))
+#Fetch SILVA assign species formatted training set 
+httr::GET("https://zenodo.org/record/1172783/files/silva_species_assignment_v132.fa.gz?download=1", httr::write_disk("reference/silva_species_assignment_v132.fa.gz", overwrite=TRUE))
+
+#Read in datasets
+silva_trainset <- readDNAStringSet("reference/silva_nr_v132_train_set.fa.gz")
+silva_species <- readDNAStringSet("reference/silva_species_assignment_v132.fa.gz")
+
+symbiont_trainset <- readDNAStringSet("reference/psyllid_symbionts_trainset.fa.gz")
+symbiont_species <- readDNAStringSet("reference/psyllid_symbionts_species.fa.gz")
+
+#Merge datasets
+merged_trainset <- append(silva_trainset, symbiont_trainset, after=length(silva_trainset))
+merged_species <- append(silva_species, symbiont_species, after=length(silva_species))
+
+writeXStringSet(merged_trainset, "reference/silva_v132_symbionts_trainset.fa.gz", format = "fasta", compress = "gzip", width = 20000, append = TRUE)
+writeXStringSet(merged_species, "reference/silva_v132_symbionts_species.fa.gz", format = "fasta", compress = "gzip", width = 20000, append = TRUE)
+
+```
+
+
+# Trim to primer regions
+
+```{r primertrim}
+seqs <- insect::readFASTA("reference/silva_v132_symbionts_trainset.fa.gz")
+
+#Trim to primer region using virtualPCR from insect package
+amplicon <- insect::virtualPCR(seqs, up = "CCTACGGGNGGCWGCAG", down= "GACTACHVGGGTATCTAATCC", minfsc=50, minrsc=50, cores=10, rcdown = TRUE, trimprimers = TRUE)
+
+writeFASTA(amplicon, "reference/silva_v132_symbionts_trainset_trimmed.fa.gz")
+```
+
+# Train IDTAXA
+
+```{r IDTAXA}
+seqs <- readDNAStringSet("reference/silva_v132_symbionts_trainset.fa.gz")
+
+# As taxonomies are encoded in the sequence names rather than a separate file, use:
+taxid <- NULL
+seqs <- RemoveGaps(seqs)
+seqs <- OrientNucleotides(seqs)
+
+#Add root rank
+names(seqs) <- paste0("Root;",names(seqs))
+
+# obtain the taxonomic assignments
+groups <- names(seqs) # sequence names
+groupCounts <- table(groups)
+u_groups <- names(groupCounts) # unique groups
+length(u_groups) # number of groups
+ 
+# Pruning training set
+
+maxGroupSize <- 10 # max sequences per label (>= 1)
+remove <- logical(length(seqs))
+for (i in which(groupCounts > maxGroupSize)) {
+  index <- which(groups==u_groups[i])
+  keep <- sample(length(index),
+  maxGroupSize)
+  remove[index[-keep]] <- TRUE
+}
+sum(remove) # number of sequences eliminated
+
+
+# Training the classifier
+maxIterations <- 3 # must be >= 1
+allowGroupRemoval <- TRUE
+probSeqsPrev <- integer() # suspected problem sequences from prior iteration
+for (i in seq_len(maxIterations)) {
+  cat("Training iteration: ", i, "\n", sep="")
+  # train the classifier
+  trainingSet <- LearnTaxa(seqs[!remove],
+  names(seqs)[!remove],
+  taxid)
+  
+  # look for problem sequences
+  probSeqs <- trainingSet$problemSequences$Index
+  if (length(probSeqs)==0) {
+    cat("No problem sequences remaining.\n")
+    break
+  } else if (length(probSeqs)==length(probSeqsPrev) &&
+  all(probSeqsPrev==probSeqs)) {
+    cat("Iterations converged.\n")
+    break
+    }
+  if (i==maxIterations)
+  break
+  probSeqsPrev <- probSeqs
+  
+  # remove any problem sequences
+  index <- which(!remove)[probSeqs]
+  remove[index] <- TRUE # remove all problem sequences
+  if (!allowGroupRemoval) {
+    # replace any removed groups
+    missing <- !(u_groups %in% groups[!remove])
+    missing <- u_groups[missing]
+    if (length(missing) > 0) {
+    index <- index[groups[index] %in% missing]
+    remove[index] <- FALSE # don't remove
+    }
+  }
+}
+sum(remove) # total number of sequences eliminated
+length(probSeqs) # number of remaining problem sequences
+
+# View the results of training
+
+trainingSet
+plot(trainingSet)
+
+#Write out training set
+saveRDS(trainingSet, file="reference/idtaxa.rds")
+
+```
+
+
+

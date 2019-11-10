@@ -336,7 +336,7 @@ st.all <- mergeSequenceTables(st1, st2, st3)
 
 
 #Remove chimeras
-seqtab.nochim <- removeBimeraDenovo(st.all, method="consensus", multithread=FALSE, verbose=TRUE)
+seqtab.nochim <- removeBimeraDenovo(st.all, method="consensus", multithread=TRUE, verbose=TRUE)
 
 #Check output of chimera removal
 print(paste(sum(seqtab.nochim)/sum(st.all),"of the abundance remaining after chimera removal"))
@@ -370,67 +370,6 @@ saveRDS(seqtab.nochim, "output/rds/seqtab_final.rds") # CHANGE ME to where you w
 
 # Assign taxonomy 
 
-Would be good to compare taxonomies here, what has the best representation for insect associated bacteria?
-  *GreenGenes
-  *RDP
-  *SILVA
-  *Refseq + RDP
-  *GenomeTaxonomyDAtabase
-
-
-### Evaluate taxonomic coverage of reference databases
-
-```{r ref eval}
-
-set.seed(100)
-
-#Greengenes
-greengenes <- read.fasta("reference/gg_13_8_train_set_97.fa.gz")
-
-cars_gg <- names(greengenes) %>%
-  str_split_fixed(pattern=";",n=7) %>%
-  as_tibble() %>%
-  filter(str_detect(V6,pattern="Carsonella"))
-rm(greengenes)
-
-#SILVA
-silva <- read.fasta("reference/silva_nr_v132_train_set.fa.gz")
-
-cars_silv <- names(silva) %>%
-  str_split_fixed(pattern=";",n=7) %>%
-  as_tibble() %>%
-  filter(str_detect(V6,pattern="Carsonella"))
-rm(silva)
-
-#RDP
-rdp <- read.fasta("reference/rdp_train_set_16.fa.gz")
-
-cars_rdp <- names(rdp) %>%
-  str_split_fixed(pattern=";",n=7) %>%
-  as_tibble() %>%
-  filter(str_detect(V6,pattern="Carsonella"))
-rm(rdp)
-
-#Refseq
-refseq <- read.fasta("reference/RefSeq-RDP16S_v2_May2018.fa.gz")
-
-cars_refseq <- names(refseq) %>%
-  str_split_fixed(pattern=";",n=7) %>%
-  as_tibble() %>%
-  filter(str_detect(V6,pattern="Carsonella"))
-rm(refseq)
-
-#Genome taxonomy database
-gtdb <- read.fasta("reference/GTDB_bac-arc_ssu_r86.fa.gz")
-
-cars_gtdb <- names(gtdb) %>%
-  str_split_fixed(pattern=";",n=7) %>%
-  as_tibble() %>%
-  filter(str_detect(V6,pattern="Carsonella"))
-rm(gtdb)
-
-
-```
 
 
 Do a search for carsonella in each of these, and perhaps just do an asignment with the different datasets
@@ -524,7 +463,7 @@ samdf <- samdf %>%
                                            filter(n()>1) %>% 
                                            pull(Sample.Name))) %>%
   set_rownames(.$SampleID) %>%
-  dplyr::select(c("SampleID", "Sample.Name", "seqrun", "psyllid_spp", "psyllid_genus", "psyllid_family", "hostplant_spp","Collection","Collection.Date","replicated"))
+  dplyr::select(c("SampleID", "Sample.Name", "seqrun", "psyllid_spp", "psyllid_genus", "psyllid_family", "hostplant_spp","Collection.Date","replicated")) #Collection
 
 #Display samDF
 head(samdf)
