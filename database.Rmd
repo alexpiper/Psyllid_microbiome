@@ -198,8 +198,10 @@ writeFASTA(amplicon, "reference/silva_v132_symbionts_trainset_trimmed.fa.gz")
 
 # Train IDTAXA
 
+Make one with  maxGroupSize <- Inf
+
 ```{r IDTAXA}
-seqs <- readDNAStringSet("reference/silva_v132_symbionts_trainset.fa.gz")
+seqs <- readDNAStringSet("reference/silva_v132_symbionts_trainset_trimmed.fa.gz")
 
 # As taxonomies are encoded in the sequence names rather than a separate file, use:
 taxid <- NULL
@@ -217,7 +219,7 @@ length(u_groups) # number of groups
  
 # Pruning training set
 
-maxGroupSize <- 10 # max sequences per label (>= 1)
+maxGroupSize <- Inf # max sequences per label (>= 1)
 remove <- logical(length(seqs))
 for (i in which(groupCounts > maxGroupSize)) {
   index <- which(groups==u_groups[i])
@@ -275,7 +277,7 @@ trainingSet
 plot(trainingSet)
 
 #Write out training set
-saveRDS(trainingSet, file="reference/idtaxa.rds")
+saveRDS(trainingSet, file="reference/silva_v132_symbionts_idtaxa_unpruned.rds")
 
 ```
 
