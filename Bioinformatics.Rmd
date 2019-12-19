@@ -1,0 +1,520 @@
+---
+title: "Psyllid microbiome Bioinformatics"
+author: "Alexander Piper"
+date: "14/08/2019"
+output: html_notebook
+---
+
+
+```{r setup, include=FALSE}
+# Knitr global setup - change eval to true to run code
+
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE, eval=FALSE, message=FALSE,error=FALSE,fig.show = "hold", fig.keep = "all")
+opts_knit$set(root.dir = 'C:/Users/ap0y/Dropbox/workprojects/Agriculture Victoria/Psyllid_microbiome')
+setwd("C:/Users/ap0y/Dropbox/workprojects/PHD/Metabarcoding/Psyllid_microbiome")
+opts_chunk$set(dev = 'png')
+```
+
+## Load packages 
+
+```{r install & Load packages} 
+#Set required packages
+.cran_packages <- c("ggplot2", "gridExtra", "tidyverse", "scales", "stringdist", "patchwork", "vegan", "ggpubr", "seqinr", "viridis","ape", "data.table", "RColorBrewer")
+.bioc_packages <- c("dada2", "phyloseq", "DECIPHER","Biostrings","ShortRead","psadd","microbiome","philr")
+#.github_packages <- c("metacal", "taxreturn", "piperline","speedyseq")
+
+#.inst <- .cran_packages %in% installed.packages()
+#if(any(!.inst)) {
+#   install.packages(.cran_packages[!.inst])
+#}
+#.inst <- .bioc_packages %in% installed.packages()
+#if(any(!.inst)) {
+#  if (!requireNamespace("BiocManager", quietly = TRUE))
+#    install.packages("BiocManager")
+#  BiocManager::install(.bioc_packages[!.inst], ask = F)
+#}
+#
+#Load all packages
+sapply(c(.cran_packages,.bioc_packages), require, character.only = TRUE)
+
+#Load helper functions 
+source('R/helper_functions.R')
+
+#devtools::install_github("benjjneb/dada2")
+#devtools::install_github("mikemc/speedyseq")
+#devtools::install_github("alexpiper/taxreturn")
+#library(taxreturn)
+
+options(stringsAsFactors = FALSE)
+
+```
+
+# Quality Control
+
+## Split files by seqrun
+```{r}
+samdf <- read.csv("sample_data/sample_info.csv")
+
+run1 <- samdf %>%
+  filter(seqrun==1) %>%
+  pull(SampleID) %>%
+  as.character()
+write_lines(run1,path="Run1.txt")
+
+run2 <- samdf %>%
+  filter(seqrun==2) %>%
+  pull(SampleID) %>%
+  as.character()
+write_lines(run2,path="Run2.txt")
+
+run3 <- samdf %>%
+  filter(seqrun==3) %>%
+  pull(SampleID) %>%
+  as.character()
+write_lines(run3,path="Run3.txt")
+
+```
+
+
+```{bash split files}
+
+mkdir run_1
+cat Run1.txt | while read i; do
+payload=$(ls | grep $i)
+echo $payload
+mv $payload run_1
+done
+
+mkdir run_2
+cat Run2.txt | while read i; do
+payload=$(ls | grep $i)
+echo $payload
+mv $payload run_2
+done
+
+mkdir run_3
+cat Run3.txt | while read i; do
+payload=$(ls | grep $i)
+echo $payload
+mv $payload run_3
+done
+
+```
+
+## Sequencer IDs for different runs
+
+run_1 - @M01895:3:000000000-AFED3:1:1101:11856:1005 1:N:0:89
+run_2 - @M00598:140:000000000-ALTW6:1:1104:15177:9425 2:N:0:120
+run_3 - @M00933:9:000000000-BFR4B:1:1101:13542:1780 1:N:0:86
+
+
+## Sequence quality control
+
+```{r Pooling of libraries}
+library(ShortRead)
+
+runs <- dir("data/", pattern="run_")
+
+for (i in seq(along=runs)){
+path <- paste0("data/",runs[i]) # CHANGE ME to the directory containing your demultiplexed forward-read fastq files
+
+  #path <- paste0("data/",runs[i])
+
+#Plot number of reads
+dat <- as.data.frame(countLines(dirPath=path, pattern=".fastq")) %>%
+  rownames_to_column()  %>%
+   `colnames<-`(c("Sample", "Reads")) %>%
+  filter(str_detect(Sample,"R1"))
+
+#Plot pooling
+
+gg.pooling <- ggplot(data=dat, aes(x=Sample,y=Reads),stat="identity") + 
+  geom_bar(aes(fill=Reads),stat="identity")  + 
+  scale_fill_viridis(name = "Reads", begin=0.1) + 
+  theme(axis.text.x = element_text(angle=90, hjust=1), plot.title=element_text(hjust = 0.5), plot.subtitle =element_text(hjust = 0.5))+ 
+  geom_hline(aes(yintercept = mean(Reads)))  +
+  xlab("sample name")+
+  ylab("Number of reads") + 
+  labs(title= paste0("Pooling for : ", runs[i]), subtitle = paste0("Total Reads: ", sum(dat$Reads), " Average reads: ",  sprintf("%.0f",mean(dat$Reads))," Standard deviation: ", sprintf("%.0f",sd(dat$Reads)))) +
+  coord_flip()
+
+plot(gg.pooling)
+}
+```
+
+
+## Trim primers
+
+DADA2 requires Non-biological nucleotides i.e. primers, adapters, linkers, etc to be removed. Prior to begining this workflow, samples were demultiplexed and illumina adapters were removed by the MiSeq software, however primer sequences still remain in the reads and must be removed prior to use with the DADA2 algorithm.
+
+ Primer sequences - 
+16S F CCTACGGGNGGCWGCAG
+16S R GACTACHVGGGTATCTAATCC
+
+All reads were trimmed to 300bp, then primers were removed. All reads for which primers were not detected were removed using the maxlength function.
+
+```{r trim primers,message=FALSE}
+#Install bbmap
+#bbmap_install()
+
+#Problem - maxlength is removing run 2 - Why tf is this over 300bp reads??
+
+#Loop over runs - Maxlength set to remove any untrimmed reads
+runs <- dir("data/", pattern="run_")
+
+for (i in seq(along=runs)){
+path <- paste0("data/",runs[i]) # CHANGE ME to the directory containing your demultiplexed forward-read fastq files
+
+#Trim forward primers - Set a maxlength to remove all those that werent trimemd
+fastqFs <- sort(list.files(path, pattern="_R1", full.names = TRUE))
+fastqRs <- sort(list.files(path, pattern="_R2_", full.names = TRUE))
+
+bbtools_trim(install="bin/bbmap", fwd=fastqFs,rev=fastqRs, primers=c("CCTACGGGNGGCWGCAG","GACTACHVGGGTATCTAATCC"), copyundefined=TRUE, outpath="trimmed",ktrim="l", ordered=TRUE,mink=FALSE, hdist=2, overwrite=TRUE, samelength=TRUE, forcetrimright = 300, maxlength = 285)
+}
+
+```
+
+## Plot read quality & lengths
+
+Note - something is going wierd with run 3
+
+Run2 reverse, most reads drop off early
+
+Run1 reversse are pretty awful, drop below Q20 at about 200
+```{r QA plot, eval = TRUE, cache= TRUE}
+runs <- dir("data/", pattern="run_")
+readcounts <- vector("list", length=length(runs))
+
+for (i in seq(along=runs)){
+ path <- paste0("data/",runs[i],"/trimmed" )# CHANGE ME to the directory containing your demultiplexed forward-read fastq files
+
+  filtFs <- sort(list.files(path, pattern="_R1_", full.names = TRUE))
+  filtRs <- sort(list.files(path, pattern="_R2_", full.names = TRUE))
+  p1 <- plotQualityProfile(filtFs, aggregate = TRUE) + ggtitle(paste0(runs[i]," Forward Reads")) 
+  p2 <- plotQualityProfile(filtRs, aggregate = TRUE) + ggtitle(paste0(runs[i]," Reverse Reads"))
+  
+  #output plots
+  dir.create("output/figures/")
+  pdf(paste0("output/figures/",runs[i],"_prefilt_quality.pdf"), width = 11, height = 8 , paper="a4r")
+  plot(p1+p2)
+  dev.off()
+  
+  #Get lengths
+  readcounts[[i]] <- cbind(width(readFastq(file.path(path, fastqFs))), width(readFastq(file.path(path, fastqRs))))
+
+}
+```
+
+The max expected error function is used as the primary quality filter, and all reads containing N bases were removed
+
+In order to reduce the amount of  reverse reads violating the MaxEE filter, the reverse reads were truncated at 200 to remove the quality crash that is typical of illumina sequencers
+
+Total amplicon = 465bp 
+Sequencing = 2x300bp = 600bp
+Primers = 17bp + 21bp = 38bp
+Read overlap = 600 - 465 - 38 = 97bp
+
+reverse should potentiall be reduced further - (from 230 to 200)
+
+```{r filter and trim}
+runs <- dir("data/", pattern="run_")
+filtered_out <- vector("list", length=length(runs))
+readlengths <- vector("list", length=length(runs))
+
+for (i in 1:length(runs)){
+  path <- paste0("data/",runs[i],"/trimmed/") # CHANGE ME to the directory containing your demultiplexed forward-read fastq files
+  filtpath <- file.path(path, "filtered") # Filtered forward files go into the path/filtered/ subdirectory
+  dir.create(filtpath)
+  fastqFs <- sort(list.files(path, pattern="R1_001.*"))
+  fastqRs <- sort(list.files(path, pattern="R2_001.*"))
+  
+  if(length(fastqFs) != length(fastqRs)) stop(paste0("Forward and reverse files for ",runs[i]," do not match."))
+  
+  filtered_out[[i]] <- (filterAndTrim(fwd=file.path(path, fastqFs), filt=file.path(filtpath, fastqFs),
+                                      rev=file.path(path, fastqRs), filt.rev=file.path(filtpath, fastqRs),
+                                      maxEE=c(2,3),truncQ = 0,truncLen=c(280,200), maxN = 0,  rm.phix=TRUE, compress=TRUE, verbose=TRUE))
+  
+  # post filtering plot
+  filtFs <- sort(list.files(filtpath, pattern="R1_001.*", full.names = TRUE))
+  filtRs <- sort(list.files(filtpath, pattern="R2_001.*", full.names = TRUE))
+  p1 <- plotQualityProfile(filtFs, aggregate = TRUE) + ggtitle(paste0(runs[i]," Forward Reads")) 
+  p2 <- plotQualityProfile(filtRs, aggregate = TRUE) + ggtitle(paste0(runs[i]," Reverse Reads"))
+  
+  #output plots
+  dir.create("output/figures/")
+  pdf(paste0("output/figures/",runs[i],"_postfilt_quality.pdf"), width = 11, height = 8 , paper="a4r")
+  plot(p1+p2)
+  dev.off()
+  
+  #Get lengths post filter
+  readlengths[[i]] <- cbind(width(readFastq(file.path(filtFs))), width(readFastq(file.path(filtRs))))
+}
+  
+print(filtered_out)
+
+```
+
+
+
+# Sequence processing
+
+## Infer sequence variants for each run
+
+Every amplicon dataset has a different set of error rates and the DADA2 algorithm makes use of a parametric error model (err) to model this and infer real biological sequence variation from error. Following error model learning, all identical sequencing reads are dereplicated into into “Exact sequence variants” with a corresponding abundance equal to the number of reads with that unique sequence. The forward and reverse reads are then merged together by aligning the denoised forward reads with the reverse-complement of the corresponding reverse reads, and then constructing the merged “contig” sequences. Following this step, a sequence variant table is constructed and saved as an RDS file.
+
+For this analysis we will use all the reads to estimate error rate, and plot the error model for each run as a sanity check
+
+The purpose of priors is to increase sensitivity to a restricted set of sequences, including singleton detection, without increasing false-positives from the unrestricted set of all possible amplicon sequences that must be considered by the naive algorithm
+
+```{r Learn error rates }
+runs <- dir("data/", pattern="run_")
+set.seed(100)
+
+for (i in seq(along=runs)){
+ path <- paste0("data/",runs[i],"/trimmed/" )# CHANGE ME to the directory containing your demultiplexed forward-read fastq files
+  filtpath <- file.path(path, "filtered") # Filtered forward files go into the path/filtered/ subdirectory
+  
+  filtFs <- list.files(filtpath, pattern="R1_001.*", full.names = TRUE)
+  filtRs <- list.files(filtpath, pattern="R2_001.*", full.names = TRUE)
+  
+    # Learn error rates from samples
+  # nread tells the function how many reads to use in error learning, this can be increased for more accuracy at the expense of runtime
+  
+  errF <- learnErrors(filtFs, multithread=TRUE, randomize=TRUE)
+  errR <- learnErrors(filtRs, multithread=TRUE, randomize=TRUE)
+  
+  ##Print error plots to see how well the algorithm modelled the errors in the different runs
+  print(plotErrors(errF, nominalQ=TRUE)+ ggtitle(paste0(runs[i]," Forward Reads")))
+  print(plotErrors(errR, nominalQ=TRUE)+ ggtitle(paste0(runs[i]," Reverse Reads")))
+  
+  #Error inference and merger of reads - Using pseudo pooling for increased sensitivity
+
+  dadaFs <- dada(filtFs, err=errF, multithread=TRUE, pool="pseudo")
+  dadaRs <- dada(filtRs, err=errR, multithread=TRUE, pool="pseudo")
+ 
+  mergers <- mergePairs(dadaFs, filtFs, dadaRs, filtRs, verbose=TRUE, minOverlap = 20)
+  
+# Construct sequence table
+
+seqtab <- makeSequenceTable(mergers)
+
+saveRDS(seqtab, paste0(path,"/seqtab.rds")) # CHANGE ME to where you want sequence table saved
+}
+```
+
+## Merge Runs, Remove Chimeras
+
+Now that the sequence tables are created for each run, they need to be merged into a larger table representing the entire study. Looking at the length of the sequences, we see some off target amplification. There are 3 large peaks, the first one at 280, second at 402bp, and third at 427. The 427bp peak contains the majority of the sequences and is the expected size, while the 402bp peak contains wolbachia which have a 24bp deletion. We will cut the sequences to between 400 and 450, which should take into account any length variation, and remove the 280bp peak (which is the length of the forward read and most likely artefactual). Following this, chimeric sequences are identified and removed using removeBimeraDenovo
+
+
+```{r merge runs and remove chimeras}
+runs <- dir("data/", pattern="run_")
+stlist <- vector()
+
+for (i in seq(along=runs)){
+  path <- paste0("data/",runs[i],"/trimmed/" )
+  seqs <- list.files(path, pattern="seqtab.rds", full.names = TRUE)
+  
+  assign(paste("st", i, sep = ""),readRDS(seqs))
+  stlist <- append(stlist, paste("st", i, sep = ""), after=length(seqs))
+}
+
+st.all <- mergeSequenceTables(st1, st2, st3)
+
+#Test collapsed
+#st.all <- collapseNoMismatch(st.all, minOverlap = 20, orderBy = "abundance",
+#                                   vec = TRUE, verbose = TRUE)
+
+
+#Remove chimeras
+seqtab.nochim <- removeBimeraDenovo(st.all, method="consensus", multithread=TRUE, verbose=TRUE)
+
+#Check output of chimera removal
+print(paste(sum(seqtab.nochim)/sum(st.all),"of the abundance remaining after chimera removal"))
+
+#Check complexity
+hist(seqComplexity(seqtab.nochim), 100)
+
+
+#Look at seqlengths
+plot(table(nchar(getSequences(seqtab.nochim))))
+
+backup <- seqtab.nochim
+
+#cut to expected size
+seqtab.nochim <- seqtab.nochim[,nchar(colnames(seqtab.nochim)) %in% 400:435]
+
+plot(table(nchar(getSequences(seqtab.nochim))))
+print(paste(sum(seqtab.nochim)/sum(st.all),"of the abundance remaining after cutting"))
+
+#Fix names -removing read name, sample number etcc
+rownames(seqtab.nochim) <- rownames(seqtab.nochim) %>% 
+  str_split_fixed("_",n=Inf) %>%
+    as_tibble() %>%
+  unite(col=SampleID, c("V1","V2"),sep="_") %>%
+  pull(SampleID)
+
+dir.create("output/rds/")
+saveRDS(seqtab.nochim, "output/rds/seqtab_final.rds") # CHANGE ME to where you want sequence table saved
+
+```
+
+# Assign taxonomy 
+
+
+
+Do a search for carsonella in each of these, and perhaps just do an asignment with the different datasets
+
+We will use the IDTAXA algorithm of Murali et al 2018 - https://doi.org/10.1186/s40168-018-0521-5
+
+This requires training on a curated reference database - The pre-trained file can be found in the reference folder, alternatively see the taxreturn scripts to curate a reference database and train a new classifier.
+
+Folllowing assignment with IDTAXA, we will also use exact matching with a reference database to assign more sequences (including the synthetic positive controls) to species level
+
+### Assign Taxonomy using RDP
+
+```{r assign taxonomy}
+seqtab.nochim <- readRDS("output/rds/seqtab_final.rds")
+
+# Assign Kingdom:Genus taxonomy using RDP classifier
+tax <- assignTaxonomy(seqtab.nochim, "reference/silva_v132_symbionts_trainset_trimmed.fa.gz", multithread=TRUE, minBoot=60, outputBootstraps=FALSE)
+colnames(tax) <- c("Root", "Phylum", "Class", "Order", "Family", "Genus")
+
+##add species to taxtable using exact matching
+tax_plus <- addSpecies(tax, "reference/silva_species_assignment_v132.fa.gz", allowMultiple=TRUE)
+
+##join genus and species name in species rank column - need to make this part of addspecies
+sptrue <- !is.na(tax_plus[,7])
+tax_plus[sptrue,7] <- paste(tax_plus[sptrue,6],tax_plus[sptrue,7], sep=" ")
+
+tax_plus <- propagate_tax(tax_plus,from="Phylum")
+
+#add Genus_SPP
+#for(col in seq(7,ncol(tax_plus))) { 
+# propagate <- is.na(tax_plus[,col]) & !is.na(tax_plus[,col-1])
+#  tax_plus[propagate,col:ncol(tax_plus)] <-  "spp."
+#}
+
+#Check Output
+taxa.print <- tax_plus # Removing sequence rownames for display only
+rownames(taxa.print) <- NULL
+head(taxa.print)
+
+
+# Write taxonomy table to disk
+saveRDS(tax_plus, "output/rds/tax_RDP_final.rds") 
+```
+
+
+##Assign taxonomy with IDTAXA
+
+Do assigntaxonomy with the full length IDTAXA silva databse
+
+then do assign species with the one supplemented with the hall et al etc data
+
+```{r IDTAXA}
+seqtab.nochim <- readRDS("output/rds/seqtab_final.rds")
+
+#trainingSet <- readRDS("reference/SILVA_SSU_r132_March2018.RData")
+load("C:/Users/ap0y/Dropbox/workprojects/PHD/Metabarcoding/Psyllid_microbiome/reference/SILVA_SSU_r132_March2018.RData")
+dna <- DNAStringSet(getSequences(seqtab.nochim)) # Create a DNAStringSet from the ASVs
+
+##Decide on threshold
+ids <- IdTaxa(dna, trainingSet, processors=1, threshold = 60, verbose=TRUE)  
+
+#delete existing file
+cat("",file="idtaxa.csv")
+for (i in 1:length(ids)){
+ lines <- as.data.frame(t(cbind(ids[[i]]$taxon,ids[[i]]$confidence)))
+ rownames(lines) <- c("taxa","confidence")
+write.table(lines,file="idtaxa.csv",sep=",",append=TRUE, col.names=FALSE)
+}
+
+ranks <-  c("Kingdom", "Phylum","Class", "Order", "Family", "Genus","Species") # ranks of interest
+#Convert the output object of class "Taxa" to a matrix analogous to the output from assignTaxonomy
+tax <- t(sapply(ids, function(x) {
+        taxa <- x$taxon
+        taxa[startsWith(taxa, "unclassified_")] <- NA
+        taxa
+}))
+
+library(stringi)
+tax <- stri_list2matrix(lapply(tax, unlist), byrow=TRUE, fill=NA)
+
+#Add sequences and column names to matrix
+colnames(tax) <- ranks; rownames(tax) <- getSequences(seqtab.nochim)
+
+#Subset to remove the root rank
+tax <- subset(tax, select=c("Kingdom", "Phylum","Class", "Order", "Family", "Genus","Species"))
+
+#Propagate high order ranks to unassigned ASV's
+tax <- propagate_tax(tax,from="Phylum") 
+
+
+#Check Output
+taxa.print <- tax # Removing sequence rownames for display only
+rownames(taxa.print) <- NULL
+head(taxa.print)
+
+# Write taxonomy table to disk
+saveRDS(tax, "tax_IdTaxa.rds") 
+
+#tax <- readRDS("output/rds/tax_IdTaxa.rds") 
+
+#Add missed species using exact matching
+
+#
+exact <- assignSpecies(seqtab.nochim, "reference/silva_v132_symbionts_species.fa.gz", allowMultiple = TRUE, tryRC = TRUE,
+  n = 100, verbose = FALSE)
+
+exact <- exact %>% 
+  as.tibble() %>%
+  mutate(binomial =  case_when(!is.na(Species) ~  paste0(Genus,"_",Species)))
+
+
+exact <- exact %>% 
+  as_tibble() %>%
+  mutate(binomial =  case_when(!is.na(Species) ~  paste0(Genus,"_",Species)))
+
+
+#merge together
+#For exact where Species is not NA, replace tax$Species where Species contains K__,P__,C__,O__,F__,G__
+pattern <- c("K__","P__","C__","O__","F__","G__")
+for (row in 1:nrow(tax)){
+  if   (str_detect(tax[row,7], paste(pattern, collapse="|")) && !is.na(exact$binomial[row]) == TRUE ) {
+  tax[row,7] <- exact$binomial[row]
+  }
+}
+
+# Write taxonomy table to disk
+saveRDS(tax, "tax_IdTaxaExact.rds") 
+
+```
+
+## Create phylogenetic tree
+
+```{r phylogenetic tree}
+seqtab.nochim <- readRDS("output/rds/seqtab_final.rds")
+
+seqs <- getSequences(seqtab.nochim)
+names(seqs) <- seqs # This propagates to the tip labels of the tree
+alignment <- AlignSeqs(DNAStringSet(seqs), anchor=NA)
+
+library(phangorn)
+phang.align <- phyDat(as(alignment, "matrix"), type="DNA")
+dm <- dist.ml(phang.align)
+treeNJ <- NJ(dm) # Note, tip order != sequence order
+fit = pml(treeNJ, data=phang.align)
+
+## negative edges length changed to 0!
+
+fitGTR <- update(fit, k=4, inv=0.2)
+fitGTR <- optim.pml(fitGTR, model="GTR", optInv=TRUE, optGamma=TRUE,
+                      rearrangement = "stochastic", control = pml.control(trace = 0))
+detach("package:phangorn", unload=TRUE)
+
+# Write taxonomy table to disk
+saveRDS(fitGTR, "output/rds/phytree.rds") 
+
+```
