@@ -882,47 +882,24 @@ psyllid_tree$tip.label <- psyllid_tree$tip.label %>%
 
 psyllid_tree$tip.label[!psyllid_tree$tip.label %in% bt_randomdf$psyllid_spp]
 
-pruned.tree <- drop.tip(psy.tree, psy.tree$tip.label[!psy.tree$tip.label %in% bt_randomdf$psyllid_spp] )
+pruned.tree <- drop.tip(psyllid_tree, psyllid_tree$tip.label[!psyllid_tree$tip.label %in% bt_randomdf$psyllid_spp] )
 
-# Plot tree
+# Plot tree + Richness estimates
 library(ggtree)
-p <- ggtree(pruned.tree, branch.length = "none") + geom_tiplab() + geom_nodelab(geom='label') +
-    scale_x_continuous(expand=c(0, 2))
+p <- ggtree(pruned.tree) + geom_tiplab() + geom_nodelab(geom='label') +
+    scale_x_continuous(expand=c(0, 0.1))
 
-col <- colorRampPalette(brewer.pal(11, "Spectral"))(75)
+gg.alphatree <- facet_plot(p, panel='Alpha Diversity', data = bt_randomdf %>% mutate(id = psyllid_spp) , geom=ggstance::geom_pointrangeh,
+                 mapping=aes(x=Estimates, xmin=Estimates-SE, xmax=Estimates+SE, colour=significant), stat="identity")
 
-gg.betarichness <- ggplot(bt_randomdf %>% mutate(psyllid_spp = factor(psyllid_spp, levels=pruned.tree$tip.label)), aes(x=psyllid_spp, y=Estimates, fill=psyllid_spp)) + 
-  geom_point(aes(shape=significant, colour=psyllid_spp), size=3) + 
-  geom_errorbar(aes(x=psyllid_spp, ymin=Estimates-SE, ymax=Estimates+SE)) +
-  geom_hline(yintercept= bt_randomdf %>% filter(psyllid_spp == paste0("(",intercept,")") ) %>% pull(Estimates)) +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle=90, vjust=0, hjust=1),
-        legend.position = "none") +
-  scale_fill_manual(values=col) +
-  scale_colour_manual(values=col) +
-  ylab("Richness Estimate") + 
-  coord_flip()  + 
-  ggtitle("Estimated taxonomic richness of psyllid microbiomes")
+facet_plot(gg.alphatree, panel='Alpha Diversity',
+           data=bt_randomdf, geom=geom_text, 
+           mapping=aes(x=Estimates, label=round(Estimates)))
 
-library(patchwork)
-
-p + gg.betarichness
-
-# Plot tree + metadata
-
-bar <- bt_randomdf %>%
-  ungroup() %>%
-  mutate(id = psyllid_spp) 
-
-p2 <- facet_plot(p, 'Unique Species', data = bar, geom=ggstance::geom_barh,
-                 mapping=aes(x=Estimates, fill=significant), stat="identity") +
-                theme_bw() +
-                scale_fill_manual(values =c("#FC4E07", "#E7B800", "#00AFBB"))
 
 # Add Statistics
 library(phylosignal)
-
-
+library(adephylo)
 #alpha diversity data
 dat <- list()
 dat$alpha <-  bt_randomdf %>%
@@ -933,26 +910,33 @@ dat$random <- rnorm(length(dat$alpha), sd = 10) # NEgative control
 dat$bm <- rTraitCont(pruned.tree) #Brownian motion - Positive control
 dat <- as.data.frame(dat)
 
-# Make phylosignal object
-p4d <- phylo4d(pruned.tree, dat)
+# Make phylosignal object and measure signal
 
-#Plot traits
-barplot.phylo4d(p4d, tree.type = "phylo", tree.ladderize = TRUE)
-
-#Measure phylogenetic signal
+p4d <- phylobase::phylo4d(pruned.tree, dat)
 phyloSignal(p4d = p4d, method = "all")
 
 # Asses modelbehavior
 phylosim <- phyloSim(tree = pruned.tree, method = "all", nsim = 100, reps = 99)
 plot.phylosim(phylosim, what = "pval", stacked.methods = TRUE)
-
-# Lambda is behaving real weird - ignore it
-
 ```
 
 
-# Beta diversity
+RESULTS: while there were significant differences between psyllid species (see betta results), there were no significant associations with phylogeny
 
+$stat
+             Cmean            I          K    K.star    Lambda
+alpha  -0.01056585 -0.025740055 0.70501041 0.3313264 0.8755386
+random  0.06885442  0.001435941 0.03960619 0.2290344 0.2717360
+bm      0.42031946  0.145456264 0.14547611 0.9100803 1.0020607
+
+$pvalue
+       Cmean     I     K K.star    Lambda
+alpha  0.445 0.634 0.017  0.208 0.0010000
+random 0.166 0.125 0.472  0.539 0.1048509
+bm     0.001 0.001 0.029  0.001 0.0010000
+
+
+# Beta diversity
 
 ## philR transformation
 
@@ -965,7 +949,7 @@ Many analysis in community ecology and hypothesis testing benefit from data tran
 philr phylogenetic transform is based on balances (binary partitions) along an evolutionary tree (Silverman et al., 2017) that is a replacement for the familiar UniFrac distance metric. Distances determined by phylogenetic transforms have the advantage that the binary partitions chosen have a simple interpretation and the correlation structure of the data is fully accounted for. However, the disadvantage is that only the relationships between the chosen partitions can be examined.# Figure 1: Community composition analysis
 
 ```{r Philr transfomration}
-ps.coda <- ps2
+ps.coda <- tip_glom(ps2, h=0.3) # Work out what h=0.3 approximates
 #Rename taxa
 taxa_names(ps.coda) <- paste0("SV", seq(ntaxa(ps.coda)),"-",tax_table(ps.coda)[,6])
 
@@ -988,37 +972,50 @@ gp.philr <- philr(otu.table, tree,
 
 gp.dist <- dist(gp.philr, method="euclidean")
 
-```
 
-#### CLR transformation
+# Ordination
+library(factoextra)
+f.pcx <- prcomp(gp.philr)
+pcx <- f.pcx 
 
-Need to decide whether to go with the CLR (easily interpretable) or philr (takes into account phylogenetic structure of microbial com)
+#Name balances
+pcnames <-  sapply(rownames(pcx$rotation), function(x) name.balance(tree, tax, x))
+pcnames <- make.unique(pcnames, sep = ".")
+rownames(pcx$rotation) <- pcnames
 
-
-
-```{r}
-library(compositions)
-library(zCompositions)
-library(CoDaSeq)
-
-ps.coda <- ps2
-taxa_names(ps.coda) <- paste0("SV", seq(ntaxa(ps.coda)),"-",tax_table(ps.coda)[,6])
-
-#Replace zero values
-ps.coda <- transform_sample_counts(ps.coda, function(x) x+1) # Check how much is explained by the pseudocount
-
-f <- t(abundances(ps.coda))
-#f.0 <- cmultRepl(f, method="CZM")
-f.0 <- f
-f.clr <- codaSeq.clr(f.0)
-#perb.all <- perb(f.0, ivar="iqlr")
-
-clr.dist <- dist(f.clr, method="euclidean")
-
+#Plot biplot
+fviz_pca_biplot(pcx) 
 
 ```
 
-# Mantel tests
+
+## ADONIS
+
+```{r adonis}
+library(vegan)
+metadata <- as(sample_data(ps2.philr), "data.frame")
+
+
+adonis(gp.dist ~ psyllid_spp, method = "euclidean",
+       data = metadata)
+
+adonis(gp.dist ~ hostplant_spp, method = "euclidean",
+       data = metadata)
+
+#Interacitons
+adonis(gp.dist ~ psyllid_spp*hostplant_spp, method = "euclidean",
+       data = metadata)
+
+adonis(gp.dist ~ hostplant_spp*psyllid_spp,
+       data = metadata)
+
+#ano <- anosim(gp.dist, permutations=999)
+```
+
+This suggests that species significantly cluster, and so do hostplants. However when accounting for species, hostplants are not significant. Therefore it should be justified to redo the barchart merging by species 
+
+
+## Mantel - association
 
 ```{r}
 #Read in genetic distance
@@ -1044,6 +1041,12 @@ phylo.dist <- phylo.dist %>%
 #check whats missing
 colnames(as.matrix(gp.dist))[which(!colnames(as.matrix(gp.dist)) %in% colnames(as.matrix(phylo.dist)))]
 
+
+# Distance from the bayesian tree - try join this to the actual
+pruned.tree
+cophenetic <- cophenetic(pruned.tree)
+
+
 # Microbial community dist
 comm.dist <- gp.dist %>%
   as.matrix() %>%
@@ -1055,7 +1058,7 @@ comm.dist <- gp.dist %>%
 
 # Hostplant dist
 plant.dist <- read_csv("sample_data/plant_distance.csv") %>%
-  select(-one_of("X1", "Host plants")) %>%
+  dplyr::select(-one_of("X1", "Host plants")) %>%
   column_to_rownames("SampleID") %>%
   set_colnames(rownames(.) %>% str_replace(pattern="\\_S(.*)$",replacement="") %>% make.unique()) %>%
   rownames_to_column("SampleID") %>%
@@ -1072,14 +1075,18 @@ plant.dist <- read_csv("sample_data/plant_distance.csv") %>%
 #Mantel test - Phylo
 plot(comm.dist~phylo.dist)
 mantel(comm.dist, phylo.dist)
+plot(mantel.correlog(comm.dist, phylo.dist), alpha=0.05)
 
 #Mantel test - Plant
 plot(comm.dist~plant.dist)
 mantel(comm.dist, plant.dist)
+plot(mantel.correlog(comm.dist, plant.dist), alpha=0.05)
 
 #Mantel test - Spatial
 plot(comm.dist~c(spatDistD+1), log="x")
 mantel(comm.dist, spatDistD)
+plot(mantel.correlog(comm.dist, spatDistD), alpha=0.05)
+
 
 #Partial Mantel test - Phylo ~ Plant
 mantel.partial(comm.dist, phylo.dist, plant.dist)
@@ -1102,10 +1109,63 @@ mantel.partial(comm.dist, phylo.dist, spatDistD)
 ## CORE TESTS - all those above neutral model expectation
 
 
+### SPATIAL
+
+
+# Bespoke function to convert a degree minute second coordinate into a fully numeric one,assuming ° is used for degree sign
+
+convert<-function(coord){
+   t1 <- strsplit(coord, "°")
+  td <- as.numeric(unlist(lapply(t1, "[", 1)))
+  min <- as.numeric(unlist(sapply(strsplit(unlist(lapply(t1, "[",2)),"'"), "[", 1)))
+  
+  if(nchar(lapply(t1,"[", 2))==10){
+    sec <- as.numeric(substr(unlist(sapply(strsplit(unlist(lapply(t1,"[", 2)),"'"), "[", 2)),1,5))
+  
+  } else  if(nchar(lapply(t1,"[", 2))==9){
+    sec <- as.numeric(substr(unlist(sapply(strsplit(unlist(lapply(t1,"[", 2)),"'"), "[", 2)),1,4))
+  }
+  return(td+min/60+sec/(60*60))
+}
+
+
+
+  test <- samdf %>%
+    separate(Collection, into= c("South", "East"), sep=" ", remove = FALSE) %>%
+    mutate(South = na_if(South, "")) %>%
+    mutate(South = case_when(
+      !is.na(South) ~  convert(South),
+      #is.na(South) ~ NA
+    ))
+  
+  for (i in 1:length(test$South)){
+    
+    if(!is.na(South[i])){test$NEW[i] <- (char2dms(test$South[i], chd=chd,chm=chm,chs=chs))}
+  print(i)
+    }
+  
+               str_replace(chm, "") %>%
+             str_replace(chs, "") %>%
+             str_replace(chd, ".") )
+  
+    mutate(South = convert(South)) #%>%
+    mutate(East = convert(East))
+  
+South <- convert(unlist(lapply(strsplit(samdf$Collection," "),
+                                   "[", 1)))
+envData$E <- convert(unlist(lapply(strsplit(samdf$Location," "),
+                                   "[", 2)))
+
+#Create a spatial distance between all samples
+spatDist <- spDists(cbind(envData$E,envData$S)[!is.na(envData$E),],
+                    longlat=TRUE)
+rownames(spatDist) <- colnames(spatDist) <-
+  envData$ID[!is.na(envData$E)]
 
     
 ```
 
+## Bar plots
 
 Dendrogram and bar plots
 ```{r dendbar}
@@ -1114,9 +1174,6 @@ library(dendextend)
 
 #PhilR dist
 hc <- hclust(gp.dist, method="ward.D2")
-
-#CLR
-#hc <- hclust(clr.dist, method="ward.D2")
 
 dend <- as.dendrogram(hc)
 
@@ -1179,178 +1236,8 @@ Fig1 <- gg.dend + gg.bar + plot_layout(ncol = 2, widths = c(1,3)) + plot_annotat
 
 ```
 
-## Can microbiome predict phylogeny
 
-Mantel test
-
-```{r get spatial distance}
-
-# Bespoke function to convert a degree minute second coordinate into a fully numeric one,assuming ° is used for degree sign
-
-convert<-function(coord){
-   t1 <- strsplit(coord, "°")
-  td <- as.numeric(unlist(lapply(t1, "[", 1)))
-  min <- as.numeric(unlist(sapply(strsplit(unlist(lapply(t1, "[",2)),"'"), "[", 1)))
-  
-  if(nchar(lapply(t1,"[", 2))==10){
-    sec <- as.numeric(substr(unlist(sapply(strsplit(unlist(lapply(t1,"[", 2)),"'"), "[", 2)),1,5))
-  
-  } else  if(nchar(lapply(t1,"[", 2))==9){
-    sec <- as.numeric(substr(unlist(sapply(strsplit(unlist(lapply(t1,"[", 2)),"'"), "[", 2)),1,4))
-  }
-  return(td+min/60+sec/(60*60))
-}
-
-
-
-  test <- samdf %>%
-    separate(Collection, into= c("South", "East"), sep=" ", remove = FALSE) %>%
-    mutate(South = na_if(South, "")) %>%
-    mutate(South = case_when(
-      !is.na(South) ~  convert(South),
-      #is.na(South) ~ NA
-    ))
-  
-  for (i in 1:length(test$South)){
-    
-    if(!is.na(South[i])){test$NEW[i] <- (char2dms(test$South[i], chd=chd,chm=chm,chs=chs))}
-  print(i)
-    }
-  
-               str_replace(chm, "") %>%
-             str_replace(chs, "") %>%
-             str_replace(chd, ".") )
-  
-    mutate(South = convert(South)) #%>%
-    mutate(East = convert(East))
-  
-South <- convert(unlist(lapply(strsplit(samdf$Collection," "),
-                                   "[", 1)))
-envData$E <- convert(unlist(lapply(strsplit(samdf$Location," "),
-                                   "[", 2)))
-
-#Create a spatial distance between all samples
-spatDist <- spDists(cbind(envData$E,envData$S)[!is.na(envData$E),],
-                    longlat=TRUE)
-rownames(spatDist) <- colnames(spatDist) <-
-  envData$ID[!is.na(envData$E)]
-
-```
-
-
-
-```{r Ordination}
-
-# perform a singular value decomposition of CLR
-f.pcx <- prcomp(gp.philr)
-pcx <- f.pcx 
-
-#Name balances
-
-pcnames <-  sapply(rownames(pcx$rotation), function(x) name.balance(tree, tax, x))
-pcnames <- make.unique(pcnames, sep = ".")
-
-rownames(pcx$rotation) <- pcnames
-#fviz_pca_biplot(pcx) 
-
-#Extract biplot objects
-pc_samp <- data.frame(Sample.Name = rownames(pcx$x), pcx$x[, 1:2]) %>%
-  left_join(samdf, by="Sample.Name")
-pc_otu <- data.frame(OTU = rownames(pcx$rotation), pcx$rotation[, 1:2])
-
-# calculate percent variance explained for the axis labels
-pc1 <- round(pcx$sdev[1]^2/sum(pcx$sdev^2),2)
-pc2 <- round(pcx$sdev[2]^2/sum(pcx$sdev^2),2)
-pc_xlab <- paste("PC1: ", pc1, sep="")
-pc_ylab <- paste("PC2: ", pc2, sep="")
-
-library(ggplot2)
-gg.biplot <- ggplot(pc_samp, aes(PC1, PC2, label=psyllid_spp, colour=psyllid_spp)) + 
-  geom_point(alpha=0.5, size=3) +
-  #geom_text(size=3) +
-  #geom_segment(data=pc_otu, aes(PC1, PC2, xend=0, yend=0), col="red") +
-  #geom_text(data=pc_otu, aes(PC1, PC2, label=OTU), col="red") +
-  geom_point(data=pc_otu,aes(PC1, PC2, label=OTU), col="red") +
-  theme_bw() + 
-  geom_hline(yintercept = 0, linetype=2) +  
-  geom_vline(xintercept = 0, linetype=2) +
-  xlab(pc_xlab) + 
-  ylab(pc_ylab) +
-  theme(legend.position = "none")# +
- # coord_fixed(ratio=pc2/pc1) # Scale plot by variance explained
-
-#Plot just OTU loadings
-
-gg.loadings <- ggplot(pc_otu, aes(PC1, PC2, label=OTU)) + 
-  geom_point(alpha=0.5, size=3) +
-  geom_text(size=3, vjust=0.5) +
-  theme_bw() + 
-  geom_hline(yintercept = 0, linetype=2) +  
-  geom_vline(xintercept = 0, linetype=2) + 
-  xlab(pc_xlab) + 
-  ylab(pc_ylab) +
-  theme(legend.position = "none") +
-  coord_fixed(ratio=pc2/pc1) # Scale plot by variance explained
-
-# Make compositional scree plot
-
-layout(matrix(c(1,2),1,2, byrow=T), widths=c(6,4), heights=c(6,4))
-par(mgp=c(2,0.5,0))
-screeplot(f.pcx, type = "lines", main="Scree plot")
-screeplot(f.pcx, type = "barplot", main="Scree plot")
-
-```
-
-### Test for differences between groups
-
-The ADONIS approach was performed only on the species with more than two samples present in the dataset for greater robustness. The p-value of 0.001 indicates that at an alpha of 0.05, the grouping of bacteria by psyllid taxonomy is statistically significant. The R2 value 0.6332 indicated that approximately 63.3% of the microflora community groupings can be ascribed to the insect species (Table 4). 
-
-
-Mantel test - 
-See https://f1000research.com/articles/5-1492/v2 multitable techniques section
-
-https://fukamilab.github.io/BIO202/06-C-matrix-comparison.html
-
-Test for associations between 2 distance matrices
-
-Distance matrices should be-
-
-Phylogenetic distances between psyllids
-Phylogenetic distances between host-plants
-Geographic distances between collection locations
-
-```{r adonis}
-
-library(vegan)
-
-gp.dist <- dist(gp.philr, method="euclidean")
-metadata <- as(sample_data(ps2.philr), "data.frame")
-
-
-adonis(gp.dist ~ psyllid_spp, method = "euclidean",
-       data = metadata)
-
-adonis(gp.dist ~ hostplant_spp, method = "euclidean",
-       data = metadata)
-
-#Pairwise permanova
-tst<-adonis_pairwise(x=meta, dd=vegdist(OTUsSCM10, method = "euclidean"), group.var="Region_SKN")
-tst$Adonis.tab
-
-#Interacitons
-adonis(gp.dist ~ psyllid_spp*hostplant_spp, method = "euclidean",
-       data = metadata)
-
-adonis(gp.dist ~ hostplant_spp*psyllid_spp,
-       data = metadata)
-
-#ano <- anosim(gp.dist, permutations=999)
-```
-
-This suggests that species significantly cluster, and so do hostplants. However when accounting for species, hostplants are not significant. Therefore it should be justified to redo the barchart merging by species 
-
-
-### Merge replicates
+### Merge Species
 
 
 ```{r replicates}
@@ -1510,16 +1397,8 @@ Fig2 <- gg.dend + gg.bar + plot_layout(ncol = 2, widths = c(1,3)) + plot_annotat
 
 ```
 
-## Random forest
 
-## Mantel test
-
-RF Distane
-
-Congruencies between host phylogenies and skin microbiota dendrograms were quantified by calculating normalized Robinson–Foulds (89) and
-normalized matching-cluster scores.
-# Cophylogenetic analyses
-
+# Cophylogeny
 
 ## Fit neutral model
 
@@ -1808,10 +1687,6 @@ library(vegan)
 
 ```
 
-
-# Core microbiome
-
-## Subset to core microbiome
 
 ## Functional profiling
 
