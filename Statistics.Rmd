@@ -13,90 +13,23 @@ editor_options:
 #Set required packages
 .cran_packages <- c("ggplot2", "gridExtra", "tidyverse", "scales", "stringdist", "patchwork", "vegan", "ggpubr", "seqinr", "viridis","ape", "data.table", "RColorBrewer")
 .bioc_packages <- c("dada2", "phyloseq", "DECIPHER","Biostrings","ShortRead","psadd","microbiome","philr")
-#.github_packages <- c("metacal", "taxreturn", "piperline","speedyseq")
 
-#.inst <- .cran_packages %in% installed.packages()
-#if(any(!.inst)) {
-#   install.packages(.cran_packages[!.inst])
-#}
-#.inst <- .bioc_packages %in% installed.packages()
-#if(any(!.inst)) {
-#  if (!requireNamespace("BiocManager", quietly = TRUE))
-#    install.packages("BiocManager")
-#  BiocManager::install(.bioc_packages[!.inst], ask = F)
-#}
-#
-#Load all packages
 sapply(c(.cran_packages,.bioc_packages), require, character.only = TRUE)
 
 #Load helper functions 
 source('R/helper_functions.R')
-
-#devtools::install_github("benjjneb/dada2")
-#devtools::install_github("mikemc/speedyseq")
-#devtools::install_github("alexpiper/taxreturn")
-#library(taxreturn)
 
 options(stringsAsFactors = FALSE)
 
 ```
 
 
-## Make Phyloseq object
 
-Following taxonomic assignment, the sequence table and taxonomic table are merged into a single phyloseq object alongside the sample info csv.
-
-We then make a plot to evaluate the effectiveness of taxonomic assignment to each rank
-
-```{r create PS, eval = FALSE}
-seqtab.nochim <- readRDS("output/rds/seqtab_final.rds")
-tax_plus <- readRDS("output/rds/tax_RDP_final.rds") 
-fitGTR <- readRDS("output/rds/phytree.rds") 
-
-#Load sample information
-## ---- samdat ----
-samdf <- read.csv("sample_data/Sample_info.csv", header=TRUE)  %>%
-  dplyr::filter(!duplicated(SampleID)) %>%
-  mutate(replicated = Sample.Name %in% ( samdf %>% group_by(Sample.Name) %>% # Flag replicated samples
-                                           filter(n()>1) %>% 
-                                           pull(Sample.Name))) %>%
-  set_rownames(.$SampleID) %>%
-  dplyr::select(c("SampleID", "Sample.Name", "seqrun", "psyllid_spp", "psyllid_genus", "psyllid_family", "hostplant_spp","Collection.Date","replicated")) #Collection
-
-#Display samDF
-head(samdf)
-
-## ---- phyloseq ----
-ps <- phyloseq(tax_table(tax_plus), sample_data(samdf),
-               otu_table(seqtab.nochim, taxa_are_rows = FALSE),
-               phy_tree(fitGTR$tree))
-
-if(nrow(seqtab.nochim) > nrow(sample_data(ps))){warning("Warning: All samples not included in phyloseq object, check sample names match the sample metadata")}
-
-##save phyloseq object
-saveRDS(ps, "output/rds/ps_rdp.rds")
-
-#Output tables of results
-dir.create("output/csv")
-dir.create("output/csv/unfiltered/")
-
-##Export raw csv
-speedyseq::psmelt(ps) %>%
-  write.csv(file = "output/csv/rawdata.csv")
-
-#Summary export
-summarize_taxa(ps, "Species", "SampleID") %>%
-  spread(key="SampleID", value="totalRA") %>%
-  write.csv(file = "output/csv/unfiltered/spp_sum.csv")
-
-summarize_taxa(ps, "Genus", "SampleID") %>%
-  spread(key="SampleID", value="totalRA") %>%
-  write.csv(file = "output/csv/unfiltered/gen_sum.csv")
-```
-
-### Summarise taxonomic assignment
+### Read in phyloseq and Summarise taxonomic assignment
 
 ```{r sum taxa}
+ps <- readRDS("output/rds/ps_rdp.rds")
+
 #Fraction of reads assigned to each taxonomic rank
 sum_reads <- speedyseq::psmelt(ps) %>%
   gather("Rank","Name",rank_names(ps)) %>%
@@ -263,30 +196,6 @@ get_taxa_unique(ps2, "Class")
 
 ```
 
-## Prevalence assesment
-
-Identification of taxa that are poorly represented in an unsupervised manner can identify taxa that will have little to no effect on downstream analysis. Sufficient removal of these "low prevalance" features can enhance many analysis by focusing statistical testing on taxa common throughout the data. However, for our dataset the problem with prevalence filtering for our dataset is that we dont have many replicates of each psyllid species, and therefore there are some high abundance but low prevalence ASV's we dont want to lose.
-
-
-```{r prevalence-assessment}
-# Calculate taxon prevalence across the data set
-prevdf <- apply(X = otu_table(ps2),MARGIN = ifelse(taxa_are_rows(ps2), yes = 1, no = 2),FUN = function(x){sum(x > 0)})
-
-# Add taxonomy and total read counts to prevdf - change this to tidyverse code
-prevdf <- data.frame(Prevalence = prevdf, TotalAbundance = taxa_sums(ps2), tax_table(ps2))
-
-#Prevalence plot
-gg.prev <- subset(prevdf, Phylum %in% get_taxa_unique(ps0, "Phylum")) %>%
-  ggplot(aes(TotalAbundance, Prevalence / nsamples(ps2),color=Genus)) +
-  geom_point(size = 3, alpha = 0.7) +
-  scale_x_log10() +
-  xlab("Total Abundance") + ylab("Prevalence [Frac. Samples]") +
-  facet_wrap(~Phylum) +
-  theme(legend.position="none") +
-  ggtitle("Phylum Prevalence in All Samples\nColored by Family")
-
-gg.prev
-```
 
 # Alpha Diversity
 
@@ -375,24 +284,31 @@ psyllid_tree <- read.tree(text=readLines("sample_data/psyllid_beast_tree.nwk"))
 # Match names with alpha diversity
 psyllid_tree$tip.label <- psyllid_tree$tip.label %>%
   str_replace_all(pattern="\\.", replacement=" ") %>%
-  str_replace_all(pattern="sp^", replacement="sp. ") %>%
+  str_replace_all(pattern="sp$", replacement="sp. ") %>%
+  str_replace_all(pattern="Acizzia hakae", replacement="Acizzia hakeae") %>%
   str_replace_all(pattern="POLLENISLAND", replacement="POLLEN ISLAND") %>%
   str_replace_all(pattern="Ctenarytaina fuchsiae$", replacement="Ctenarytaina fuchsia A") %>%
   str_replace_all(pattern="Ctenarytaina fuchsiaeB", replacement="Ctenarytaina fuchsia B") %>%
   str_replace_all(pattern="Ctenarytaina fuchsiaeC", replacement="Ctenarytaina fuchsia C") %>%
   str_replace_all(pattern="Ctenarytaina clavata", replacement="Ctenarytaina clavata sp. ") %>%
   str_replace_all(pattern="Ctenarytaina clavata sp. $", replacement="Ctenarytaina clavata sp. A") %>%
-  str_replace_all(pattern="Ctenarytaina sp", replacement="Ctenarytaina sp. ") %>%
+  str_replace_all(pattern="Ctenarytaina sp$", replacement="Ctenarytaina sp. ") %>%
+  str_replace_all(pattern="Ctenarytaina unknown", replacement="Ctenarytaina insularis") %>%  
+  str_replace_all(pattern="Psylla apicalis A", replacement="Psylla frodobagginsi") %>%
+  str_replace_all(pattern="Psylla apicalis B", replacement="Psylla apicalis") %>%
   str_replace_all(pattern="carmichaeliae", replacement="carmichaeliae ") %>%
   str_replace_all(pattern="Psylla apicalis", replacement="Psylla apicalis ") %>% # Should these be A,B or?
   str_replace_all(pattern="Trioza sp", replacement="Trioza sp. ") %>%
+  str_replace_all(pattern="Trioza acutaB", replacement="Trioza Acuta B") %>%
   str_replace_all(pattern="BRENDAMAY", replacement="BRENDA MAY") %>%
   str_replace_all(pattern="PRICES", replacement="PRICE'S VALLEY") %>%
   trimws(which="right")
 
+
 psyllid_tree$tip.label[!psyllid_tree$tip.label %in% bt_randomdf$psyllid_spp]
 
 pruned.tree <- drop.tip(psyllid_tree, psyllid_tree$tip.label[!psyllid_tree$tip.label %in% bt_randomdf$psyllid_spp] )
+psyllid_tree$tip.label[!psyllid_tree$tip.label %in%  pruned.tree$tip.label]
 
 # Plot tree + Richness estimates
 library(ggtree)
@@ -445,10 +361,76 @@ alpha  0.445 0.634 0.017  0.208 0.0010000
 random 0.166 0.125 0.472  0.539 0.1048509
 bm     0.001 0.001 0.029  0.001 0.0010000
 
+## Prevalence assesment
+
+Identification of taxa that are poorly represented in an unsupervised manner can identify taxa that will have little to no effect on downstream analysis. Sufficient removal of these "low prevalance" features can enhance many analysis by focusing statistical testing on taxa common throughout the data. However, for our dataset the problem with prevalence filtering for our dataset is that we dont have many replicates of each psyllid species, and therefore there are some high abundance but low prevalence ASV's we dont want to lose.
+
+If we are agglomerating anyway, the prevalence filter doesnt have any impact really
+
+
+```{r prevalence-assessment}
+# Calculate taxon prevalence across the data set
+prevdf <- apply(X = otu_table(ps2), MARGIN = ifelse(taxa_are_rows(ps2), yes = 1, no = 2), FUN = function(x){sum(x > 0)})
+
+# Add taxonomy and total read counts to prevdf - change this to tidyverse code
+prevdf <- data.frame(Prevalence = prevdf, TotalAbundance = taxa_sums(ps2), tax_table(ps2))
+
+#Prevalence plot
+gg.prev <- subset(prevdf, Phylum %in% get_taxa_unique(ps0, "Phylum")) %>%
+  ggplot(aes(TotalAbundance, Prevalence / nsamples(ps2),color=Genus)) +
+  geom_point(size = 3, alpha = 0.7) +
+  scale_x_log10() +
+  xlab("Total Abundance") + ylab("Prevalence [Frac. Samples]") +
+  facet_wrap(~Phylum) +
+  theme(legend.position="none") +
+  ggtitle("Phylum Prevalence in All Samples\nColored by Family")
+
+gg.prev
+```
+
+
+## Agglomerate taca
+
+```{r agglomerate}
+#ps.coda <- tip_glom(ps2.prev, h=0.3) # Work out what h=0.3 approximates
+
+genglom <- tax_glom(ps2, "Genus", NArm = TRUE)
+tipglom <- tip_glom(ps2, h=0.3) # Work out what h=0.3 approximates
+tipglom2 <- tip_glom(ps2, h=0.2) # Work out what h=0.3 approximates
+
+
+multiPlotTitleTextSize = 15
+p2tree = plot_tree(ps2, method = "treeonly",
+                   ladderize = "left",
+                   title = "Before Agglomeration") +
+  theme(plot.title = element_text(size = multiPlotTitleTextSize))
+
+p3tree = plot_tree(genglom, method = "treeonly",
+                   ladderize = "left", title = "By Genus") +
+  theme(plot.title = element_text(size = multiPlotTitleTextSize))
+
+p4tree = plot_tree(tipglom, method = "treeonly",
+                   ladderize = "left", title = "H=0.3") +
+  theme(plot.title = element_text(size = multiPlotTitleTextSize))
+
+
+p5tree = plot_tree(tipglom2, method = "treeonly",
+                   ladderize = "left", title = "H=0.2") +
+  theme(plot.title = element_text(size = multiPlotTitleTextSize))
+
+
+library(patchwork)
+
+p2tree + p3tree +  p5tree
+
+```
+
+
+
 
 # Beta diversity
 
-## philR transformation
+
 
 To find the Aitchison distance a centered log-ratio (clr) transformation was performed on ASV count data with the R
 165 package CoDaSeq (30) before computing the Euclidean distance between samples with
@@ -458,8 +440,13 @@ Many analysis in community ecology and hypothesis testing benefit from data tran
 
 philr phylogenetic transform is based on balances (binary partitions) along an evolutionary tree (Silverman et al., 2017) that is a replacement for the familiar UniFrac distance metric. Distances determined by phylogenetic transforms have the advantage that the binary partitions chosen have a simple interpretation and the correlation structure of the data is fully accounted for. However, the disadvantage is that only the relationships between the chosen partitions can be examined.# Figure 1: Community composition analysis
 
+## PhilR transformation
+
+- might be worth doing these with both the CLR and philr transformed data
+
 ```{r Philr transfomration}
 ps.coda <- tip_glom(ps2, h=0.3) # Work out what h=0.3 approximates
+
 #Rename taxa
 taxa_names(ps.coda) <- paste0("SV", seq(ntaxa(ps.coda)),"-",tax_table(ps.coda)[,6])
 
@@ -484,7 +471,6 @@ gp.dist <- dist(gp.philr, method="euclidean")
 
 
 # Ordination
-gp.dist <- dist(gp.philr, method="euclidean")
 gp.pcoa <- ordinate(ps.coda, 'PCoA', distance=gp.dist)
 gg.pca <- plot_ordination(ps.coda, gp.pcoa, color='psyllid_spp', label="psyllid_spp", type="Sample") + geom_point(size=4)
 
@@ -503,7 +489,7 @@ fviz_pca_biplot(pcx)
 ```
 
 
-## ADONIS
+## Test for microbiome distinguisability
 
 ```{r adonis}
 library(vegan)
@@ -529,20 +515,15 @@ adonis(gp.dist ~ hostplant_spp*psyllid_spp,
 This suggests that species significantly cluster, and so do hostplants. However when accounting for species, hostplants are not significant. Therefore it should be justified to redo the barchart merging by species 
 
 
-## Mantel 
+# Test for phylosymbiosis
+Use mantel, Procrustean superimposition 
 
 ### Create distance matrices
-```{r distance matrices}
-# Microbial community dist
-comm.dist <- gp.dist %>%
-  as.matrix() %>%
-  as.data.frame() %>%
-  rownames_to_column("SampleID") %>%
-  filter(SampleID %in% rownames(as.matrix(phylo.dist))) %>%
-  dplyr::select(one_of(colnames(as.matrix(phylo.dist)))) %>%
-  as.dist()
 
-# Genetic distance
+Note: Alpha-diversity could also be converted to a distance matrix by taking the Euclidean distance among all pairwise sample comparisons.
+
+```{r distance matrices}
+# COI Genetic distance
 phylo.dist <- read_csv("sample_data/genetic_distance.csv") %>%
   column_to_rownames("SampleID") 
 
@@ -560,13 +541,52 @@ phylo.dist <- phylo.dist %>%
   dplyr::select(one_of(colnames(as.matrix(comm.dist)))) %>%
   as.dist()
 
-#check whats missing
+phylo.dist#check whats missing
 colnames(as.matrix(comm.dist))[which(!colnames(as.matrix(comm.dist)) %in% colnames(as.matrix(phylo.dist)))]
 
 
 # Distance from the bayesian tree - try join this to the actual samples
 pruned.tree
 cophenetic <- cophenetic(pruned.tree)
+
+tree.dist <- samdf %>%
+  select(SampleID, psyllid_spp) %>%
+  dplyr::rename(psyllid_spp1 = psyllid_spp) %>%
+  left_join(cophenetic %>%
+  as.data.frame() %>%
+  rownames_to_column("psyllid_spp1") %>%
+  tidyr::pivot_longer(-psyllid_spp1, names_to = "psyllid_spp2",
+               values_to = "dist")
+  ) %>%
+  left_join(
+    samdf %>%
+  select(SampleID, psyllid_spp) %>%
+  dplyr::rename(psyllid_spp2 = psyllid_spp) %>%
+  dplyr::rename(SampleID2 = SampleID)
+  ) %>%
+  mutate(SampleID = SampleID %>% str_replace(pattern="\\_S(.*)$",replacement="") %>% str_to_upper()) %>%
+  mutate(SampleID2 = SampleID2 %>% str_replace(pattern="\\_S(.*)$",replacement="")%>% str_to_upper()) %>%
+  select(-one_of("psyllid_spp1", "psyllid_spp2")) %>%
+  #unique() %>%
+  pivot_wider(names_from = SampleID2,
+              values_from = dist) %>%
+  filter(SampleID %in% rownames(as.matrix(gp.dist))) %>%
+  arrange(match(SampleID, colnames(as.matrix(gp.dist)))) %>%
+  column_to_rownames("SampleID") %>%
+  dplyr::select(one_of(colnames(as.matrix(gp.dist))))# %>%
+  
+  as.dist()
+
+# Microbial community dist
+comm.dist <- gp.dist# %>%
+  as.matrix() %>%
+  as.data.frame() %>%
+  rownames_to_column("SampleID") %>%
+  filter(SampleID %in% rownames(as.matrix(phylo.dist))) %>%
+  dplyr::select(one_of(colnames(as.matrix(phylo.dist)))) %>%
+
+  as.dist()
+
 
 # Hostplant distance
 plant.dist <- read_csv("sample_data/plant_distance.csv") %>%
@@ -595,19 +615,9 @@ envData <- read.csv("sample_data/Sample_info.csv", header=TRUE)  %>%
   column_to_rownames("SampleID") %>%
   drop_na()
 
-#Plot on map to confirm points
-library("maptools")
-data(wrld_simpl)
-wrld_simpl@data$id <- wrld_simpl@data$NAME
-wrld <- fortify(wrld_simpl, region="id")
-
-gg.map <- ggplot(envData) + geom_map(data=wrld, map=wrld, aes(map_id=id, x=long, y=lat), fill="lightgrey", color="#7f7f7f", size=0.25) + geom_count(aes(x=long, y=lat, color=psyllid_spp), alpha=.5) + 
-  theme_bw() + coord_fixed(ylim = c(-90,90), xlim=c(-180,180))  
-
-plot(gg.map)
 
 #Make spatial distance matrix
-spat.dist <- spDists(as.matrix(envData), longlat=TRUE) %>%
+spat.dist <- spDists(as.matrix(envData %>% select(-psyllid_spp)), longlat=TRUE) %>%
   as.data.frame() %>%
   set_rownames(rownames(envData) %>% str_replace(pattern="\\_S(.*)$",replacement="") %>% make.unique()) %>%
   set_colnames(rownames(envData) %>% str_replace(pattern="\\_S(.*)$",replacement="") %>% make.unique()) %>%
@@ -620,52 +630,115 @@ spat.dist <- spDists(as.matrix(envData), longlat=TRUE) %>%
   as.dist()
 
 
+#Plot on map to confirm points
+library("maptools")
+data(wrld_simpl)
+wrld_simpl@data$id <- wrld_simpl@data$NAME
+wrld <- fortify(wrld_simpl, region="id")
+
+gg.worldmap <- ggplot(envData) +
+  geom_map(data=wrld, map=wrld, aes(map_id=id, x=long, y=lat), fill="lightgrey", color="#7f7f7f", size=0.25) +
+  geom_point(aes(x=long, y=lat, color=psyllid_spp), alpha=.5, size=3) + 
+  theme_bw() +
+  coord_fixed(ylim = c(-90,90), xlim=c(-180,180))  
+
+gg.anzmap <- ggplot(envData) +
+  geom_map(data=wrld, map=wrld, aes(map_id=id, x=long, y=lat), fill="lightgrey", color="#7f7f7f", size=0.25) +
+  geom_point(aes(x=long, y=lat, color=psyllid_spp), alpha=.5, size=3) + 
+  theme_bw() +
+  coord_fixed(ylim = c(-50,-30), xlim=c(130,180))+
+  theme(legend.position = "bottom")  
+
+
+gg.nzmap <- ggplot(envData) +
+  geom_map(data=wrld, map=wrld, aes(map_id=id, x=long, y=lat), fill="lightgrey", color="#7f7f7f", size=0.25) +
+  geom_point(aes(x=long, y=lat, color=psyllid_spp), alpha=.5, size=3) + 
+  theme_bw() +
+  coord_fixed(ylim = c(-50,-30), xlim=c(160,180)) 
+
 ```
 
+### Matrix correlation
+Also see paco - https://besjournals.onlinelibrary.wiley.com/doi/full/10.1111/2041-210X.12736
 
-### Conduct mantel tests
+```{r matrix correlation}
 
-```{r mantel tests}
-#Mantel test - Phylo
+#Microbial community ~ Phylogenetic distance
+#Mantel test
 plot(comm.dist~phylo.dist)
 mantel(comm.dist, phylo.dist)
 plot(mantel.correlog(comm.dist, phylo.dist), alpha=0.05)
 
-#Mantel test - Plant
+#Partial mantel taking into account plant
+mantel.partial(comm.dist, phylo.dist, plant.dist)
+
+#Partial mantel taking into account geography
+mantel.partial(comm.dist, phylo.dist, spat.dist)
+
+#Procrustes
+phylo_proc <- protest(monoMDS(comm.dist), monoMDS(phylo.dist)) # Do i need the MDS scaling?
+
+summary(phylo_proc)
+plot(phylo_proc)
+plot(phylo_proc, kind=2)
+residuals(phylo_proc)
+
+
+#Microbial Community ~ Plant Distance
+#Mantel test 
 plot(comm.dist~plant.dist)
 mantel(comm.dist, plant.dist)
 plot(mantel.correlog(comm.dist, plant.dist), alpha=0.05)
 
-#Mantel test - Spatial
+#Partial mantel taking into account phylogeny
+mantel.partial(comm.dist, plant.dist, phylo.dist)
+
+#Partial mantel taking into account geography
+mantel.partial(comm.dist, plant.dist, spat.dist)
+
+#Procrustes
+plant_proc <- protest(monoMDS(comm.dist), monoMDS(plant.dist))
+plant_proc <- protest(comm.dist, plant.dist) # this gives very different results!
+
+summary(plant_proc)
+plot(plant_proc)
+plot(plant_proc, kind=2)
+residuals(plant_proc)
+
+#Microbial community ~ Geographic distance
+#Mantel test
 plot(comm.dist~spat.dist)
 plot(comm.dist~c(spat.dist+1), log="x")
 mantel(comm.dist, spat.dist)
 plot(mantel.correlog(comm.dist, spat.dist), alpha=0.05)
 
-
-#Partial Mantel test - Phylo ~ Plant
-mantel.partial(comm.dist, phylo.dist, plant.dist)
-
-#Partial Mantel test - Plant ~ Phylo
-mantel.partial(comm.dist, plant.dist, phylo.dist)
-
-#Partial Mantel test - Phylo ~ Space
-mantel.partial(comm.dist, phylo.dist, spat.dist)
-
-#Partial Mantel test - Plant ~ Space
-mantel.partial(comm.dist, plant.dist, spat.dist)
-
-#Partial Mantel test - Space ~ Phylo
+#Partial mantel taking into host phylogeny
 mantel.partial(comm.dist, spat.dist, phylo.dist)
 
-#Partial Mantel test - Space ~ Plant
+#Partial mantel taking into account plant phylogeny
 mantel.partial(comm.dist, spat.dist, plant.dist)
 
-## CORE TESTS - all those above neutral model expectation
+#Procrustes
+geo_proc <- protest(monoMDS(comm.dist), monoMDS(spat.dist))
+geo_proc <- protest(comm.dist, spat.dist)
+
+summary(geo_proc)
+plot(geo_proc)
+plot(geo_proc, kind=2)
+residuals(geo_proc) #Work out how to interpret these
+```
+
+
+### Tree topology comparison
+robinson foulds, matching cluster
+
+But also see how this paper has done it with PACO https://www.nature.com/articles/s41467-019-10191-3.pdf Using random subsampling? Then pull out the most associated also file:///C:/Users/ap0y/Dropbox/workprojects/Papers/10.1002_ecy.1955.pdf
+```{r}
 
 ```
 
-## Bar plots
+
+## Beta diversity plots
 
 Dendrogram and bar plots
 ```{r dendbar}
@@ -849,62 +922,13 @@ Fig2 <- gg.dend + gg.bar + plot_layout(ncol = 2, widths = c(1,3)) + plot_annotat
 ```
 
 
-# Cophylogeny
+# Test for Cophylogeny
 
-## Fit neutral model
+## Primary symbiont
 
+Use paco https://besjournals.onlinelibrary.wiley.com/doi/full/10.1111/2041-210X.12736
 
-Cluster at a rate that approximates genus (95%?) Before fititng neutral model
-Loop through those that are above the predicitons, doing a mantel test for each
-
-Specifically, points above the prediction represent taxa that are found more frequently than expected, suggesting that they are actively being maintained and selected for by the host, while points found below the prediction represent taxa found less frequently than expected, suggesting that they are either selected against by the host or are especially dispersal limited. 
-
-
-```{r}
-library(reltools)
-library(minpack.lm)
-library(Hmisc)
-
-ps.neutral <- speedyseq::tax_glom(ps2, taxrank="Genus")
-
-ps.neutral <- tip_glom(ps2, h=0.2)
-
-spp <- otu_table(ps.neutral)@.Data
-spp.out <- fit_sncm(spp, pool=spp, taxon=data.frame(tax_table(ps.neutral)))
-
-
-library(ggrepel)
-gg.neutral <- ggplot(data = spp.out$predictions) + 
-  geom_point(aes(x = log(p), y = freq, fill = fit_class),
-        shape = 21, color = "black", size = 2, alpha = 0.75) +
-  scale_fill_manual(name = "Prediction", 
-        values = c(`Above prediction` = "cyan4", 
-            `As predicted` = "blue", `Below prediction` = "goldenrod", 
-            `NA` = "white"), breaks = c("Above prediction", 
-            "As predicted", "Below prediction", 
-            "NA"), labels = c(paste0("Above prediction (", 
-            round((df[1, 2]/spp.out$fitstats$Richness) * 
-              100, 1), "%)"), paste0("As predicted (", 
-            round((df[2, 2]/spp.out$fitstats$Richness) * 
-              100, 1), "%)"), paste0("Below Prediction (", 
-            round((df[3, 2]/spp.out$fitstats$Richness) * 
-              100, 1), "%)"), paste0("NA (", 
-            df[4, 2], ")"))) +
-  geom_line(aes(x = log(p), y = freq.pred), color = "blue") + 
-  geom_line(aes(x = log(p), y = pred.lwr), color = "blue", linetype = "dashed") + 
-  geom_line(aes(x = log(p), y = pred.upr), color = "blue", linetype = "dashed") +
-  theme_bw() +
-  geom_label_repel(data = (spp.out$predictions %>% filter(fit_class == "Above prediction") %>% filter(freq > 0.5)), aes(x = log(p), y = freq,  label=Genus))+
-  xlab("log(Mean Relative Abundance)") +
-  ylab("Frequency") +
-  annotate("text", x = mean(log(spp.out$predictions$p), na.rm = TRUE),
-           y = 0.95, size = 5, label =  paste("r^2 ==", round(spp.out$fitstats$Rsqr, 4)), parse = TRUE) +  
-  annotate("text", x = mean(log(spp.out$predictions$p), na.rm = TRUE),
-           y = 0.9, size = 5, label =  paste("m ==", round(spp.out$fitstats$m,  4)), parse = TRUE)
-
-
-```
-
+and Parafit https://www.rdocumentation.org/packages/ape/versions/5.3/topics/parafit
 
 ## Minimum abundance threshold
 
@@ -1119,29 +1143,75 @@ gg.entero <- plot_tree(ps3.carson, ladderize="left",  color="psyllid_spp", label
 
 ```
 
-## Tanglegram
+## Secondary symbionts
 
-```{r tanglegram}
-#Tanglegram
-library(dendextend)
-dend_list <- dendlist(as.dendrogram (hc), as.dendrogram (gp.hc))
-
-dend_list <- untangle(dend_list, method="step1side")
-tanglegram(dend_list)
+Subset to clades within the 16S gene tree, do a paco analysis with that clade. Return test statistics.
 
 
-dend_diff(dend_list)
 
-#Look at adonis  
+### Fit neutral model
 
-library(vegan)
+Cluster at a rate that approximates genus (95%?) Before fititng neutral model
+Loop through those that are above the predicitons, doing a mantel test for each
+
+Specifically, points above the prediction represent taxa that are found more frequently than expected, suggesting that they are actively being maintained and selected for by the host, while points found below the prediction represent taxa found less frequently than expected, suggesting that they are either selected against by the host or are especially dispersal limited. 
+
+
+```{r}
+library(reltools)
+library(minpack.lm)
+library(Hmisc)
+
+ps.neutral <- speedyseq::tax_glom(ps2, taxrank="Genus")
+
+ps.neutral <- tip_glom(ps2, h=0.2)
+
+spp <- otu_table(ps.neutral)@.Data
+spp.out <- fit_sncm(spp, pool=spp, taxon=data.frame(tax_table(ps.neutral)))
+
+
+library(ggrepel)
+gg.neutral <- ggplot(data = spp.out$predictions) + 
+  geom_point(aes(x = log(p), y = freq, fill = fit_class),
+        shape = 21, color = "black", size = 2, alpha = 0.75) +
+  scale_fill_manual(name = "Prediction", 
+        values = c(`Above prediction` = "cyan4", 
+            `As predicted` = "blue", `Below prediction` = "goldenrod", 
+            `NA` = "white"), breaks = c("Above prediction", 
+            "As predicted", "Below prediction", 
+            "NA"), labels = c(paste0("Above prediction (", 
+            round((df[1, 2]/spp.out$fitstats$Richness) * 
+              100, 1), "%)"), paste0("As predicted (", 
+            round((df[2, 2]/spp.out$fitstats$Richness) * 
+              100, 1), "%)"), paste0("Below Prediction (", 
+            round((df[3, 2]/spp.out$fitstats$Richness) * 
+              100, 1), "%)"), paste0("NA (", 
+            df[4, 2], ")"))) +
+  geom_line(aes(x = log(p), y = freq.pred), color = "blue") + 
+  geom_line(aes(x = log(p), y = pred.lwr), color = "blue", linetype = "dashed") + 
+  geom_line(aes(x = log(p), y = pred.upr), color = "blue", linetype = "dashed") +
+  theme_bw() +
+  geom_label_repel(data = (spp.out$predictions %>% filter(fit_class == "Above prediction") %>% filter(freq > 0.5)), aes(x = log(p), y = freq,  label=Genus))+
+  xlab("log(Mean Relative Abundance)") +
+  ylab("Frequency") +
+  annotate("text", x = mean(log(spp.out$predictions$p), na.rm = TRUE),
+           y = 0.95, size = 5, label =  paste("r^2 ==", round(spp.out$fitstats$Rsqr, 4)), parse = TRUE) +  
+  annotate("text", x = mean(log(spp.out$predictions$p), na.rm = TRUE),
+           y = 0.9, size = 5, label =  paste("m ==", round(spp.out$fitstats$m,  4)), parse = TRUE)
+
 
 ```
 
 
-## Functional profiling
+## Community assembly
 
-PICRUST2
+SEE: https://www.nature.com/articles/s41467-019-10191-3#Sec10
+
+Our findings that host evolutionary history significantly explain microbiome diversity indicate that environmental filtering plays a substantial role in microbial community assembly. 
+
+n order to further test this notion and to assess how environmental filtering may differ among host clades, we utilized two ecophylogenetics analyses: mean phylogenetic distance (MPD) and mean nearest taxon distance (MNTD). These tests assess the degree of phylogenetic clustering within each sample (host) relative to a permuted null model. Assuming phylogenetic niche conservatism (i.e., closely related taxa overlap along niche axes), then host diet or gut physiology may select for phylogenetically clustered taxa with overlapping niches, while in the absence of such strong selection, competition via niche conservatism would lead to phylogenetic overdispersion40. Phylogenetic overdispersion may also result from facilitation (i.e., beneficial microbe–microbe interactions), such as when distantly related taxa form consortia to break down complex plant polymers40. MPD is more sensitive to overall patterns of phylogenetic clustering and evenness, while MNTD is more sensitive to patterns at the tree tips41.
+
+
 
 
 ```{r session-info}
