@@ -315,14 +315,59 @@ library(ggtree)
 p <- ggtree(pruned.tree) + geom_tiplab() + geom_nodelab(geom='label') +
     scale_x_continuous(expand=c(0, 0.1))
 
-gg.alphatree <- facet_plot(p, panel='Alpha Diversity', data = bt_randomdf %>% mutate(id = psyllid_spp) , geom=ggstance::geom_pointrangeh,
+gg.alphatree <- facet_plot(p, panel='Species Richness', data = bt_randomdf %>% mutate(id = psyllid_spp) , geom=ggstance::geom_pointrangeh,
                  mapping=aes(x=Estimates, xmin=Estimates-SE, xmax=Estimates+SE, colour=significant), stat="identity")
 
-facet_plot(gg.alphatree, panel='Alpha Diversity',
+test <- facet_plot(gg.alphatree, panel='Alpha Diversity',
            data=bt_randomdf, geom=geom_text, 
            mapping=aes(x=Estimates, label=round(Estimates)))
 
+
+p4 <- facet_plot(gg.alphatree, panel="PD", data=pd.plot %>% mutate(id = psyllid_spp) , ggstance::geom_boxploth, 
+            mapping = aes(x=PD, group=id))
+
+p5 <- facet_plot(p4, panel="SR", data=pd.plot %>% mutate(id = psyllid_spp) , ggstance::geom_boxploth, 
+            mapping = aes(x=SR, group=id))
+
+
 # Could probably highlight the few clades with a high local morans I in Red for the plot
+
+# Calculate Faith's PD-index
+pdtable <- picante::pd(as(phyloseq::otu_table(ps2), "matrix"), phyloseq::phy_tree(ps2), include.root = F)
+
+# Calculate Faith's PD-index with SES
+test <- picante::ses.pd(as(phyloseq::otu_table(ps2), "matrix"), phyloseq::phy_tree(ps2), include.root = F, runs=10)
+
+pd.plot <- test %>%
+      rownames_to_column("Sample.Name") %>%
+      left_join(samdf, by = "Sample.Name") %>%
+  select(psyllid_spp, pd.obs, pd.obs.z, pd.obs.p, Sample.Name)
+
+#Model richness with psyllid_spp as a fixed effect
+pd_spp <- betta(chats = pd.plot$estimate,
+                      ses = ba_estimates$error,
+                      X = model.matrix(~psyllid_spp, data = ba_estimates)) 
+
+
+# Use this on the dotplot
+
+pd.plot <- pdtable %>%
+      rownames_to_column("Sample.Name") %>%
+      left_join(samdf, by = "Sample.Name") %>%
+  select(psyllid_spp, PD, SR, Sample.Name)
+## Plot the PD estimates from each sample
+col <- colorRampPalette(brewer.pal(11, "Spectral"))(75)
+gg.barichnes <- ggplot(pd.plot, aes(x=psyllid_spp, y=PD, fill=psyllid_spp)) + 
+  geom_boxplot(outlier.alpha = 0) +
+  geom_jitter(aes(colour=psyllid_spp), colour="black", pch=21) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle=90, vjust=0, hjust=1),
+        legend.position = "none") +
+  scale_fill_manual(values=col) +
+  scale_colour_manual(values=col) +
+  ylab("Richness Estimate")
+
+# Plug in estimators
 
 
 # Add Statistics
