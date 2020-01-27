@@ -11,7 +11,7 @@ editor_options:
 
 ```{r install & Load packages} 
 #Set required packages
-.cran_packages <- c("ggplot2", "gridExtra", "tidyverse", "scales", "stringdist", "patchwork", "vegan", "ggpubr", "seqinr", "viridis","ape", "data.table", "RColorBrewer")
+.cran_packages <- c("ggplot2", "gridExtra", "tidyverse", "scales", "stringdist", "patchwork", "vegan", "ggpubr", "seqinr", "viridis", "ape", "sp", "data.table", "RColorBrewer", "ggtree")
 .bioc_packages <- c("dada2", "phyloseq", "DECIPHER","Biostrings","ShortRead","psadd","microbiome","philr")
 
 sapply(c(.cran_packages,.bioc_packages), require, character.only = TRUE)
@@ -171,6 +171,32 @@ sample_data(ps.merged) <- samdf
 ps.merged <- filter_taxa(ps.merged, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
 ```
 
+## Prevalence assesment
+
+Identification of taxa that are poorly represented in an unsupervised manner can identify taxa that will have little to no effect on downstream analysis. Sufficient removal of these "low prevalance" features can enhance many analysis by focusing statistical testing on taxa common throughout the data. However, for our dataset the problem with prevalence filtering for our dataset is that we dont have many replicates of each psyllid species, and therefore there are some high abundance but low prevalence ASV's we dont want to lose.
+
+If we are agglomerating anyway, the prevalence filter doesnt have any impact really
+
+
+```{r prevalence-assessment}
+# Calculate taxon prevalence across the data set
+prevdf <- apply(X = otu_table(ps.merged), MARGIN = ifelse(taxa_are_rows(ps.merged), yes = 1, no = 2), FUN = function(x){sum(x > 0)})
+
+# Add taxonomy and total read counts to prevdf - change this to tidyverse code
+prevdf <- data.frame(Prevalence = prevdf, TotalAbundance = taxa_sums(ps.merged), tax_table(ps.merged))
+
+#Prevalence plot
+gg.prev <- subset(prevdf, Phylum %in% get_taxa_unique(ps0, "Phylum")) %>%
+  ggplot(aes(TotalAbundance, Prevalence / nsamples(ps.merged),color=Genus)) +
+  geom_point(size = 3, alpha = 0.7) +
+  scale_x_log10() +
+  xlab("Total Abundance") + ylab("Prevalence [Frac. Samples]") +
+  facet_wrap(~Phylum) +
+  theme(legend.position="none") +
+  ggtitle("Phylum Prevalence in All Samples\nColored by Family")
+
+gg.prev
+```
 
 ## Taxon Filtering
 
@@ -186,9 +212,10 @@ ps.merged # Check the number of taxa prior to removal
 ps2 <- ps.merged %>%
   subset_taxa(
     Root == "Bacteria" & #This is probably the only required one
-    Family  != "mitochondria" &
+    Family  != "Mitochondria" &
     Class   != "Chloroplast" &
-    Phylum != "Cyanobacteria/Chloroplast"
+    Order   != "Chloroplast" &
+    Phylum != "Cyanobacteria"
   )
 ps2 # Confirm that the taxa were removed
 get_taxa_unique(ps2, "Phylum")
@@ -202,8 +229,6 @@ get_taxa_unique(ps2, "Class")
 Instead of using traditional plug-in diversity estiamtors, which only tell us about the diversity of our samples (observed richness), instead of the actual environment (actual richness), we will use the breakaway package which uses biological replicates to estimate the total diversity in the environment. Breakaway estimates the number of missing species based on the sequence depth and  number of rare taxa in the data, and accounts for experimental noise such as the correlation between observed richness and the sequencing depth.
 
 Following the initial estimate of diversity and variance using the breakaway package, we use the betta model of Willis, A. and Bunge, J. (2015) which works like regression but takes into account uncertainty in diversirty estimates betta accounts for strains that are present in the environment but not observed in the samples due to incomplete sampling.. Some of the samples in the initial estimates had large standard errors, indicating that we cannot precisely estimate the total species richness in those sample. In the betta model these samples will be given less weight in the regression than samples with small standard errors on their richness estimates. This is the behaviour we want, because while that sample contains some information, the standard error is telling us that the richness estimate may not be as reliable as other samples' estimates, and we should downweight the importance of that observation relative to observations would smaller standard errors on their richness estimates.
-
-## Association of richness with phylogeny
 
 May be interesting to model richness at different taxonomic ranks?
 
@@ -408,75 +433,8 @@ alpha  0.445 0.634 0.017  0.208 0.0010000
 random 0.166 0.125 0.472  0.539 0.1048509
 bm     0.001 0.001 0.029  0.001 0.0010000
 
-## Prevalence assesment
-
-Identification of taxa that are poorly represented in an unsupervised manner can identify taxa that will have little to no effect on downstream analysis. Sufficient removal of these "low prevalance" features can enhance many analysis by focusing statistical testing on taxa common throughout the data. However, for our dataset the problem with prevalence filtering for our dataset is that we dont have many replicates of each psyllid species, and therefore there are some high abundance but low prevalence ASV's we dont want to lose.
-
-If we are agglomerating anyway, the prevalence filter doesnt have any impact really
-
-
-```{r prevalence-assessment}
-# Calculate taxon prevalence across the data set
-prevdf <- apply(X = otu_table(ps2), MARGIN = ifelse(taxa_are_rows(ps2), yes = 1, no = 2), FUN = function(x){sum(x > 0)})
-
-# Add taxonomy and total read counts to prevdf - change this to tidyverse code
-prevdf <- data.frame(Prevalence = prevdf, TotalAbundance = taxa_sums(ps2), tax_table(ps2))
-
-#Prevalence plot
-gg.prev <- subset(prevdf, Phylum %in% get_taxa_unique(ps0, "Phylum")) %>%
-  ggplot(aes(TotalAbundance, Prevalence / nsamples(ps2),color=Genus)) +
-  geom_point(size = 3, alpha = 0.7) +
-  scale_x_log10() +
-  xlab("Total Abundance") + ylab("Prevalence [Frac. Samples]") +
-  facet_wrap(~Phylum) +
-  theme(legend.position="none") +
-  ggtitle("Phylum Prevalence in All Samples\nColored by Family")
-
-gg.prev
-```
-
-
-## Agglomerate taca
-
-```{r agglomerate}
-#ps.coda <- tip_glom(ps2.prev, h=0.3) # Work out what h=0.3 approximates
-
-genglom <- tax_glom(ps2, "Genus", NArm = TRUE)
-tipglom <- tip_glom(ps2, h=0.3) # Work out what h=0.3 approximates
-tipglom2 <- tip_glom(ps2, h=0.2) # Work out what h=0.3 approximates
-
-
-multiPlotTitleTextSize = 15
-p2tree = plot_tree(ps2, method = "treeonly",
-                   ladderize = "left",
-                   title = "Before Agglomeration") +
-  theme(plot.title = element_text(size = multiPlotTitleTextSize))
-
-p3tree = plot_tree(genglom, method = "treeonly",
-                   ladderize = "left", title = "By Genus") +
-  theme(plot.title = element_text(size = multiPlotTitleTextSize))
-
-p4tree = plot_tree(tipglom, method = "treeonly",
-                   ladderize = "left", title = "H=0.3") +
-  theme(plot.title = element_text(size = multiPlotTitleTextSize))
-
-
-p5tree = plot_tree(tipglom2, method = "treeonly",
-                   ladderize = "left", title = "H=0.2") +
-  theme(plot.title = element_text(size = multiPlotTitleTextSize))
-
-
-library(patchwork)
-
-p2tree + p3tree +  p5tree
-
-```
-
-
-
 
 # Beta diversity
-
 
 
 To find the Aitchison distance a centered log-ratio (clr) transformation was performed on ASV count data with the R
@@ -497,24 +455,21 @@ ps.coda <- tip_glom(ps2, h=0.3) # Work out what h=0.3 approximates
 #Rename taxa
 taxa_names(ps.coda) <- paste0("SV", seq(ntaxa(ps.coda)),"-",tax_table(ps.coda)[,6])
 
-ps2.philr <- transform_sample_counts(ps.coda, function(x) x+1)
+ps2.n0 <- transform_sample_counts(ps.coda, function(x) x+1)
 
-ape::is.rooted(phy_tree(ps2.philr))
-ape::is.binary.tree(phy_tree(ps2.philr))
+phy_tree(ps2.n0) <- multi2di(phy_tree(ps2.n0))
+phy_tree(ps2.n0) <- makeNodeLabel(phy_tree(ps2.n0), method="number", prefix='n')
 
-phy_tree(ps2.philr) <- multi2di(phy_tree(ps2.philr))
-phy_tree(ps2.philr) <- makeNodeLabel(phy_tree(ps2.philr), method="number", prefix='n')
-
-#Transpose
-otu.table <- otu_table(ps2.philr)
-tree <- phy_tree(ps2.philr)
-metadata <- as(sample_data(ps2.philr), "data.frame")
-tax <- tax_table(ps2.philr)
-gp.philr <- philr(otu.table, tree,
+#PhilR distance
+otu.table <- otu_table(ps2.n0)
+tree <- phy_tree(ps2.n0)
+metadata <- as(sample_data(ps2.n0), "data.frame")
+tax <- tax_table(ps2.n0)
+ps2.philr <- philr(otu.table, tree,
                   part.weights='enorm.x.gm.counts',
                   ilr.weights='blw.sqrt')
 
-gp.dist <- dist(gp.philr, method="euclidean")
+gp.dist <- dist(ps2.philr, method="euclidean")
 
 
 # Ordination
@@ -523,7 +478,7 @@ gg.pca <- plot_ordination(ps.coda, gp.pcoa, color='psyllid_spp', label="psyllid_
 
 # Fviz biplot
 library(factoextra)
-f.pcx <- prcomp(gp.philr)
+f.pcx <- prcomp(ps2.philr)
 pcx <- f.pcx 
 
 #Name balances
@@ -535,43 +490,15 @@ fviz_pca_biplot(pcx)
 
 ```
 
-
-## Test for microbiome distinguisability
-
-```{r adonis}
-library(vegan)
-metadata <- as(sample_data(ps2.philr), "data.frame")
-
-
-adonis(gp.dist ~ psyllid_spp, method = "euclidean",
-       data = metadata)
-
-adonis(gp.dist ~ hostplant_spp, method = "euclidean",
-       data = metadata)
-
-#Interacitons
-adonis(gp.dist ~ psyllid_spp*hostplant_spp, method = "euclidean",
-       data = metadata)
-
-adonis(gp.dist ~ hostplant_spp*psyllid_spp,
-       data = metadata)
-
-#ano <- anosim(gp.dist, permutations=999)
-```
-
-This suggests that species significantly cluster, and so do hostplants. However when accounting for species, hostplants are not significant. Therefore it should be justified to redo the barchart merging by species 
-
-
-# Test for phylosymbiosis
-Use mantel, Procrustean superimposition 
-
 ### Create distance matrices
 
 Note: Alpha-diversity could also be converted to a distance matrix by taking the Euclidean distance among all pairwise sample comparisons.
 
 ```{r distance matrices}
+metadata <- as(sample_data(ps2), "data.frame")
+
 # COI Genetic distance
-phylo.dist <- read_csv("sample_data/genetic_distance.csv") %>%
+phylo.dist <- read_csv("sample_data/genetic_distance.csv", col_names = FALSE) %>%
   column_to_rownames("SampleID") 
 
 phylo.dist[upper.tri(phylo.dist)] <- 0
@@ -620,8 +547,7 @@ tree.dist <- samdf %>%
   filter(SampleID %in% rownames(as.matrix(gp.dist))) %>%
   arrange(match(SampleID, colnames(as.matrix(gp.dist)))) %>%
   column_to_rownames("SampleID") %>%
-  dplyr::select(one_of(colnames(as.matrix(gp.dist))))# %>%
-  
+  dplyr::select(one_of(colnames(as.matrix(gp.dist)))) %>%
   as.dist()
 
 # Microbial community dist
@@ -631,7 +557,6 @@ comm.dist <- gp.dist %>%
   rownames_to_column("SampleID") %>%
   filter(SampleID %in% rownames(as.matrix(phylo.dist))) %>%
   dplyr::select(one_of(colnames(as.matrix(phylo.dist)))) %>%
-
   as.dist()
 
 
@@ -705,6 +630,316 @@ gg.nzmap <- ggplot(envData) +
   coord_fixed(ylim = c(-50,-30), xlim=c(160,180)) 
 
 ```
+
+
+## Relationship over agglomeration
+
+```{r agglomeration}
+## CLR
+f <- t(abundances(ps.coda))
+#f.0 <- cmultRepl(f, method="CZM")
+f.0 <- f
+f.clr <- codaSeq.clr(f.0)
+#perb.all <- perb(f.0, ivar="iqlr")
+clr.dist <- dist(f.clr, method="euclidean")
+
+##
+
+
+set.seed(666)
+glomseq <- seq(0, 0.8,0.1)
+
+adlist <- vector("list", length=length(glomseq))
+mantlist <- vector("list", length=length(glomseq))
+treelist <- vector("list", length=length(glomseq))
+
+for (i in 1:length(glomseq)){
+  
+ps.glom <- tip_glom(ps2, h=glomseq[i])
+
+treelist[i] <- phy_tree(psglom)
+
+#Rename taxa
+taxa_names(ps.glom) <- paste0("SV", seq(ntaxa(ps.glom)),"-",tax_table(ps.glom)[,6])
+
+ps2.philr <- transform_sample_counts(ps.glom, function(x) x+1)
+
+phy_tree(ps2.philr) <- multi2di(phy_tree(ps2.philr))
+phy_tree(ps2.philr) <- makeNodeLabel(phy_tree(ps2.philr), method="number", prefix='n')
+
+#Transpose
+otu.table <- otu_table(ps2.philr)
+tree <- phy_tree(ps2.philr)
+metadata <- as(sample_data(ps2.philr), "data.frame")
+tax <- tax_table(ps2.philr)
+ps.philr <- philr(otu.table, tree,
+                  part.weights='enorm.x.gm.counts',
+                  ilr.weights='blw.sqrt')
+
+distances <-  c("ps2.philr", "clr.ds"
+for (d in distances)
+
+gp.dist <- dist(ps2.philr, method="euclidean")
+
+
+# ADONIS TESTS
+metadata <- as(sample_data(ps2.philr), "data.frame")
+
+
+ad_psyllid <- adonis(gp.dist ~ psyllid_spp, method = "euclidean",
+                   data = metadata)$aov.tab %>%
+  as_tibble() %>%
+  mutate(call = "psyllid_spp")
+
+
+ad_hostplant <- adonis(gp.dist ~ hostplant_spp, method = "euclidean",
+                     data = metadata)$aov.tab %>%
+  as_tibble() %>%
+  mutate(call = "hostplant_spp")
+
+#Interactions
+ad_psyllid_hostplant <- adonis(gp.dist ~ psyllid_spp*hostplant_spp, method = "euclidean",
+                        data = metadata)$aov.tab %>%
+  as_tibble() %>%
+  mutate(call = "psyllid_spp*hostplant_spp")
+
+ad_hostplant_psyllid <- adonis(gp.dist ~ hostplant_spp*psyllid_spp,
+                        data = metadata)$aov.tab %>%
+  as_tibble() %>%
+  mutate(call = "hostplant_spp*psyllid_spp")
+
+
+adlist[[i]] <- bind_rows(ad_psyllid, ad_hostplant, ad_psyllid_hostplant, ad_hostplant_psyllid) %>%
+  mutate(glom = glomseq[i])
+
+
+## Mantel & Procrustes
+
+## Make distance matrices
+# COI Genetic distance
+phylo.dist <- read_csv("sample_data/genetic_distance.csv", col_names = TRUE) %>%
+  column_to_rownames("SampleID") 
+
+phylo.dist[upper.tri(phylo.dist)] <- 0
+phylo.dist <- phylo.dist + t(phylo.dist)
+phylo.dist[is.na(phylo.dist)] <- 0
+
+phylo.dist <- phylo.dist %>%
+  set_colnames(rownames(.) %>% str_replace(pattern="\\_S(.*)$",replacement="") %>% make.unique()) %>%
+  rownames_to_column("SampleID") %>%
+  mutate(SampleID = SampleID %>% str_replace(pattern="\\_S(.*)$",replacement="") %>% make.unique()) %>%
+  filter(SampleID %in% rownames(as.matrix(gp.dist))) %>%
+  arrange(match(SampleID, colnames(as.matrix(gp.dist)))) %>%
+  column_to_rownames("SampleID") %>%
+  dplyr::select(one_of(colnames(as.matrix(gp.dist)))) %>%
+  as.dist()
+
+# Microbial community dist
+comm.dist <- gp.dist %>%
+  as.matrix() %>%
+  as.data.frame() %>%
+  rownames_to_column("SampleID") %>%
+  filter(SampleID %in% rownames(as.matrix(phylo.dist))) %>%
+  dplyr::select(one_of(colnames(as.matrix(phylo.dist)))) %>%
+  as.dist()
+
+# Hostplant distance
+plant.dist <- read_csv("sample_data/plant_distance.csv") %>%
+  dplyr::select(-one_of("X1", "Host plants")) %>%
+  column_to_rownames("SampleID") %>%
+  set_colnames(rownames(.) %>% str_replace(pattern="\\_S(.*)$",replacement="") %>% make.unique()) %>%
+  rownames_to_column("SampleID") %>%
+  mutate(SampleID = SampleID %>% str_replace(pattern="\\_S(.*)$",replacement="") %>% make.unique()) %>%
+  filter(SampleID %in% rownames(as.matrix(comm.dist))) %>%
+  arrange(match(SampleID, colnames(as.matrix(comm.dist)))) %>%
+  column_to_rownames("SampleID") %>%
+  dplyr::select(one_of(colnames(as.matrix(comm.dist)))) %>%
+  as.dist()
+
+# Spatial distance
+envData <- read.csv("sample_data/Sample_info.csv", header=TRUE)  %>%
+  dplyr::filter(!duplicated(SampleID)) %>%
+  set_rownames(.$SampleID) %>%
+  separate(Collection, into= c("Lat", "Long"), sep=" ", remove = FALSE) %>%
+  separate(Lat, paste("lat",c("d","m","s"), sep="_") ) %>%
+  separate(Long, paste("long",c("d","m","s"), sep="_" ) ) %>%
+  mutate_at(vars(-SampleID, -psyllid_spp), funs(as.numeric)) %>%
+  mutate(lat=-(lat_d + lat_m/60 + lat_s/60^2),
+            long=long_d + long_m/60 + long_s/60^2) %>%
+  select(SampleID,psyllid_spp, lat, long) %>%
+  column_to_rownames("SampleID") %>%
+  drop_na()
+
+#Make spatial distance matrix
+spat.dist <- spDists(as.matrix(envData %>% select(-psyllid_spp)), longlat=TRUE) %>%
+  as.data.frame() %>%
+  set_rownames(rownames(envData) %>% str_replace(pattern="\\_S(.*)$",replacement="") %>% make.unique()) %>%
+  set_colnames(rownames(envData) %>% str_replace(pattern="\\_S(.*)$",replacement="") %>% make.unique()) %>%
+  rownames_to_column("SampleID") %>%
+  mutate(SampleID = SampleID %>% str_replace(pattern="\\_S(.*)$",replacement="") %>% make.unique()) %>%
+  filter(SampleID %in% rownames(as.matrix(comm.dist))) %>%
+  arrange(match(SampleID, colnames(as.matrix(comm.dist)))) %>%
+  column_to_rownames("SampleID") %>%
+  dplyr::select(one_of(colnames(as.matrix(comm.dist)))) %>%
+  as.dist()
+
+## Mantel tests
+
+#Microbial community ~ Phylogenetic distance
+man_phylo <- mantel(comm.dist, phylo.dist)
+man_phylo <- data.frame(
+  call="M Microbe~Phylo",
+  test="Mantel",
+  stat=man_phylo$statistic,
+  signif=man_phylo$signif)
+
+#Microbial Community ~ Plant Distance
+man_plant <- mantel(comm.dist, plant.dist)
+man_plant <- data.frame(
+  call="M Microbe~Plant",
+  test="Mantel",
+  stat=man_plant$statistic,
+  signif=man_plant$signif)
+
+#Microbial community ~ Geographic distance
+man_geo <- mantel(comm.dist, spat.dist)
+man_geo <- data.frame(
+  call="M Microbe~Geography",
+  test="Mantel",
+  stat=man_geo$statistic,
+  signif=man_geo$signif)
+
+## Partial mantel tests
+
+#Partial mantel taking into account plant
+pman_phylo_plant <- mantel.partial(comm.dist, phylo.dist, plant.dist)
+pman_phylo_plant <- data.frame(
+  call="PM Microbe~Phylo~Plant",
+  test="Partial Mantel",
+  stat=pman_phylo_plant$statistic,
+  signif=pman_phylo_plant$signif)
+
+#Partial mantel taking into account geography
+pman_phylo_geo <- mantel.partial(comm.dist, phylo.dist, spat.dist)
+pman_phylo_geo <- data.frame(
+  call="PM Microbe~Phylo~Geography",
+  test="Partial Mantel",
+  stat=pman_phylo_geo$statistic,
+  signif=pman_phylo_geo$signif)
+
+#Partial mantel taking into account phylogeny
+pman_plant_phylo <- mantel.partial(comm.dist, plant.dist, phylo.dist)
+pman_plant_phylo <- data.frame(
+  call="PM Microbe~Plant~Phylo",
+  test="Partial Mantel",
+  stat=pman_plant_phylo$statistic,
+  signif=pman_plant_phylo$signif)
+
+#Partial mantel taking into account geography
+pman_plant_geo <- mantel.partial(comm.dist, plant.dist, spat.dist)
+pman_plant_geo <- data.frame(
+  call="PM Microbe~Plant~Geography",
+  test="Partial Mantel",
+  stat=pman_plant_geo$statistic,
+  signif=pman_plant_geo$signif)
+
+#Partial mantel taking into host phylogeny
+pman_geo_phylo <- mantel.partial(comm.dist, spat.dist, phylo.dist)
+pman_geo_phylo <- data.frame(
+  call="PM Microbe~Geography~Phylo",
+  test="Partial Mantel",
+  stat=pman_geo_phylo$statistic,
+  signif=pman_geo_phylo$signif)
+
+#Partial mantel taking into account plant phylogeny
+pman_geo_plant <- mantel.partial(comm.dist, spat.dist, plant.dist)
+pman_geo_plant <- data.frame(
+  call="PM Microbe~Geography~Plant",
+  test="Partial Mantel",
+  stat=pman_geo_plant$statistic,
+  signif=pman_geo_plant$signif)
+
+##Procrustes tests
+
+phylo_proc <- protest(monoMDS(comm.dist), monoMDS(phylo.dist)) # Do i need the MDS scaling?
+phylo_proc <- data.frame(
+  call="Procrustes Microbe~Phylo",
+  test="Procrustes",
+  stat=phylo_proc$ss,
+  scale=phylo_proc$scale,
+  signif=phylo_proc$signif)
+
+plant_proc <- protest(monoMDS(comm.dist), monoMDS(plant.dist))
+plant_proc <- data.frame(
+  call="Procrustes Microbe~Plant",
+  test="Procrustes",
+  stat=plant_proc$ss,
+  scale=plant_proc$scale,
+  signif=plant_proc$signif)
+
+
+#Procrustes
+geo_proc <- protest(monoMDS(comm.dist), monoMDS(spat.dist))
+geo_proc <- data.frame(
+  call="Procrustes Microbe~Geography",
+  test="Procrustes",
+  stat=geo_proc$ss,
+  scale=geo_proc$scale,
+  signif=geo_proc$signif)
+
+
+mantlist[[i]] <- bind_rows(man_phylo, man_geo, man_plant,
+                  pman_phylo_geo, pman_phylo_plant,
+                  pman_plant_geo, pman_plant_phylo,
+                  pman_geo_phylo, pman_geo_plant,
+                  phylo_proc, plant_proc, geo_proc) %>%
+  mutate(glom = glomseq[i])
+
+}
+
+
+adonis_stats <- bind_rows(adlist)
+
+gg.adonis <- ggplot(adonis_stats, aes(x=glom, y=R2, fill=call))
+
+matrix_stats <- bind_rows(mantlist) %>%
+  mutate(signif_test = case_when(
+    signif < 0.01 ~ TRUE,
+    signif > 0.01 ~ FALSE
+  ))
+
+
+mantel <- matrix_stats %>% 
+  filter(test %in% c("Mantel", "Partial Mantel"))
+
+gg.mantel <- ggplot(mantel, aes(x=call, y=stat, fill=call)) + 
+  geom_bar(stat="identity") + 
+  geom_point(data=mantel %>% filter(signif_test==TRUE), aes(x = call, y=stat + 0.005), shape=8, colour="black") +
+  scale_fill_brewer(palette="Spectral") + 
+  facet_grid(~glom) +
+  ylab("Mantel test statistic") +
+  theme_classic() + 
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+
+# Trees
+treelist
+
+
+library(ggtree)
+trees <- treelist
+class(trees) <- "multiPhylo"
+ggtree(trees) + facet_wrap(~.id, scale="free") + geom_tiplab()
+
+```
+
+
+This suggests that species significantly cluster, and so do hostplants. However when accounting for species, hostplants are not significant. Therefore it should be justified to redo the barchart merging by species 
+
+
+# Test for phylosymbiosis
+Use mantel, Procrustean superimposition 
+
 
 ### Matrix correlation
 Also see paco - https://besjournals.onlinelibrary.wiley.com/doi/full/10.1111/2041-210X.12736
@@ -785,85 +1020,17 @@ But also see how this paper has done it with PACO https://www.nature.com/article
 ```
 
 
-## Beta diversity plots
+# Figures 
+
+## Species Psyllid spp, beta diversity, alpha diversity  
 
 Dendrogram and bar plots
-```{r dendbar}
-library(ggdendro)
-library(dendextend)
-
-#PhilR dist
-hc <- hclust(gp.dist, method="ward.D2")
-
-dend <- as.dendrogram(hc)
-
-#Replace labels
-samdf <- samdf %>%
-  mutate(labels = paste0(psyllid_spp,"-",Sample.Name,"-",hostplant_spp))
-
-lab <- as.data.frame(labels(dend)) %>%
-    dplyr::rename(Sample.Name = `labels(dend)`) %>%
-    left_join(samdf, by="Sample.Name") %>%
-    pull(labels)
-
-labels(dend) <- lab
-
-# Rectangular lines
-ddata <- dendro_data(dend, type = "rectangle")
-gg.dend <- ggplot(segment(ddata)) + 
-  geom_segment(aes(x = x, y = y, xend = xend, yend = yend))  + 
-  scale_y_reverse(expand = c(0, 0)) +
-  theme_void()+
-  scale_x_discrete(expand=c(0.001,0.001))+
-  coord_flip()
-
-ps2_bar <- #subset_taxa(ps2, !Family == "Enterobacteriaceae") %>%
-            ps2 %>%
-  speedyseq::tax_glom(taxrank = "Phylum") %>%           # agglomerate at Order level
-  transform_sample_counts(function(x) {x/sum(x)} ) %>% # Transform to rel. abundance
-  speedyseq::psmelt() %>%
-  #mutate(Family = case_when(
-  #  Abundance >= 0.01 ~ Genus, # Change this to whatever taxrank we want
-  #  Abundance < 0.01 ~ "NA"
-  #  )) %>%
-  #mutate(plot_level = case_when(
-  #  Family == "Enterobacteriaceae" | Genus == "Candidatus_Carsonella" ~ paste0("G-",Genus),
-  #  TRUE  ~ paste0("P-", Phylum),
-  #  )) %>%
-  #filter(Abundance > 0.01) %>% # Could instead mutate this to just be "Low abundance"
-  mutate(labels = paste0(psyllid_spp,"-",Sample.Name,"-",hostplant_spp)) %>%
-  mutate(labels = factor(labels, levels=labels(dend)))
-
-library(RColorBrewer)
-col <- colorRampPalette(brewer.pal(11, "Spectral"))(28)
-
-gg.bar <- ggplot(ps2_bar, aes(x = labels, y = Abundance, fill = Phylum)) + 
-  geom_bar(stat = "identity", width = 0.8) +
-  theme_minimal()+
-  theme(axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        legend.position = "right",
-        plot.margin=unit(c(-2,-1,10,0),unit="cm")) +
-  scale_x_discrete(expand=c(0,0),position="top")+
-  scale_y_discrete(expand=c(0,0))+
-  scale_fill_manual(values=col) +
-  guides(fill=guide_legend(ncol=1)) +
-  coord_flip() 
-
-#plot together
-
-Fig1 <- gg.dend + gg.bar + plot_layout(ncol = 2, widths = c(1,3)) + plot_annotation(title="Microbial diversity of New Zealand psyllids", subtitle="Run1 & Run3 0.01% threshold, Run 2 0.035% filtering threshold. PhilR transformation, Ward d2 Heirarchial clustering", tag_levels="A")
-
-```
-
-
-## merged spp phylo
 
 Merge species, arrange microbiome by phylogeny, try the mantel tests on the merged data as well (but the seperate is probs more statistically better)
 
 ```{r merge spp}
 # Merge species
-ps.sppmerged <- ps.coda %>%
+ps.sppmerged <- ps2 %>%
     merge_samples(group = "psyllid_spp")
 
 #This loses the sample metadata - Need to add it agian
@@ -875,96 +1042,54 @@ samdf <- read.csv("sample_data/Sample_info.csv", header=TRUE) %>%
 sample_data(ps.sppmerged) <- samdf
 ps4 <- filter_taxa(ps.sppmerged, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
 
-```
-
-### Species only beta
-
-```{r beta plots}
-ps4.coda <- ps4
-
 #Rename taxa
-taxa_names(ps4.coda) <- paste0("SV", seq(ntaxa(ps4.coda)),"-",tax_table(ps4.coda)[,6])
-
-ps4.philr <- transform_sample_counts(ps4.coda, function(x) x+1)
-
-ape::is.rooted(phy_tree(ps4.philr))
-ape::is.binary.tree(phy_tree(ps4.philr))
-
-phy_tree(ps4.philr) <- multi2di(phy_tree(ps4.philr))
-phy_tree(ps4.philr) <- makeNodeLabel(phy_tree(ps4.philr), method="number", prefix='n')
-
-#Transpose
-otu.table <- otu_table(ps4.philr)
-tree <- phy_tree(ps4.philr)
-metadata <- as(sample_data(ps4.philr), "data.frame")
-tax <- tax_table(ps4.philr)
-ps4.philr <- philr(otu.table, tree,
-                  part.weights='enorm.x.gm.counts',
-                  ilr.weights='blw.sqrt')
-
-gp.dist <- dist(ps4.philr, method="euclidean")
-
-
-# perform a singular value decomposition of CLR
-f.pcx <- prcomp(ps4.philr)
-pcx <- f.pcx 
-
-#Name balances
-
-pcnames <-  sapply(rownames(pcx$rotation), function(x) name.balance(tree, tax, x))
-pcnames <- make.unique(pcnames, sep = ".")
-
-rownames(pcx$rotation) <- pcnames
-fviz_pca_biplot(pcx) 
-
-
-
-#Replace labels
-
-# Rectangular lines
-ddata <- dendro_data(dend, type = "rectangle")
-gg.dend <- ggplot(segment(ddata)) + 
-  geom_segment(aes(x = x, y = y, xend = xend, yend = yend))  + 
-  scale_y_reverse(expand = c(0, 0)) +
-  theme_void()+
-  scale_x_discrete(expand=c(0.001,0.001))+
-  coord_flip()
+taxa_names(ps4) <- paste0("SV", seq(ntaxa(ps4)),"-",tax_table(ps4)[,6])
 
 ps4_bar <- #subset_taxa(ps3, !Family == "Enterobacteriaceae") %>%
             ps4 %>%
   speedyseq::tax_glom(taxrank = "Order") %>%           # agglomerate at Order level
   transform_sample_counts(function(x) {x/sum(x)} ) %>% # Transform to rel. abundance
   speedyseq::psmelt() %>%
-  #mutate(Family = case_when(
-  #  Abundance >= 0.01 ~ Genus, # Change this to whatever taxrank we want
-  #  Abundance < 0.01 ~ "NA"
-  #  )) %>%
-  #mutate(plot_level = case_when(
-  #  Family == "Enterobacteriaceae" | Genus == "Candidatus_Carsonella" ~ paste0("G-",Genus),
-  #  TRUE  ~ paste0("P-", Phylum),
-  #  )) %>%
-  filter(Abundance > 0.01) %>% # Could instead mutate this to just be "Low abundance"
-    mutate(psyllid_spp = factor(psyllid_spp, levels=labels(dend)))
+  mutate(plotlabel = Phylum) %>%
+  mutate(plotlabel = case_when(
+    Abundance >= 0.01 & Phylum=="Proteobacteria" ~ paste0(Phylum, " - ", Order), # Change this to whatever taxrank we want
+    Abundance >= 0.01 & !Phylum=="Proteobacteria"~ Phylum ,
+    Abundance < 0.01 ~ "NA"
+    )) %>%
+  dplyr::na_if("NA") %>%
+  select(Sample, plotlabel, Phylum, Order, Abundance)
 
-library(RColorBrewer)
-col <- colorRampPalette(brewer.pal(11, "Spectral"))(32)
+library(ggtree)
+p <- ggtree(pruned.tree) + geom_tiplab(align=TRUE) + geom_nodelab(geom='label') +
+    scale_x_continuous(expand=c(0, 0.1))
 
-gg.bar <- ggplot(ps4_bar, aes(x = Sample, y = Abundance, fill = Order)) + 
-  geom_bar(stat = "identity", width = 0.8) +
-  theme_minimal()+
-  theme(axis.title = element_blank(),
-        axis.ticks = element_blank(),
-        legend.position = "right",
-        plot.margin=unit(c(-2,-1,10,0),unit="cm")) +
-  scale_x_discrete(expand=c(0,0),position="top")+
-  scale_y_discrete(expand=c(0,0))+
-  scale_fill_manual(values=col) +
-  guides(fill=guide_legend(ncol=1)) +
-  coord_flip() 
 
-#plot together
+Fig1 <- facet_plot(p, panel='Relative Abundance', data = ps4_bar %>% mutate(id = Sample), geom=ggstance::geom_barh,
+                 mapping=aes(x = Abundance, fill = plotlabel), stat="identity")  + 
+  scale_fill_manual(values=colorRampPalette(brewer.pal(11, "Paired"))(length(unique(ps4_bar$plotlabel))-1), na.value="grey")
 
-Fig2 <- gg.dend + gg.bar + plot_layout(ncol = 2, widths = c(1,3)) + plot_annotation(title="Microbial diversity of New Zealand psyllids, taxa >0.01", subtitle="Merged by species, PhilR transformation, Ward d2 Heirarchial clustering", tag_levels="A")
+
+Fig1 <- facet_plot(Fig1, panel='Species Richness', data = bt_randomdf %>% mutate(id = psyllid_spp),
+                          geom=ggstance::geom_pointrangeh,
+                           mapping=aes(x=Estimates, xmin=Estimates-SE, xmax=Estimates+SE),
+                           stat="identity", size=0.5, colour="#696969") +
+  #scale_colour_manual(values=c("#808080","#9e0142"),na.value="#808080") + 
+  theme_classic2()   +
+  theme(legend.position = "bottom",
+  panel.grid.major.x = element_line(colour="grey92", size=0.5, linetype="dashed"),
+  strip.background = element_rect(fill = "grey92", 
+                colour = "black", size = 1)
+  )
+        
+# Change relative grid sizes
+library(grid)
+library(gtable)
+
+gt = ggplot_gtable(ggplot_build(Fig1))
+gt$layout$l[grep('panel-3', gt$layout$name)] # you want to find the column specific to panel-2
+
+gt$widths[9] = 0.3*gt$widths[9] # reduce width of column 9
+grid.draw(gt) # plot with grid draw
 
 ```
 
