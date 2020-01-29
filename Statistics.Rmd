@@ -435,8 +435,6 @@ random 0.166 0.125 0.472  0.539 0.1048509
 bm     0.001 0.001 0.029  0.001 0.0010000
 
 
-# Beta diversity
-
 
 To find the Aitchison distance a centered log-ratio (clr) transformation was performed on ASV count data with the R
 165 package CoDaSeq (30) before computing the Euclidean distance between samples with
@@ -447,7 +445,7 @@ Many analysis in community ecology and hypothesis testing benefit from data tran
 philr phylogenetic transform is based on balances (binary partitions) along an evolutionary tree (Silverman et al., 2017) that is a replacement for the familiar UniFrac distance metric. Distances determined by phylogenetic transforms have the advantage that the binary partitions chosen have a simple interpretation and the correlation structure of the data is fully accounted for. However, the disadvantage is that only the relationships between the chosen partitions can be examined.# Figure 1: Community composition analysis
 
 
-## Figure 1
+## Figure 1 - Alpha / Beta diversity
 
 Dendrogram and bar plots
 
@@ -518,365 +516,451 @@ grid.draw(gt) # plot with grid draw
 
 ```
 
-## Beta diversity association over Phylogenetic scale 
 
-```{r agglomeration}
+## Figure 2 - Time slice
 
-## Define phy_glom function - alternative to tip_glom
+```{r timeslice}
+library(ape)
 library(castor)
-phy_glom <- function(physeq, similarity = 0.2) 
-{
-  tree <- phyloseq::phy_tree(physeq)
-  ColapsedNodes <- collapse_tree_at_resolution(tree, similarity)
-  DescendingTips <- lapply(ColapsedNodes$collapsed_nodes,tree,FUN=function(i,tree){get_subtree_at_node(tree, i)$subtree$tip.label})
-  
-  if(length(DescendingTips)>0){
-    for (i in 1:length(DescendingTips)) {
-      physeq <- phyloseq::merge_taxa(physeq, eqtaxa = DescendingTips[[i]])
-    }
-  }
-  
-  Ncollapsed <- length(DescendingTips)
-  NcollapsedOld <- sum(do.call(rbind, lapply(DescendingTips, function(x) length(x))))
-  message(paste(NcollapsedOld, "OTUS within", Ncollapsed, "Nodes collapsed" ))
-  return(physeq)
-}
-
+library(abind)
+library(Matrix)
 #Look at depth categories in tree
 hist(get_all_node_depths(phy_tree(ps2)))
 
-set.seed(666)
-library(CoDaSeq)
-glomseq <- seq(0, 0.8, 0.1) 
-distances <-  c("ps2.philr", "ps2.clr", "ps2.bray", "ps2.jac")
+#Set slices
+slices=seq(0,1.6,0.1)
 
-adlist <- vector("list", length=length(glomseq))
-mantlist <- vector("list", length=length(glomseq))
-treelist <- vector("list", length=length(glomseq))
-
-adlist_distances <-  vector("list", length=length(distances))
-mantlist_distances <-  vector("list", length=length(distances))
-
-for (i in 1:length(glomseq)){
-  
-#ps.glom <- tip_glom(ps2, h=glomseq[i])
-ps.glom <- phy_glom(ps2, similarity=glomseq[i])
-
-treelist[[i]] <- ps.glom
-
-#Rename taxa
-taxa_names(ps.glom) <- paste0("SV", seq(ntaxa(ps.glom)),"-",tax_table(ps.glom)[,6])
-
-ps2.n0 <- transform_sample_counts(ps.glom, function(x) x+1)
-
-phy_tree(ps2.n0) <- multi2di(phy_tree(ps2.n0))
-phy_tree(ps2.n0) <- makeNodeLabel(phy_tree(ps2.n0), method="number", prefix='n')
-
-# philr dist
-otu.table <- otu_table(ps2.n0)
-tree <- phy_tree(ps2.n0)
-metadata <- as(sample_data(ps2.n0), "data.frame")
-tax <- tax_table(ps2.n0)
-ps2.philr <- philr(otu.table, tree,
-                  part.weights='enorm.x.gm.counts',
-                  ilr.weights='blw.sqrt')
-ps2.philr <- dist(ps2.philr, method="euclidean")
-
-# CLR dist
-ps2.clr <- t(abundances(ps2.n0))
-ps2.clr <- codaSeq.clr(ps2.clr)
-ps2.clr <- dist(ps2.clr, method="euclidean")
-
-# Bray dist
-ps2.bray <- vegdist(otu_table(ps.glom),method="bray")
-#Jacard
-ps2.jac <- vegdist(otu_table(ps.glom),method="jac",binary = T)
-
-  for (d in 1:length(distances)){
-  
-  coda.dist <- get(distances[d])
-  #coda.dist <- dist(dist_obj, method="euclidean")
-  
-  
-  # ADONIS TESTS
-  metadata <- as(sample_data(ps2.n0), "data.frame")
-  
-  
-  ad_psyllid <- adonis(coda.dist ~ psyllid_spp, method = "euclidean",
-                     data = metadata)$aov.tab %>%
-    as_tibble(rownames="terms") %>%
-    mutate(call = "psyllid_spp")
-  
-  
-  ad_hostplant <- adonis(coda.dist ~ hostplant_spp, method = "euclidean",
-                       data = metadata)$aov.tab %>%
-    as_tibble(rownames="terms") %>%
-    mutate(call = "hostplant_spp")
-  
-  #Interactions
-  ad_psyllid_hostplant <- adonis(coda.dist ~ psyllid_spp*hostplant_spp, method = "euclidean",
-                          data = metadata)$aov.tab %>%
-    as_tibble(rownames="terms") %>%
-    mutate(call = "psyllid_spp*hostplant_spp")
-  
-  ad_hostplant_psyllid <- adonis(coda.dist ~ hostplant_spp*psyllid_spp,
-                          data = metadata)$aov.tab %>%
-    as_tibble(rownames="terms") %>%
-    mutate(call = "hostplant_spp*psyllid_spp")
-  
-  
-  adlist[[d]] <- bind_rows(ad_psyllid, ad_hostplant, ad_psyllid_hostplant, ad_hostplant_psyllid) %>%
-    mutate(distance = distances[d])
-  
-  
-  ## Matrix correlations
-  
-  ## Make distance matrices
-  # COI Genetic distance
-  phylo.dist <- read_csv("sample_data/genetic_distance.csv", col_names = TRUE) %>%
-    column_to_rownames("SampleID") 
-  
-  phylo.dist[upper.tri(phylo.dist)] <- 0
-  phylo.dist <- phylo.dist + t(phylo.dist)
-  phylo.dist[is.na(phylo.dist)] <- 0
-  
-  phylo.dist <- phylo.dist %>%
-    set_colnames(rownames(.) %>% str_replace(pattern="\\_S(.*)$",replacement="") %>% make.unique()) %>%
-    rownames_to_column("SampleID") %>%
-    mutate(SampleID = SampleID %>% str_replace(pattern="\\_S(.*)$",replacement="") %>% make.unique()) %>%
-    filter(SampleID %in% rownames(as.matrix(coda.dist))) %>%
-    arrange(match(SampleID, colnames(as.matrix(coda.dist)))) %>%
-    column_to_rownames("SampleID") %>%
-    dplyr::select(one_of(colnames(as.matrix(coda.dist)))) %>%
-    as.dist()
-  
-  # Microbial community dist
-  comm.dist <- coda.dist %>%
-    as.matrix() %>%
-    as.data.frame() %>%
-    rownames_to_column("SampleID") %>%
-    filter(SampleID %in% rownames(as.matrix(phylo.dist))) %>%
-    dplyr::select(one_of(colnames(as.matrix(phylo.dist)))) %>%
-    as.dist()
-  
-  # Hostplant distance
-  plant.dist <- read_csv("sample_data/plant_distance.csv") %>%
-    dplyr::select(-one_of("X1", "Host plants")) %>%
-    column_to_rownames("SampleID") %>%
-    set_colnames(rownames(.) %>% str_replace(pattern="\\_S(.*)$",replacement="") %>% make.unique()) %>%
-    rownames_to_column("SampleID") %>%
-    mutate(SampleID = SampleID %>% str_replace(pattern="\\_S(.*)$",replacement="") %>% make.unique()) %>%
-    filter(SampleID %in% rownames(as.matrix(comm.dist))) %>%
-    arrange(match(SampleID, colnames(as.matrix(comm.dist)))) %>%
-    column_to_rownames("SampleID") %>%
-    dplyr::select(one_of(colnames(as.matrix(comm.dist)))) %>%
-    as.dist()
-  
-  # Spatial distance
-  envData <- read.csv("sample_data/Sample_info.csv", header=TRUE)  %>%
-    dplyr::filter(!duplicated(SampleID)) %>%
-    set_rownames(.$SampleID) %>%
-    separate(Collection, into= c("Lat", "Long"), sep=" ", remove = FALSE) %>%
-    separate(Lat, paste("lat",c("d","m","s"), sep="_") ) %>%
-    separate(Long, paste("long",c("d","m","s"), sep="_" ) ) %>%
-    mutate_at(vars(-SampleID, -psyllid_spp), funs(as.numeric)) %>%
-    mutate(lat=-(lat_d + lat_m/60 + lat_s/60^2),
-              long=long_d + long_m/60 + long_s/60^2) %>%
-    dplyr::select(SampleID, psyllid_spp, lat, long) %>%
-    column_to_rownames("SampleID") %>%
-    drop_na()
-  
-  #Make spatial distance matrix
-  spat.dist <- spDists(as.matrix(envData %>% dplyr::select(-psyllid_spp)), longlat=TRUE) %>%
-    as.data.frame() %>%
-    set_rownames(rownames(envData) %>% str_replace(pattern="\\_S(.*)$",replacement="") %>% make.unique()) %>%
-    set_colnames(rownames(envData) %>% str_replace(pattern="\\_S(.*)$",replacement="") %>% make.unique()) %>%
-    rownames_to_column("SampleID") %>%
-    mutate(SampleID = SampleID %>% str_replace(pattern="\\_S(.*)$",replacement="") %>% make.unique()) %>%
-    filter(SampleID %in% rownames(as.matrix(comm.dist))) %>%
-    arrange(match(SampleID, colnames(as.matrix(comm.dist)))) %>%
-    column_to_rownames("SampleID") %>%
-    dplyr::select(one_of(colnames(as.matrix(comm.dist)))) %>%
-    as.dist()
-  
-  ## Mantel tests
-  
-  #Microbial community ~ Phylogenetic distance
-  man_phylo <- mantel(comm.dist, phylo.dist)
-  man_phylo <- data.frame(
-    call="M Microbe~Phylo",
-    test="Mantel",
-    stat=man_phylo$statistic,
-    signif=man_phylo$signif)
-  
-  #Microbial Community ~ Plant Distance
-  man_plant <- mantel(comm.dist, plant.dist)
-  man_plant <- data.frame(
-    call="M Microbe~Plant",
-    test="Mantel",
-    stat=man_plant$statistic,
-    signif=man_plant$signif)
-  
-  #Microbial community ~ Geographic distance
-  man_geo <- mantel(comm.dist, spat.dist)
-  man_geo <- data.frame(
-    call="M Microbe~Geography",
-    test="Mantel",
-    stat=man_geo$statistic,
-    signif=man_geo$signif)
-  
-  ## Partial mantel tests
-  
-  #Partial mantel taking into account plant
-  pman_phylo_plant <- mantel.partial(comm.dist, phylo.dist, plant.dist)
-  pman_phylo_plant <- data.frame(
-    call="PM Microbe~Phylo~Plant",
-    test="Partial Mantel",
-    stat=pman_phylo_plant$statistic,
-    signif=pman_phylo_plant$signif)
-  
-  #Partial mantel taking into account geography
-  pman_phylo_geo <- mantel.partial(comm.dist, phylo.dist, spat.dist)
-  pman_phylo_geo <- data.frame(
-    call="PM Microbe~Phylo~Geography",
-    test="Partial Mantel",
-    stat=pman_phylo_geo$statistic,
-    signif=pman_phylo_geo$signif)
-  
-  #Partial mantel taking into account phylogeny
-  pman_plant_phylo <- mantel.partial(comm.dist, plant.dist, phylo.dist)
-  pman_plant_phylo <- data.frame(
-    call="PM Microbe~Plant~Phylo",
-    test="Partial Mantel",
-    stat=pman_plant_phylo$statistic,
-    signif=pman_plant_phylo$signif)
-  
-  #Partial mantel taking into account geography
-  pman_plant_geo <- mantel.partial(comm.dist, plant.dist, spat.dist)
-  pman_plant_geo <- data.frame(
-    call="PM Microbe~Plant~Geography",
-    test="Partial Mantel",
-    stat=pman_plant_geo$statistic,
-    signif=pman_plant_geo$signif)
-  
-  #Partial mantel taking into host phylogeny
-  pman_geo_phylo <- mantel.partial(comm.dist, spat.dist, phylo.dist)
-  pman_geo_phylo <- data.frame(
-    call="PM Microbe~Geography~Phylo",
-    test="Partial Mantel",
-    stat=pman_geo_phylo$statistic,
-    signif=pman_geo_phylo$signif)
-  
-  #Partial mantel taking into account plant phylogeny
-  pman_geo_plant <- mantel.partial(comm.dist, spat.dist, plant.dist)
-  pman_geo_plant <- data.frame(
-    call="PM Microbe~Geography~Plant",
-    test="Partial Mantel",
-    stat=pman_geo_plant$statistic,
-    signif=pman_geo_plant$signif)
-  
-  ##Procrustes tests
-  
-  phylo_proc <- protest(monoMDS(comm.dist), monoMDS(phylo.dist)) # Do i need the MDS scaling?
-  phylo_proc <- data.frame(
-    call="Procrustes Microbe~Phylo",
-    test="Procrustes",
-    stat=phylo_proc$ss,
-    scale=phylo_proc$scale,
-    signif=phylo_proc$signif)
-  
-  plant_proc <- protest(monoMDS(comm.dist), monoMDS(plant.dist))
-  plant_proc <- data.frame(
-    call="Procrustes Microbe~Plant",
-    test="Procrustes",
-    stat=plant_proc$ss,
-    scale=plant_proc$scale,
-    signif=plant_proc$signif)
-  
-  
-  #Procrustes
-  geo_proc <- protest(monoMDS(comm.dist), monoMDS(spat.dist))
-  geo_proc <- data.frame(
-    call="Procrustes Microbe~Geography",
-    test="Procrustes",
-    stat=geo_proc$ss,
-    scale=geo_proc$scale,
-    signif=geo_proc$signif)
-  
-  
-  mantlist[[d]] <- bind_rows(man_phylo, man_geo, man_plant,
-                    pman_phylo_geo, pman_phylo_plant,
-                    pman_plant_geo, pman_plant_phylo,
-                    pman_geo_phylo, pman_geo_plant,
-                    phylo_proc, plant_proc, geo_proc)  %>%
-    mutate(distance = distances[d])
-  
-
-  }
-
-  adlist_distances[[i]] <- bind_rows(adlist)  %>%
-    mutate(glom = glomseq[i])
-  mantlist_distances[[i]] <- bind_rows(mantlist)   %>%
-    mutate(glom = glomseq[i])
-  
+#Plot trees at slices
+treelist <- vector("list", length=length(slices))
+for (i in 1:length(slices)){
+  newtree <- collapse_tree_at_resolution(phy_tree(ps2),slices[i], shorten = TRUE)$tree
+  treelist[[i]] <- newtree
 }
 
+class(treelist) <- "multiPhylo"
+ggtree(treelist) + facet_wrap(~.id, scale="free") + theme_tree2()
 
-adonis_stats <- bind_rows(adlist_distances)
+#Conduct slices and calculate beta diversity
+Betas=BDTT(similarity_slices = slices, tree = phy_tree(ps2), sampleOTUs = t(otu_table(ps2)))
+```
 
-gg.adonis <- ggplot(adonis_stats, aes(x=glom, y=R2, fill=call))
+### Prepare distance matrices
+```{r prepare distances}
+## Make distance matrices
+# COI Genetic distance
+phylo.dist <- read_csv("sample_data/genetic_distance.csv", col_names = TRUE) %>%
+  column_to_rownames("SampleID") 
+
+phylo.dist[upper.tri(phylo.dist)] <- 0
+phylo.dist <- phylo.dist + t(phylo.dist)
+phylo.dist[is.na(phylo.dist)] <- 0
+
+phylo.dist <- phylo.dist %>%
+  set_colnames(rownames(.) %>% str_replace(pattern="\\_S(.*)$",replacement="") %>% make.unique()) %>%
+  rownames_to_column("SampleID") %>%
+  mutate(SampleID = SampleID %>% str_replace(pattern="\\_S(.*)$",replacement="") %>% make.unique()) %>%
+  #filter(SampleID %in% rownames(as.matrix(coda.dist))) %>%
+  #arrange(match(SampleID, colnames(as.matrix(coda.dist)))) %>%
+  column_to_rownames("SampleID") %>%
+  #dplyr::select(one_of(colnames(as.matrix(coda.dist)))) %>%
+  as.matrix()
+
+# Hostplant distance
+plant.dist <- read_csv("sample_data/plant_distance.csv") %>%
+  dplyr::select(-one_of("X1", "Host plants")) %>%
+  column_to_rownames("SampleID") %>%
+  set_colnames(rownames(.) %>% str_replace(pattern="\\_S(.*)$",replacement="") %>% make.unique()) %>%
+  rownames_to_column("SampleID") %>%
+  mutate(SampleID = SampleID %>% str_replace(pattern="\\_S(.*)$",replacement="") %>% make.unique()) %>%
+  #filter(SampleID %in% rownames(as.matrix(comm.dist))) %>%
+  #arrange(match(SampleID, colnames(as.matrix(comm.dist)))) %>%
+  column_to_rownames("SampleID") %>%
+  #dplyr::select(one_of(colnames(as.matrix(comm.dist)))) %>%
+  as.matrix()
+
+# Spatial distance
+envData <- read.csv("sample_data/Sample_info.csv", header=TRUE)  %>%
+  dplyr::filter(!duplicated(SampleID)) %>%
+  set_rownames(.$SampleID) %>%
+  separate(Collection, into= c("Lat", "Long"), sep=" ", remove = FALSE) %>%
+  separate(Lat, paste("lat",c("d","m","s"), sep="_") ) %>%
+  separate(Long, paste("long",c("d","m","s"), sep="_" ) ) %>%
+  mutate_at(vars(-SampleID, -psyllid_spp), funs(as.numeric)) %>%
+  mutate(lat=-(lat_d + lat_m/60 + lat_s/60^2),
+            long=long_d + long_m/60 + long_s/60^2) %>%
+  dplyr::select(SampleID, psyllid_spp, lat, long) %>%
+  column_to_rownames("SampleID") %>%
+  drop_na()
+
+#Make spatial distance matrix
+spat.dist <- spDists(as.matrix(envData %>% dplyr::select(-psyllid_spp)), longlat=TRUE) %>%
+  as.data.frame() %>%
+  set_rownames(rownames(envData) %>% str_replace(pattern="\\_S(.*)$",replacement="") %>% make.unique()) %>%
+  set_colnames(rownames(envData) %>% str_replace(pattern="\\_S(.*)$",replacement="") %>% make.unique()) %>%
+  rownames_to_column("SampleID") %>%
+  mutate(SampleID = SampleID %>% str_replace(pattern="\\_S(.*)$",replacement="") %>% make.unique()) %>%
+  #filter(SampleID %in% rownames(as.matrix(comm.dist))) %>%
+  #arrange(match(SampleID, colnames(as.matrix(comm.dist)))) %>%
+  column_to_rownames("SampleID") %>%
+  #dplyr::select(one_of(colnames(as.matrix(comm.dist)))) %>%
+  as.matrix()
+```
+
+### Adonis tests
+```{r Adonis}
+# Construct sequence table
+predictors="psyllid_spp"
+StatsRes=expand.grid(similarity_slices=as.character(slices),predictors=predictors,metric=c("Jac","Bray","Aitch"))
+StatsRes[["F.Model"]]=StatsRes[["R2"]]=StatsRes[["Pr(>F)"]]=NA
+head(StatsRes)
+
+## ADONIS
+for (i in as.character(slices)){
+  res=unlist(adonis(Betas[i,"Jac",samples,samples]~ psyllid_spp, method = "euclidean",
+                           data = metadata)$aov.tab[1,c(6,5,4)])
+  StatsRes[(StatsRes$metric=="Jac")&(StatsRes$similarity_slices==i),4:6]=res
+  res=unlist(adonis(Betas[i,"Bray",samples,samples]~ psyllid_spp, method = "euclidean",
+                    data = metadata)$aov.tab[1,c(6,5,4)])
+  StatsRes[(StatsRes$metric=="Bray")&(StatsRes$similarity_slices==i),4:6]=res
+  res=unlist(adonis(Betas[i,"Aitch",samples,samples]~ psyllid_spp, method = "euclidean",
+                    data = metadata)$aov.tab[1,c(6,5,4)])
+  StatsRes[(StatsRes$metric=="Aitch")&(StatsRes$similarity_slices==i),4:6]=res
+}
+
+# Profile for all
+ggplot(aes(y=R2,x=similarity_slices,colour=predictors,group=factor(predictors)),data=StatsRes)+geom_point()+geom_line()+facet_wrap(~metric)
+
+```
+
+### Mantel tests
+```{r Mantel} 
+samples <- rownames(otu_table(ps2))
+dists <- c("phylo.dist","plant.dist", "spat.dist")
+mantlist_distances <- vector("list", length=length(dists))
+
+for (d in 1:length(dists)){
+  test.dist <- get(dists[d])
+  
+  samples_to_use <- samples[samples %in% colnames(as.matrix(test.dist))]
+  
+  manlist <- vector("list", length=length(slices))
+  for (i in 1:length(slices)){
+    
+    nslice <- as.character(slices[i])
+    #Jac
+    M <- mantel(Betas[nslice,"Jac",samples_to_use,samples_to_use], test.dist[samples_to_use,samples_to_use])
+    man_jac <- data.frame(metric="Jac", test=dists[d], stat=M$statistic,  signif=M$signif)
+    #Bray
+    M <- mantel(Betas[nslice,"Bray",samples_to_use,samples_to_use], test.dist[samples_to_use,samples_to_use])
+    man_bray <- data.frame(metric="Bray", test=dists[d], stat=M$statistic,  signif=M$signif)
+    #Aitch_psedo
+    M <- mantel(Betas[nslice,"Aitch_pseudo",samples_to_use,samples_to_use], test.dist[samples_to_use,samples_to_use])
+    man_aitch_pseudo <- data.frame(metric="Aitch_pseudo", test=dists[d], stat=M$statistic,  signif=M$signif)
+    #Aitch_rep
+    M <- mantel(Betas[nslice,"Aitch_rep",samples_to_use,samples_to_use], test.dist[samples_to_use,samples_to_use])
+    man_aitch_rep <- data.frame(metric="Aitch_rep", test=dists[d], stat=M$statistic,  signif=mantel$signif)
+    manlist[[i]] <- bind_rows(man_jac, man_bray, man_aitch_pseudo, man_aitch_rep) %>%
+      mutate(slice=slices[i])
+  }
+  mantlist_distances[[d]] <- bind_rows(manlist)
+}
 
 matrix_stats <- bind_rows(mantlist_distances) %>%
   mutate(signif_test = case_when(
     signif < 0.01 ~ TRUE,
     signif > 0.01 ~ FALSE
   ))
+gg.mantel <- ggplot(matrix_stats, aes(y=stat,x=slice, colour=test, group=factor(test)))+
+  geom_point(aes(shape=signif_test)) +
+  geom_line()+ 
+  geom_hline(yintercept=0) +
+  facet_wrap(~metric) 
+```
+
+### Partial mantel tests
+```{r Partial Mantel}
+samples <- rownames(otu_table(ps2))
+dists <- expand_grid(dist1 = c("phylo.dist","plant.dist", "spat.dist"), dist2=c("phylo.dist","plant.dist", "spat.dist")) %>%
+  filter(!dist1==dist2)
+mantlist_distances <- vector("list", length=length(dists))
+
+for (d in 1:nrow(dists)){
+  test.dist <- get(dists$dist1[d])
+  control.dist <- get(dists$dist2[d])
+  
+  samples_to_use <- samples[samples %in% colnames(as.matrix(test.dist))]
+  
+  manlist <- vector("list", length=length(slices))
+  for (i in 1:length(slices)){
+    
+    nslice <- as.character(slices[i])
+    #Jac
+    PM <- mantel.partial(Betas[nslice,"Jac",samples_to_use,samples_to_use],
+                         test.dist[samples_to_use,samples_to_use],
+                          control.dist[samples_to_use,samples_to_use])
+    PM_jac <- data.frame(metric="Jac", dist1=dists$dist1[d], dist2=dists$dist2[d], stat=PM$statistic,  signif=PM$signif)
+    #Bray
+    PM <- mantel.partial(Betas[nslice,"Bray",samples_to_use,samples_to_use],
+                         test.dist[samples_to_use,samples_to_use],
+                         control.dist[samples_to_use,samples_to_use])
+    PM_bray <- data.frame(metric="Bray", dist1=dists$dist1[d], dist2=dists$dist2[d], stat=PM$statistic,  signif=PM$signif)
+    #Aitch_psedo
+    PM <- mantel.partial(Betas[nslice,"Aitch_pseudo",samples_to_use,samples_to_use], 
+                         test.dist[samples_to_use,samples_to_use], 
+                         control.dist[samples_to_use,samples_to_use])
+    PM_aitch_pseudo <- data.frame(metric="Aitch_pseudo", dist1=dists$dist1[d], dist2=dists$dist2[d], stat=PM$statistic,  signif=PM$signif)
+    #Aitch_rep
+    PM <- mantel.partial(Betas[nslice,"Aitch_rep",samples_to_use,samples_to_use], 
+                         test.dist[samples_to_use,samples_to_use], 
+                         control.dist[samples_to_use,samples_to_use])
+    PM_aitch_rep <- data.frame(metric="Aitch_rep", dist1=dists$dist1[d], dist2=dists$dist2[d], stat=PM$statistic,  signif=PM$signif)
+    manlist[[i]] <- bind_rows(PM_jac, PM_bray, PM_aitch_pseudo, PM_aitch_rep) %>%
+      mutate(slice=slices[i])
+  }
+  mantlist_distances[[d]] <- bind_rows(manlist)
+}
+
+matrix_stats <- bind_rows(mantlist_distances) %>%
+  mutate(signif_test = case_when(
+    signif < 0.01 ~ TRUE,
+    signif > 0.01 ~ FALSE
+  )) %>%
+  mutate(test = paste0("microbe~",dist1,"~",dist2))
+gg.mantel <- ggplot(matrix_stats, aes(y=stat,x=slice, colour=test, group=factor(test)))+
+  geom_point(aes(shape=signif_test)) +
+  geom_line()+ 
+  geom_hline(yintercept=0) +
+  facet_wrap(~metric) 
+```
+
+### Procrustes
+```{r Procrustes}
+samples <- rownames(otu_table(ps2))
+dists <- c("phylo.dist","plant.dist", "spat.dist")
+mantlist_distances <- vector("list", length=length(dists))
+
+for (d in 1:length(dists)){
+  test.dist <- get(dists[d])
+  
+  samples_to_use <- samples[samples %in% colnames(as.matrix(test.dist))]
+  
+  manlist <- vector("list", length=length(slices))
+  for (i in 1:length(slices)){
+    
+    nslice <- as.character(slices[i])
+    #Jac
+    proc <- protest(monoMDS(Betas[nslice,"Jac",samples_to_use,samples_to_use]), monoMDS(test.dist[samples_to_use,samples_to_use]))
+    proc_jac <- data.frame(metric="Jac", test=dists[d], stat=proc$t0, scale=proc$scale, signif=proc$signif)
+    #Bray
+    proc <- protest(monoMDS(Betas[nslice,"Bray",samples_to_use,samples_to_use]), monoMDS(test.dist[samples_to_use,samples_to_use]))
+    proc_bray <- data.frame(metric="Bray", test=dists[d], stat=proc$t0, scale=proc$scale, signif=proc$signif)
+    #Aitch_psedo
+    proc <- protest(monoMDS(Betas[nslice,"Aitch_pseudo",samples_to_use,samples_to_use]), monoMDS(test.dist[samples_to_use,samples_to_use]))
+    proc_aitch_pseudo <- data.frame(metric="Aitch_pseudo", test=dists[d], stat=proc$t0, scale=proc$scale, signif=proc$signif)
+    #Aitch_rep
+    proc <- protest(monoMDS(Betas[nslice,"Aitch_pseudo",samples_to_use,samples_to_use]), monoMDS(test.dist[samples_to_use,samples_to_use]))
+    proc_aitch_rep <- data.frame(metric="Aitch_rep", test=dists[d], stat=proc$t0, scale=proc$scale, signif=proc$signif)
+    manlist[[i]] <- bind_rows(proc_jac, proc_bray, proc_aitch_pseudo, proc_aitch_rep) %>%
+      mutate(slice=slices[i])
+  }
+  mantlist_distances[[d]] <- bind_rows(manlist)
+}
+
+matrix_stats <- bind_rows(mantlist_distances) %>%
+  mutate(signif_test = case_when(
+    signif < 0.01 ~ TRUE,
+    signif > 0.01 ~ FALSE
+  ))
+gg.mantel <- ggplot(matrix_stats, aes(y=stat,x=slice, colour=test, group=factor(test)))+
+  geom_point(aes(shape=signif_test)) +
+  geom_line()+ 
+  geom_hline(yintercept=0) +
+  facet_wrap(~metric) 
+```
 
 
-mantel <- matrix_stats %>% 
-  filter(test %in% c("Mantel", "Partial Mantel")) %>%
-  mutate(call = factor(call, levels = c(
-    "M Microbe~Phylo", "PM Microbe~Phylo~Plant", "PM Microbe~Phylo~Geography", 
-    "M Microbe~Geography", "PM Microbe~Geography~Phylo", "PM Microbe~Geography~Plant",
-    "M Microbe~Plant", "PM Microbe~Plant~Phylo", "PM Microbe~Plant~Geography"
-     )))
+### Tree topology comparison
 
-gg.mantel <- ggplot(mantel, aes(x=call, y=stat, fill=call)) + 
-  geom_bar(stat="identity") + 
-  geom_point(data=mantel %>% filter(signif_test==TRUE), aes(x = call, y=stat + 0.005), shape=8, colour="black") +
-  scale_fill_brewer(palette="Spectral") + 
-  facet_grid(distance~glom) +
-  ylab("Mantel test statistic") +
-  theme_classic() + 
-  theme(axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        legend.position = "bottom",
-  panel.grid.major.y = element_line(colour="grey92", size=0.5, linetype="dashed"))
+Heirarchial clustering 
+robinson foulds, matching cluster
 
-gg.manteline  <- ggplot(mantel, aes(x=glom, y=stat, colour=call)) + 
-  geom_line(stat="identity") + 
-  facet_wrap(~distance, ncol=1) +
-  ylab("Mantel test statistic") +
-  theme_classic() + 
-  theme(panel.grid.major.y = element_line(colour="grey92", size=0.5, linetype="dashed"))
+But also see how this paper has done it with PACO https://www.nature.com/articles/s41467-019-10191-3.pdf Using random subsampling? Then pull out the most associated also file:///C:/Users/ap0y/Dropbox/workprojects/Papers/10.1002_ecy.1955.pdf
+```{r topology comparison}
+samples <- rownames(otu_table(ps2))
+dists <- c("phylo.dist","plant.dist", "spat.dist")
+mantlist_distances <- vector("list", length=length(dists))
 
+for (d in 1:length(dists)){
+  test.dist <- get(dists[d])
+  
+  samples_to_use <- samples[samples %in% colnames(as.matrix(test.dist))]
+  
+  manlist <- vector("list", length=length(slices))
+  for (i in 1:length(slices)){
+    
+    nslice <- as.character(slices[i])
+    #Jac
+    hc <- (as.phylo(hclust(as.dist(Betas[nslice,"Jac",samples_to_use,samples_to_use]), method="ward.D2")))
+    
+    # random tree
+    rtree(length(hc$tip.label), rooted=FALSE)
+    
+    
+    dist.topo(as.phylo(hclust(as.dist(Betas[nslice,"Jac",samples_to_use,samples_to_use]), method="ward.D2"), directed=FALSE),
+              y = as.phylo(hclust(as.dist(test.dist[samples_to_use,samples_to_use]), method="ward.D2")), method = "PH85")
+    
+    dist.topo(as.phylo(hclust(as.dist(Betas[nslice,"Jac",samples_to_use,samples_to_use]), method="ward.D2")),
+              y = as.phylo(hclust(as.dist(test.dist[samples_to_use,samples_to_use]), method="ward.D2")), method = "PH85")
 
-# Trees
-library(ggtree)
-trees <- lapply(treelist, phy_tree)
-class(trees) <- "multiPhylo"
-gg.glomtrees <- ggtree(trees) + facet_wrap(~.id, scale="free", nrow=1) + theme_void()
+    
+    proc <- protest(monoMDS(Betas[nslice,"Jac",samples_to_use,samples_to_use]), monoMDS(test.dist[samples_to_use,samples_to_use]))
+    proc_jac <- data.frame(metric="Jac", test=dists[d], stat=proc$t0, scale=proc$scale, signif=proc$signif)
+    #Bray
+    proc <- protest(monoMDS(Betas[nslice,"Bray",samples_to_use,samples_to_use]), monoMDS(test.dist[samples_to_use,samples_to_use]))
+    proc_bray <- data.frame(metric="Bray", test=dists[d], stat=proc$t0, scale=proc$scale, signif=proc$signif)
+    #Aitch_psedo
+    proc <- protest(monoMDS(Betas[nslice,"Aitch_pseudo",samples_to_use,samples_to_use]), monoMDS(test.dist[samples_to_use,samples_to_use]))
+    proc_aitch_pseudo <- data.frame(metric="Aitch_pseudo", test=dists[d], stat=proc$t0, scale=proc$scale, signif=proc$signif)
+    #Aitch_rep
+    proc <- protest(monoMDS(Betas[nslice,"Aitch_pseudo",samples_to_use,samples_to_use]), monoMDS(test.dist[samples_to_use,samples_to_use]))
+    proc_aitch_rep <- data.frame(metric="Aitch_rep", test=dists[d], stat=proc$t0, scale=proc$scale, signif=proc$signif)
+    manlist[[i]] <- bind_rows(proc_jac, proc_bray, proc_aitch_pseudo, proc_aitch_rep) %>%
+      mutate(slice=slices[i])
+  }
+  mantlist_distances[[d]] <- bind_rows(manlist)
+}
 
-#Combine
-library(patchwork)
+matrix_stats <- bind_rows(mantlist_distances) %>%
+  mutate(signif_test = case_when(
+    signif < 0.01 ~ TRUE,
+    signif > 0.01 ~ FALSE
+  ))
+gg.mantel <- ggplot(matrix_stats, aes(y=stat,x=slice, colour=test, group=factor(test)))+
+  geom_point(aes(shape=signif_test)) +
+  geom_line()+ 
+  geom_hline(yintercept=0) +
+  facet_wrap(~metric) 
 
-gg.glomtrees / gg.mantel 
 
 ```
+
+## Beta diversity association over Phylogenetic scale 
 
 
 ## Cophylogeny over Phylogenetic scale
 
+
+```{r randomtapas}
+## Prepare interaction table
+#used merged by species
+# Merge species
+ps.sppmerged <- ps2 %>%
+    merge_samples(group = "psyllid_spp")
+
+#This loses the sample metadata - Need to add it agian
+samdf <- read.csv("sample_data/Sample_info.csv", header=TRUE) %>%
+  filter(!duplicated(psyllid_spp)) %>%
+  set_rownames(.$psyllid_spp) %>%
+  dplyr::select(c("SampleID", "Sample.Name", "seqrun", "psyllid_spp", "psyllid_genus", "psyllid_family", "hostplant_spp","Collection","Collection.Date"))
+
+sample_data(ps.sppmerged) <- samdf
+ps4 <- filter_taxa(ps.sppmerged, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
+
+#Rename taxa
+taxa_names(ps4) <- paste0("SV", seq(ntaxa(ps4)),"-",tax_table(ps4)[,6])
+
+#rename problem samples
+sample_names(ps4) <- sample_names(ps4) %>% str_replace_all("'","")
+
+otu <- ps4 %>%
+    otu_table %>%
+    as.matrix() %>% 
+  apply(2, function(x) ifelse(x > 0, 1, 0))
+
+                  
+#Cophenetic distance
+psyllid_tree <- read.tree(text=readLines("sample_data/psyllid_beast_tree.nwk"))
+
+# Match names with alpha diversity
+psyllid_tree$tip.label <- psyllid_tree$tip.label %>%
+  str_replace_all(pattern="\\.", replacement=" ") %>%
+  str_replace_all(pattern="sp$", replacement="sp. ") %>%
+  str_replace_all(pattern="Acizzia hakae", replacement="Acizzia hakeae") %>%
+  str_replace_all(pattern="POLLENISLAND", replacement="POLLEN ISLAND") %>%
+  str_replace_all(pattern="Ctenarytaina fuchsiae$", replacement="Ctenarytaina fuchsia A") %>%
+  str_replace_all(pattern="Ctenarytaina fuchsiaeB", replacement="Ctenarytaina fuchsia B") %>%
+  str_replace_all(pattern="Ctenarytaina fuchsiaeC", replacement="Ctenarytaina fuchsia C") %>%
+  str_replace_all(pattern="Ctenarytaina clavata", replacement="Ctenarytaina clavata sp. ") %>%
+  str_replace_all(pattern="Ctenarytaina clavata sp. $", replacement="Ctenarytaina clavata sp. A") %>%
+  str_replace_all(pattern="Ctenarytaina sp$", replacement="Ctenarytaina sp. ") %>%
+  str_replace_all(pattern="Ctenarytaina unknown", replacement="Ctenarytaina insularis") %>%  
+  str_replace_all(pattern="Psylla apicalis A", replacement="Psylla frodobagginsi") %>%
+  str_replace_all(pattern="Psylla apicalis B", replacement="Psylla apicalis") %>%
+  str_replace_all(pattern="carmichaeliae", replacement="carmichaeliae ") %>%
+  str_replace_all(pattern="Psylla apicalis", replacement="Psylla apicalis ") %>% # Should these be A,B or?
+  str_replace_all(pattern="Trioza sp", replacement="Trioza sp. ") %>%
+  str_replace_all(pattern="Trioza acutaB", replacement="Trioza Acuta B") %>%
+  str_replace_all(pattern="BRENDAMAY", replacement="BRENDA MAY") %>%
+  str_replace_all(pattern="PRICES", replacement="PRICES VALLEY") %>%
+  trimws(which="right")
+
+psyllid_tree$tip.label[!psyllid_tree$tip.label %in% rownames(otu)]
+
+pruned.tree <- drop.tip(psyllid_tree, psyllid_tree$tip.label[!psyllid_tree$tip.label %in% rownames(otu)] )
+psyllid_tree$tip.label[!psyllid_tree$tip.label %in%  pruned.tree$tip.label]
+
+#cophenetic <- cophenetic(pruned.tree)
+
+HS <- otu[pruned.tree$tip.label,]
+TreeH <- psyllid_tree
+TreeS <- phy_tree(ps4)
+
+# Optional: Draw a tanglegram
+
+HS.lut <- which(HS ==1, arr.ind=TRUE)
+linkhs <- cbind(rownames(HS)[HS.lut[,1]], colnames(HS)[HS.lut[,2]])
+obj <- cophylo(TreeH,TreeS, linkhs, rotate=FALSE) # Rotate crashes it, because too many nodes?
+plot.cophylo(obj, link.lwd=1, link.lty=2, fsize=0.5, pts=FALSE,
+             link.type="curved")
+dev.off() #reset graphics device
+
+
+# 1. Find minimum value with which all runs can be completed - Establish N
+#Recommended= N= 1e+4
+N= 100
+One2one.f(HS,N) 
+
+# N should be close	to	20%,	or	at	least	10%,	of	the	total	number	of	associations
+# For our dataset number of associations = (length(TreeS$tip.label)) = 3042 * 0.2 = 608.4 
+# We can evaluate a range if we want
+X <- seq(10,50,5)
+Y <- rep(NA, length(X))
+for(i in 1:length(X)) {
+  THS <- trimHS.maxC(N, HS, n=X[i], check.unique=TRUE)
+  Y[i] <- length(THS)
+}
+plot(X,Y, type="b", xlab="Number of unique H-S associations",
+     ylab="Number of runs accomplished")
+# 3. We choose 8
+n=50
+THS <- trimHS.maxC(N, HS, n=n, check.unique=TRUE)
+THS[sapply(THS, is.null)] <- NULL
+
+####### Apply 2 global-fit methods: GD and PACo ##########
+# NOTE PACo symmetric= TRUE in this example!!!!
+GD <- sapply(THS, geo.D, treeH=TreeH, treeS= TreeS)
+PACO <- sapply(THS, paco.ss, treeH=TreeH, treeS= TreeS, ei.correct= "sqrt.D",
+               symmetric=TRUE)
+#
+######### extract h-s association frequencies
+LFGD01 <- link.freq(THS, GD, HS, percentile=0.01)
+LFPACO01 <- link.freq(THS, PACO, HS, percentile=0.01)
+#
+```
+
+Use paco https://besjournals.onlinelibrary.wiley.com/doi/full/10.1111/2041-210X.12736
+
+and Parafit https://www.rdocumentation.org/packages/ape/versions/5.3/topics/parafit
 
 ```{r paco}
 
@@ -1068,40 +1152,127 @@ plant_degree <- summary(lm(cophy.sig ~ pla_deg, data=special))
 # alternatively, could split tree at different phylogenetic levels and do it? Family is probably more sensible
 ```
 
-This suggests that species significantly cluster, and so do hostplants. However when accounting for species, hostplants are not significant. Therefore it should be justified to redo the barchart merging by species 
 
-
-```{r similarity slicing}
-
-tree <- phy_tree(ps2)
-
-# slice tree at different total branch lengths (using ape)
-
-# Get tip labels that are still in tree
-
-# Test
- dd = as.dist(cophenetic.phylo(phy_tree(ps2)))
-    psclust = cutree(as.hclust(hcfun(dd, ...)), h = h)
-    cliques = levels(factor(psclust))[tapply(psclust, factor(psclust), 
-        function(x) {
-            length(x) > 1
-        })]
-    for (i in cliques) {
-        physeq = merge_taxa(physeq, eqtaxa = names(psclust)[psclust == 
-            i])
-    }
-    return(physeq)
-
-```
-
-### Tree topology comparison
-robinson foulds, matching cluster
-
-But also see how this paper has done it with PACO https://www.nature.com/articles/s41467-019-10191-3.pdf Using random subsampling? Then pull out the most associated also file:///C:/Users/ap0y/Dropbox/workprojects/Papers/10.1002_ecy.1955.pdf
 ```{r}
 
+
+for (i in 1:length(glomseq)){
+  
+#ps.glom <- tip_glom(ps2, h=glomseq[i])
+ps.glom <- phy_glom(ps2, similarity=glomseq[i])
+
+treelist[[i]] <- ps.glom
+
+#Rename taxa
+taxa_names(ps.glom) <- paste0("SV", seq(ntaxa(ps.glom)),"-",tax_table(ps.glom)[,6])
+
+ps2.n0 <- transform_sample_counts(ps.glom, function(x) x+1)
+
+phy_tree(ps2.n0) <- multi2di(phy_tree(ps2.n0))
+phy_tree(ps2.n0) <- makeNodeLabel(phy_tree(ps2.n0), method="number", prefix='n')
+
+# philr dist
+otu.table <- otu_table(ps2.n0)
+tree <- phy_tree(ps2.n0)
+metadata <- as(sample_data(ps2.n0), "data.frame")
+tax <- tax_table(ps2.n0)
+ps2.philr <- philr(otu.table, tree,
+                  part.weights='enorm.x.gm.counts',
+                  ilr.weights='blw.sqrt')
+ps2.philr <- dist(ps2.philr, method="euclidean")
+
+# CLR dist
+ps2.clr <- t(abundances(ps2.n0))
+ps2.clr <- codaSeq.clr(ps2.clr)
+ps2.clr <- dist(ps2.clr, method="euclidean")
+
+# Bray dist
+ps2.bray <- vegdist(otu_table(ps.glom),method="bray")
+#Jacard
+ps2.jac <- vegdist(otu_table(ps.glom),method="jac",binary = T)
+
+  for (d in 1:length(distances)){
+  
+  coda.dist <- get(distances[d])
+  #coda.dist <- dist(dist_obj, method="euclidean")
+  
+  
+  # ADONIS TESTS
+  metadata <- as(sample_data(ps2.n0), "data.frame")
+  
+  
+  ad_psyllid <- adonis(coda.dist ~ psyllid_spp, method = "euclidean",
+                     data = metadata)$aov.tab %>%
+    as_tibble(rownames="terms") %>%
+    mutate(call = "psyllid_spp")
+  
+  
+  ad_hostplant <- adonis(coda.dist ~ hostplant_spp, method = "euclidean",
+                       data = metadata)$aov.tab %>%
+    as_tibble(rownames="terms") %>%
+    mutate(call = "hostplant_spp")
+  
+  #Interactions
+  ad_psyllid_hostplant <- adonis(coda.dist ~ psyllid_spp*hostplant_spp, method = "euclidean",
+                          data = metadata)$aov.tab %>%
+    as_tibble(rownames="terms") %>%
+    mutate(call = "psyllid_spp*hostplant_spp")
+  
+  ad_hostplant_psyllid <- adonis(coda.dist ~ hostplant_spp*psyllid_spp,
+                          data = metadata)$aov.tab %>%
+    as_tibble(rownames="terms") %>%
+    mutate(call = "hostplant_spp*psyllid_spp")
+  
+  
+  adlist[[d]] <- bind_rows(ad_psyllid, ad_hostplant, ad_psyllid_hostplant, ad_hostplant_psyllid) %>%
+    mutate(distance = distances[d])
+  
+  
+  ## Matrix correlations
+  
+
+adonis_stats <- bind_rows(adlist_distances)
+
+gg.adonis <- ggplot(adonis_stats, aes(x=glom, y=R2, fill=call))
+
+matrix_stats <- bind_rows(mantlist_distances) %>%
+  mutate(signif_test = case_when(
+    signif < 0.01 ~ TRUE,
+    signif > 0.01 ~ FALSE
+  ))
+
+
+mantel <- matrix_stats %>% 
+  filter(test %in% c("Mantel", "Partial Mantel")) %>%
+  mutate(call = factor(call, levels = c(
+    "M Microbe~Phylo", "PM Microbe~Phylo~Plant", "PM Microbe~Phylo~Geography", 
+    "M Microbe~Geography", "PM Microbe~Geography~Phylo", "PM Microbe~Geography~Plant",
+    "M Microbe~Plant", "PM Microbe~Plant~Phylo", "PM Microbe~Plant~Geography"
+     )))
+
+gg.mantel <- ggplot(mantel, aes(x=call, y=stat, fill=call)) + 
+  geom_bar(stat="identity") + 
+  geom_point(data=mantel %>% filter(signif_test==TRUE), aes(x = call, y=stat + 0.005), shape=8, colour="black") +
+  scale_fill_brewer(palette="Spectral") + 
+  facet_grid(distance~glom) +
+  ylab("Mantel test statistic") +
+  theme_classic() + 
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        legend.position = "bottom",
+  panel.grid.major.y = element_line(colour="grey92", size=0.5, linetype="dashed"))
+
+gg.manteline  <- ggplot(mantel, aes(x=glom, y=stat, colour=call)) + 
+  geom_line(stat="identity") + 
+  facet_wrap(~distance, ncol=1) +
+  ylab("Mantel test statistic") +
+  theme_classic() + 
+  theme(panel.grid.major.y = element_line(colour="grey92", size=0.5, linetype="dashed"))
+
 ```
 
+
+This suggests that species significantly cluster, and so do hostplants. However when accounting for species, hostplants are not significant. Therefore it should be justified to redo the barchart merging by species 
 
 # Figures 
 
@@ -1156,13 +1327,8 @@ gg.nzmap <- ggplot(envData) +
 
 
 
-# Test for Cophylogeny
-
 ## Primary symbiont
 
-Use paco https://besjournals.onlinelibrary.wiley.com/doi/full/10.1111/2041-210X.12736
-
-and Parafit https://www.rdocumentation.org/packages/ape/versions/5.3/topics/parafit
 
 ## Minimum abundance threshold
 
