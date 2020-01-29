@@ -150,6 +150,10 @@ gg.reps <- ggplot(data=pc_samp, aes(x=PC1, y=PC2, colour=SampleID, label=SampleI
   coord_fixed(ratio=pc2/pc1) # Scale plot by variance explained
 
 print(gg.reps)
+
+
+## Bar plots of pairwise similarity between reps, species, species~hostplant
+
 ```
 
 ### Merge technical replicates
@@ -239,7 +243,24 @@ This is a univariate phylogenetic analysis, and could be done with the package p
 
 The effects of phylogenetic signal, defined as “a tendency for related species to resemble each other more than they resemble species drawn at random from the tree” (74), on univariate traits (e.g., microbial alpha diversity) have been examined in parallel with phylosymbiosis studies. Phylogenetic signal indices like Pagel’s λ (75), and Blomberg’s K (76) are based on a random Brownian model of trait evolution (77), These can be calculated with with the phylosignal package
 
-```{r estimate richness}
+
+To find the Aitchison distance a centered log-ratio (clr) transformation was performed on ASV count data with the R
+165 package CoDaSeq (30) before computing the Euclidean distance between samples with
+the R package vegan (31). The Aitchison distance was then used in Permutational Multivariate Analyses of Variance (PERMANOVA, 999 permutations) with the vegan function adonis to test whether community composition was significantly different
+
+Many analysis in community ecology and hypothesis testing benefit from data transformation. Many microbiome data sets do not fit to a normal distribution, but transforming them towards normality may enable more appropriate data for specific statistical tests. 
+
+philr phylogenetic transform is based on balances (binary partitions) along an evolutionary tree (Silverman et al., 2017) that is a replacement for the familiar UniFrac distance metric. Distances determined by phylogenetic transforms have the advantage that the binary partitions chosen have a simple interpretation and the correlation structure of the data is fully accounted for. However, the disadvantage is that only the relationships between the chosen partitions can be examined.# Figure 1: Community composition analysis
+
+
+## Figure 1 - Alpha / Beta diversity
+
+Dendrogram and bar plots
+
+Merge species, arrange microbiome by phylogeny, try the mantel tests on the merged data as well (but the seperate is probs more statistically better)
+
+```{r merge spp}
+# Model richness
 library(breakaway)
 
 #Model richness for all samples by psyllid spp
@@ -252,30 +273,6 @@ betta_pic(summary(ba)$estimate, summary(ba)$error)
 ba_estimates <- summary(ba) %>%
       add_column("Sample.Name" = ps2 %>% otu_table %>% sample_names) %>%
       left_join(samdf, by = "Sample.Name")
-
-## Plot the richness estimates from each sample
-col <- colorRampPalette(brewer.pal(11, "Spectral"))(75)
-gg.barichnes <- ggplot(ba_estimates, aes(x=psyllid_spp, y=estimate, fill=psyllid_spp)) + 
-  geom_boxplot(outlier.alpha = 0) +
-  geom_jitter(aes(colour=psyllid_spp), colour="black", pch=21) +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle=90, vjust=0, hjust=1),
-        legend.position = "none") +
-  scale_fill_manual(values=col) +
-  scale_colour_manual(values=col) +
-  ylab("Richness Estimate")
-
-
-#Model richness with psyllid_spp as a fixed effect
-bt_spp <- betta(chats = ba_estimates$estimate,
-                      ses = ba_estimates$error,
-                      X = model.matrix(~psyllid_spp, data = ba_estimates)) 
-
-bt_spp$table
-
-bt_sppdf <- as_tibble(bt_spp$table, rownames="psyllid_spp")%>% 
-                mutate_at(2:4, as.numeric) %>%
-              magrittr::set_colnames(c("Estimates", "SE", "P"))
 
 ## Model with psyllid_spp as a fixed effect and seqrun as a random effect
 bt_sppfixed_hostrandom <- betta_random(chats = ba_estimates$estimate,
@@ -301,8 +298,39 @@ bt_randomdf <- as_tibble(bt_sppfixed_hostrandom$table, rownames="psyllid_spp")%>
                   P < 0.05 ~ TRUE,
                   P > 0.05 ~ FALSE
                 ))
-#Our intercept term is one that is left out
-intercept <- unique(ba_estimates$psyllid_spp[which(!ba_estimates$psyllid_spp %in% bt_randomdf$psyllid_spp)])
+
+# Merge species for beta diversity
+ps.sppmerged <- ps2 %>%
+    merge_samples(group = "psyllid_spp")
+
+#This loses the sample metadata - Need to add it agian
+samdf <- read.csv("sample_data/Sample_info.csv", header=TRUE) %>%
+  filter(!duplicated(psyllid_spp)) %>%
+  set_rownames(.$psyllid_spp) %>%
+  dplyr::select(c("SampleID", "Sample.Name", "seqrun", "psyllid_spp", "psyllid_genus", "psyllid_family", "hostplant_spp","Collection","Collection.Date"))
+
+sample_data(ps.sppmerged) <- samdf
+ps4 <- filter_taxa(ps.sppmerged, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
+
+#Rename taxa
+taxa_names(ps4) <- paste0("SV", seq(ntaxa(ps4)),"-",tax_table(ps4)[,6])
+
+ps4_bar <- #subset_taxa(ps3, !Family == "Enterobacteriaceae") %>%
+            ps4 %>%
+  speedyseq::tax_glom(taxrank = "Order") %>%           # agglomerate at Order level
+  transform_sample_counts(function(x) {x/sum(x)} ) %>% # Transform to rel. abundance
+  speedyseq::psmelt() %>%
+  mutate(plotlabel = Phylum) %>%
+  mutate(plotlabel = case_when(
+    Abundance >= 0.01 & Phylum=="Proteobacteria" ~ paste0(Phylum, " - ", Order), # Change this to whatever taxrank we want
+    Abundance >= 0.01 & !Phylum=="Proteobacteria"~ Phylum ,
+    Abundance < 0.01 ~ "NA"
+    )) %>%
+  dplyr::na_if("NA") %>%
+  select(Sample, plotlabel, Phylum, Order, Abundance)
+
+
+## Read in tree
 
 ## Plotting - arrange by tree
 psyllid_tree <- read.tree(text=readLines("sample_data/psyllid_beast_tree.nwk"))
@@ -336,152 +364,8 @@ psyllid_tree$tip.label[!psyllid_tree$tip.label %in% bt_randomdf$psyllid_spp]
 pruned.tree <- drop.tip(psyllid_tree, psyllid_tree$tip.label[!psyllid_tree$tip.label %in% bt_randomdf$psyllid_spp] )
 psyllid_tree$tip.label[!psyllid_tree$tip.label %in%  pruned.tree$tip.label]
 
-# Plot tree + Richness estimates
-library(ggtree)
-p <- ggtree(pruned.tree) + geom_tiplab() + geom_nodelab(geom='label') +
-    scale_x_continuous(expand=c(0, 0.1))
 
-gg.alphatree <- facet_plot(p, panel='Species Richness', data = bt_randomdf %>% mutate(id = psyllid_spp) , geom=ggstance::geom_pointrangeh,
-                 mapping=aes(x=Estimates, xmin=Estimates-SE, xmax=Estimates+SE, colour=significant), stat="identity")
-
-test <- facet_plot(gg.alphatree, panel='Alpha Diversity',
-           data=bt_randomdf, geom=geom_text, 
-           mapping=aes(x=Estimates, label=round(Estimates)))
-
-
-p4 <- facet_plot(gg.alphatree, panel="PD", data=pd.plot %>% mutate(id = psyllid_spp) , ggstance::geom_boxploth, 
-            mapping = aes(x=PD, group=id))
-
-p5 <- facet_plot(p4, panel="SR", data=pd.plot %>% mutate(id = psyllid_spp) , ggstance::geom_boxploth, 
-            mapping = aes(x=SR, group=id))
-
-
-# Could probably highlight the few clades with a high local morans I in Red for the plot
-
-# Calculate Faith's PD-index
-pdtable <- picante::pd(as(phyloseq::otu_table(ps2), "matrix"), phyloseq::phy_tree(ps2), include.root = F)
-
-# Calculate Faith's PD-index with SES
-test <- picante::ses.pd(as(phyloseq::otu_table(ps2), "matrix"), phyloseq::phy_tree(ps2), include.root = F, runs=10)
-
-pd.plot <- test %>%
-      rownames_to_column("Sample.Name") %>%
-      left_join(samdf, by = "Sample.Name") %>%
-  select(psyllid_spp, pd.obs, pd.obs.z, pd.obs.p, Sample.Name)
-
-#Model richness with psyllid_spp as a fixed effect
-pd_spp <- betta(chats = pd.plot$estimate,
-                      ses = ba_estimates$error,
-                      X = model.matrix(~psyllid_spp, data = ba_estimates)) 
-
-
-# Use this on the dotplot
-
-pd.plot <- pdtable %>%
-      rownames_to_column("Sample.Name") %>%
-      left_join(samdf, by = "Sample.Name") %>%
-  select(psyllid_spp, PD, SR, Sample.Name)
-## Plot the PD estimates from each sample
-col <- colorRampPalette(brewer.pal(11, "Spectral"))(75)
-gg.barichnes <- ggplot(pd.plot, aes(x=psyllid_spp, y=PD, fill=psyllid_spp)) + 
-  geom_boxplot(outlier.alpha = 0) +
-  geom_jitter(aes(colour=psyllid_spp), colour="black", pch=21) +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle=90, vjust=0, hjust=1),
-        legend.position = "none") +
-  scale_fill_manual(values=col) +
-  scale_colour_manual(values=col) +
-  ylab("Richness Estimate")
-
-# Plug in estimators
-
-
-# Add Statistics
-library(phylosignal)
-library(adephylo)
-#alpha diversity data
-dat <- list()
-dat$alpha <-  bt_randomdf %>%
-  filter(psyllid_spp %in% pruned.tree$tip.label) %>%
-  arrange(match(psyllid_spp, pruned.tree$tip.label)) %>%
-  pull(Estimates)
-dat$random <- rnorm(length(dat$alpha), sd = 10) # NEgative control
-dat$bm <- rTraitCont(pruned.tree) #Brownian motion - Positive control
-dat <- as.data.frame(dat)
-
-# Make phylosignal object and measure signal
-
-p4d <- phylobase::phylo4d(pruned.tree, dat)
-phyloSignal(p4d = p4d, method = "all")
-
-# Asses modelbehavior
-phylosim <- phyloSim(tree = pruned.tree, method = "all", nsim = 100, reps = 99)
-plot.phylosim(phylosim, what = "pval", stacked.methods = TRUE)
-```
-
-
-RESULTS: while there were significant differences between psyllid species (see betta results), there were no significant associations with phylogeny
-
-$stat
-             Cmean            I          K    K.star    Lambda
-alpha  -0.01056585 -0.025740055 0.70501041 0.3313264 0.8755386
-random  0.06885442  0.001435941 0.03960619 0.2290344 0.2717360
-bm      0.42031946  0.145456264 0.14547611 0.9100803 1.0020607
-
-$pvalue
-       Cmean     I     K K.star    Lambda
-alpha  0.445 0.634 0.017  0.208 0.0010000
-random 0.166 0.125 0.472  0.539 0.1048509
-bm     0.001 0.001 0.029  0.001 0.0010000
-
-
-
-To find the Aitchison distance a centered log-ratio (clr) transformation was performed on ASV count data with the R
-165 package CoDaSeq (30) before computing the Euclidean distance between samples with
-the R package vegan (31). The Aitchison distance was then used in Permutational Multivariate Analyses of Variance (PERMANOVA, 999 permutations) with the vegan function adonis to test whether community composition was significantly different
-
-Many analysis in community ecology and hypothesis testing benefit from data transformation. Many microbiome data sets do not fit to a normal distribution, but transforming them towards normality may enable more appropriate data for specific statistical tests. 
-
-philr phylogenetic transform is based on balances (binary partitions) along an evolutionary tree (Silverman et al., 2017) that is a replacement for the familiar UniFrac distance metric. Distances determined by phylogenetic transforms have the advantage that the binary partitions chosen have a simple interpretation and the correlation structure of the data is fully accounted for. However, the disadvantage is that only the relationships between the chosen partitions can be examined.# Figure 1: Community composition analysis
-
-
-## Figure 1 - Alpha / Beta diversity
-
-Dendrogram and bar plots
-
-Merge species, arrange microbiome by phylogeny, try the mantel tests on the merged data as well (but the seperate is probs more statistically better)
-
-```{r merge spp}
-# Merge species
-ps.sppmerged <- ps2 %>%
-    merge_samples(group = "psyllid_spp")
-
-#This loses the sample metadata - Need to add it agian
-samdf <- read.csv("sample_data/Sample_info.csv", header=TRUE) %>%
-  filter(!duplicated(psyllid_spp)) %>%
-  set_rownames(.$psyllid_spp) %>%
-  dplyr::select(c("SampleID", "Sample.Name", "seqrun", "psyllid_spp", "psyllid_genus", "psyllid_family", "hostplant_spp","Collection","Collection.Date"))
-
-sample_data(ps.sppmerged) <- samdf
-ps4 <- filter_taxa(ps.sppmerged, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
-
-#Rename taxa
-taxa_names(ps4) <- paste0("SV", seq(ntaxa(ps4)),"-",tax_table(ps4)[,6])
-
-ps4_bar <- #subset_taxa(ps3, !Family == "Enterobacteriaceae") %>%
-            ps4 %>%
-  speedyseq::tax_glom(taxrank = "Order") %>%           # agglomerate at Order level
-  transform_sample_counts(function(x) {x/sum(x)} ) %>% # Transform to rel. abundance
-  speedyseq::psmelt() %>%
-  mutate(plotlabel = Phylum) %>%
-  mutate(plotlabel = case_when(
-    Abundance >= 0.01 & Phylum=="Proteobacteria" ~ paste0(Phylum, " - ", Order), # Change this to whatever taxrank we want
-    Abundance >= 0.01 & !Phylum=="Proteobacteria"~ Phylum ,
-    Abundance < 0.01 ~ "NA"
-    )) %>%
-  dplyr::na_if("NA") %>%
-  select(Sample, plotlabel, Phylum, Order, Abundance)
-
+# Plot them together
 library(ggtree)
 p <- ggtree(pruned.tree) + geom_tiplab(align=TRUE) + geom_nodelab(geom='label') +
     scale_x_continuous(expand=c(0, 0.1))
