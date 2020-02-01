@@ -95,7 +95,6 @@ print(gg.rich)
 ps1 <- prune_samples(sample_sums(ps0)>=threshold, ps0) # 
 ps1 <- filter_taxa(ps1, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
 print(paste(nsamples(ps) - nsamples(ps1), " Samples and ", ntaxa(ps) - ntaxa(ps1), " taxa Dropped"))
-
 ```
 
 
@@ -228,21 +227,19 @@ get_taxa_unique(ps2, "Family")
 
 ```
 
-
-# Alpha Diversity
+# Community Diversity
 
 Instead of using traditional plug-in diversity estiamtors, which only tell us about the diversity of our samples (observed richness), instead of the actual environment (actual richness), we will use the breakaway package which uses biological replicates to estimate the total diversity in the environment. Breakaway estimates the number of missing species based on the sequence depth and  number of rare taxa in the data, and accounts for experimental noise such as the correlation between observed richness and the sequencing depth.
 
 Following the initial estimate of diversity and variance using the breakaway package, we use the betta model of Willis, A. and Bunge, J. (2015) which works like regression but takes into account uncertainty in diversirty estimates betta accounts for strains that are present in the environment but not observed in the samples due to incomplete sampling.. Some of the samples in the initial estimates had large standard errors, indicating that we cannot precisely estimate the total species richness in those sample. In the betta model these samples will be given less weight in the regression than samples with small standard errors on their richness estimates. This is the behaviour we want, because while that sample contains some information, the standard error is telling us that the richness estimate may not be as reliable as other samples' estimates, and we should downweight the importance of that observation relative to observations would smaller standard errors on their richness estimates.
 
-May be interesting to model richness at different taxonomic ranks?
+May be interesting to model richness at different taxonomic ranks? - or different slices of the tree?
 
 Psyllid_spp and hostplant_spp are multi-colinear, therefore they cant be included as either additive effects or interaction effects, as it causes the design-matrix to have less than full rank, which means it isn't invertible, and therefore least-squares-techniques fail
 
 This is a univariate phylogenetic analysis, and could be done with the package phylosignal, or a phylogenetic linear mixed model
 
 The effects of phylogenetic signal, defined as “a tendency for related species to resemble each other more than they resemble species drawn at random from the tree” (74), on univariate traits (e.g., microbial alpha diversity) have been examined in parallel with phylosymbiosis studies. Phylogenetic signal indices like Pagel’s λ (75), and Blomberg’s K (76) are based on a random Brownian model of trait evolution (77), These can be calculated with with the phylosignal package
-
 
 To find the Aitchison distance a centered log-ratio (clr) transformation was performed on ASV count data with the R
 165 package CoDaSeq (30) before computing the Euclidean distance between samples with
@@ -253,7 +250,7 @@ Many analysis in community ecology and hypothesis testing benefit from data tran
 philr phylogenetic transform is based on balances (binary partitions) along an evolutionary tree (Silverman et al., 2017) that is a replacement for the familiar UniFrac distance metric. Distances determined by phylogenetic transforms have the advantage that the binary partitions chosen have a simple interpretation and the correlation structure of the data is fully accounted for. However, the disadvantage is that only the relationships between the chosen partitions can be examined.# Figure 1: Community composition analysis
 
 
-## Figure 1 - Alpha / Beta diversity
+## Figure 1 - Community Diversity
 
 Dendrogram and bar plots
 
@@ -301,7 +298,8 @@ bt_randomdf <- as_tibble(bt_sppfixed_hostrandom$table, rownames="psyllid_spp")%>
 
 # Merge species for beta diversity
 ps.sppmerged <- ps2 %>%
-    merge_samples(group = "psyllid_spp")
+    merge_samples(group = "psyllid_spp", fun=mean)
+
 
 #This loses the sample metadata - Need to add it agian
 samdf <- read.csv("sample_data/Sample_info.csv", header=TRUE) %>%
@@ -367,27 +365,43 @@ psyllid_tree$tip.label[!psyllid_tree$tip.label %in%  pruned.tree$tip.label]
 
 # Plot them together
 library(ggtree)
+library(treeio)
 p <- ggtree(pruned.tree) + geom_tiplab(align=TRUE) + geom_nodelab(geom='label') +
-    scale_x_continuous(expand=c(0, 0.1))
+    scale_x_continuous(expand=c(0, 0.1)) + theme_tree2()
 
 
 Fig1 <- facet_plot(p, panel='Relative Abundance', data = ps4_bar %>% mutate(id = Sample), geom=ggstance::geom_barh,
                  mapping=aes(x = Abundance, fill = plotlabel), stat="identity")  + 
-  scale_fill_manual(values=colorRampPalette(brewer.pal(11, "Paired"))(length(unique(ps4_bar$plotlabel))-1), na.value="grey")
+  scale_fill_manual(values=colorRampPalette(brewer.pal(11, "Set1"))(length(unique(ps4_bar$plotlabel))-1), na.value="grey")
 
 
 Fig1 <- facet_plot(Fig1, panel='Species Richness', data = bt_randomdf %>% mutate(id = psyllid_spp),
                           geom=ggstance::geom_pointrangeh,
                            mapping=aes(x=Estimates, xmin=Estimates-SE, xmax=Estimates+SE),
                            stat="identity", size=0.5, colour="#696969") +
-  #scale_colour_manual(values=c("#808080","#9e0142"),na.value="#808080") + 
   theme_classic2()   +
   theme(legend.position = "bottom",
   panel.grid.major.x = element_line(colour="grey92", size=0.5, linetype="dashed"),
   strip.background = element_rect(fill = "grey92", 
                 colour = "black", size = 1)
   )
+
+## Collection_hist
+gg.spp <- as_tibble(sample_data(ps2)) %>%
+  dplyr::rename(label = psyllid_spp) %>%
+  group_by(label) %>%
+  summarise(n_species = n()) %>%
+  left_join(p$data %>%
+  filter(isTip) %>% select(c(label, y))) %>%
+  filter(!is.na(y)) %>%
+  ggplot(aes(x=factor(.$label, levels=.$label[order(.$y)]), y=1, fill=n_species)) +
+  geom_tile() +
+  coord_flip() + theme_void() +
+  scale_fill_distiller(palette = "Reds", direction=1)
         
+
+Fig1 + gg.spp 
+  
 # Change relative grid sizes
 library(grid)
 library(gtable)
@@ -401,18 +415,238 @@ grid.draw(gt) # plot with grid draw
 ```
 
 
-## Figure 2 - Time slice
+# Community assembly
+
+
+## Neutral model
+
+```{r Neutral model}
+library(reltools)
+library(minpack.lm)
+library(Hmisc)
+
+# Fit neutral model
+spp <- otu_table(ps2)@.Data
+spp.out <- fit_sncm(spp, pool=spp, taxon=data.frame(tax_table(ps.neutral)))
+
+## Neutral model through time
+#Set slices
+slices=seq(0,1.6,0.1)
+ sampleOTUs = t(otu_table(ps2))
+
+neutral <- NMTT(similarity_slices = slices, sampleOTUs = otu_table(ps2), tree = phy_tree(ps2), quiet = FALSE, return="summary")
+  
+ggplot(test, aes(x=slice, y=freq, fill=fit_class)) + 
+      geom_bar(stat="identity")
+```
+
+## Phylogenetic community assembly
+
+n order to further test this notion and to assess how environmental filtering may differ among host clades, we utilized two ecophylogenetics analyses: mean phylogenetic distance (MPD) and mean nearest taxon distance (MNTD). These tests assess the degree of phylogenetic clustering within each sample (host) relative to a permuted null model. Assuming phylogenetic niche conservatism (i.e., closely related taxa overlap along niche axes), then host diet or gut physiology may select for phylogenetically clustered taxa with overlapping niches, while in the absence of such strong selection, competition via niche conservatism would lead to phylogenetic overdispersion40. Phylogenetic overdispersion may also result from facilitation (i.e., beneficial microbe–microbe interactions), such as when distantly related taxa form consortia to break down complex plant polymers40. MPD is more sensitive to overall patterns of phylogenetic clustering and evenness, while MNTD is more sensitive to patterns at the tree tips41.
+
+```{r phylogenetic community assembly}
+phy <- phyloseq::phy_tree(ps2)
+comm <- as(phyloseq::otu_table(ps2), "matrix") 
+
+## Need to do these with rarified samples as well! 
+
+# Calculate Faith's PD-index	
+pdtable <- picante::pd(comm, phy, include.root = F)	
+
+# Calculate Faith's PD-index with SES	
+sespd <- picante::ses.pd(comm, phy, null.model = "taxa.labels", include.root = F, runs = 99) %>% 
+  rownames_to_column("Sample.Name") %>%
+  left_join(read.csv("sample_data/Sample_info.csv", header=TRUE)  %>%
+  dplyr::filter(!duplicated(SampleID)) %>%
+  set_rownames(.$SampleID), by = "Sample.Name") 
+
+# Weighted NTI
+library(picante)
+phydist <- cophenetic(phy)
+
+weightedNTI <- picante::ses.mpd(comm, phydist, null.model = "taxa.labels", abundance.weighted = TRUE, runs = 99) %>% 
+  rownames_to_column("Sample.Name") %>%
+  left_join(read.csv("sample_data/Sample_info.csv", header=TRUE)  %>%
+  dplyr::filter(!duplicated(SampleID)) %>%
+  set_rownames(.$SampleID), by = "Sample.Name") %>%
+  mutate(NTI = mpd.obs.z *-1)
+
+ggplot(weightedNTI, aes(x=psyllid_spp, y=NTI, group=psyllid_spp)) + 
+  geom_boxplot() +
+  geom_point() +
+  theme(axis.text.x = element_text(angle=90)) + 
+  ggtitle("Weighted NTI by psyllid family")
+
+# Mean Weighted NTI
+mean(weightedNTI$NTI)
+
+#Unweighted NTI
+unweightedNTI <- picante::ses.mpd(comm, phydist, null.model = "taxa.labels", abundance.weighted = FALSE, runs = 99) %>% 
+  rownames_to_column("Sample.Name") %>%
+  left_join(read.csv("sample_data/Sample_info.csv", header=TRUE)  %>%
+  dplyr::filter(!duplicated(SampleID)) %>%
+  set_rownames(.$SampleID), by = "Sample.Name") %>%
+  mutate(NTI = mpd.obs.z *-1)
+
+ggplot(unweightedNTI, aes(x=psyllid_spp, y=NTI, group=psyllid_spp)) + 
+  geom_boxplot() +
+  geom_point() +
+  theme(axis.text.x = element_text(angle=90)) + 
+  ggtitle("Unweighted NTI by psyllid family")
+
+# Mean uneighted NTI
+mean(unweightedNTI$NTI)
+
+# Weighted NRI
+weightedNRI <- picante::ses.mntd(comm, phydist, null.model = "taxa.labels", abundance.weighted = TRUE, runs = 99) %>% 
+  rownames_to_column("Sample.Name") %>%
+  left_join(read.csv("sample_data/Sample_info.csv", header=TRUE)  %>%
+  dplyr::filter(!duplicated(SampleID)) %>%
+  set_rownames(.$SampleID), by = "Sample.Name") %>%
+  mutate(NRI = mntd.obs.z *-1)
+
+ggplot(weightedNRI, aes(x=psyllid_spp, y=NRI, group=psyllid_spp)) + 
+  geom_boxplot() +
+  geom_point() +
+  theme(axis.text.x = element_text(angle=90)) + 
+  ggtitle("Weighted by psyllid family")
+
+# Mean Weighted NRI
+mean(weightedNRI$NRI)
+
+# Unweighted NRI
+unweightedNRI <- picante::ses.mntd(comm, phydist, null.model = "taxa.labels", abundance.weighted = FALSE, runs = 99) %>% 
+  rownames_to_column("Sample.Name") %>%
+  left_join(read.csv("sample_data/Sample_info.csv", header=TRUE)  %>%
+  dplyr::filter(!duplicated(SampleID)) %>%
+  set_rownames(.$SampleID), by = "Sample.Name") %>%
+    mutate(NRI = mntd.obs.z *-1) 
+
+ggplot(unweightedNRI, aes(x=psyllid_spp, y=NRI, group=psyllid_spp)) + 
+  geom_boxplot() +
+  geom_point() +
+  theme(axis.text.x = element_text(angle=90)) + 
+  ggtitle("Weighted by psyllid family")
+
+# Mean Weighted NRI
+mean(unweightedNRI$NRI)
+
+library(phylosignal)	
+library(adephylo)	
+#alpha diversity data	
+dat <- list()	
+
+dat$ba_alpha <-  bt_randomdf %>%	
+  filter(psyllid_spp %in% pruned.tree$tip.label) %>%	
+  arrange(match(psyllid_spp, pruned.tree$tip.label)) %>%	
+  pull(Estimates)	
+
+dat$alpha <-  sespd %>%	
+  filter(psyllid_spp %in% pruned.tree$tip.label) %>%	
+  group_by(psyllid_spp) %>%
+  summarise(ntaxa = mean(ntaxa)) %>%
+  arrange(match(psyllid_spp, pruned.tree$tip.label)) %>%	
+  pull(ntaxa)	
+
+dat$pd_obs <-  sespd %>%	
+  filter(psyllid_spp %in% pruned.tree$tip.label) %>%	
+  group_by(psyllid_spp) %>%
+  summarise(pd.obs = mean(pd.obs)) %>%
+  arrange(match(psyllid_spp, pruned.tree$tip.label)) %>%	
+  pull(pd.obs)	
+
+dat$pd_obsz <-  sespd %>%	
+  filter(psyllid_spp %in% pruned.tree$tip.label) %>%	
+  group_by(psyllid_spp) %>%
+  summarise(pd.obs.z = mean(pd.obs.z)) %>%
+  arrange(match(psyllid_spp, pruned.tree$tip.label)) %>%	
+  pull(pd.obs.z)	
+
+dat$weighted_nti <- weightedNTI   %>%	
+  filter(psyllid_spp %in% pruned.tree$tip.label) %>%	
+  group_by(psyllid_spp) %>%
+  summarise(NTI = mean(NTI)) %>% # Get mean for each species
+  arrange(match(psyllid_spp, pruned.tree$tip.label)) %>%	
+  pull(NTI)	
+
+dat$unweighted_nti <- unweightedNTI   %>%	
+  filter(psyllid_spp %in% pruned.tree$tip.label) %>%	
+  group_by(psyllid_spp) %>%
+  summarise(NTI = mean(NTI)) %>% # Get mean for each species
+  arrange(match(psyllid_spp, pruned.tree$tip.label)) %>%	
+  pull(NTI)	
+
+dat$weighted_nri <- weightedNRI   %>%	
+  filter(psyllid_spp %in% pruned.tree$tip.label) %>%	
+  group_by(psyllid_spp) %>%
+  summarise(NRI = mean(NRI)) %>% # Get mean for each species
+  arrange(match(psyllid_spp, pruned.tree$tip.label)) %>%	
+  pull(NRI)	
+
+dat$unweighted_nri <- unweightedNRI   %>%	
+  filter(psyllid_spp %in% pruned.tree$tip.label) %>%	
+  group_by(psyllid_spp) %>%
+  summarise(NRI = mean(NRI)) %>% # Get mean for each species
+  arrange(match(psyllid_spp, pruned.tree$tip.label)) %>%	
+  pull(NRI)	
+
+dat$random <- rnorm(length(dat$alpha), sd = 10) # Negative control - random association
+dat$bm <- rTraitCont(pruned.tree) #Positive control - Brownian motion
+dat <- as.data.frame(dat)	
+
+# Make phylosignal object and measure signal between univariate traits.
+p4d <- phylobase::phylo4d(pruned.tree, dat)	
+phyloSignal(p4d = p4d, method = "all")	
+
+# Plots
+barplot.phylo4d(p4d, tree.type = "phylo", tree.ladderize = TRUE)
+
+correl <- vector("list", length=length(dat))
+for (i in 1:length(dat)) {
+  correl[[i]] <- phyloCorrelogram(p4d, trait = names(dat[i]))
+  plot(correl[[i]], main= names(dat[i]))
+}
+
+# Locate signal
+lipa <- lipaMoran(p4d)
+lipa.p4d <- lipaMoran(p4d, as.p4d = TRUE)
+
+barplot.phylo4d(p4d, bar.col=(lipa$p.value < 0.05) + 1, center = FALSE , scale = FALSE)
+
+barplot.phylo4d(lipa.p4d, bar.col = (lipa$p.value < 0.05) + 1, center = FALSE, scale = FALSE)
+
+# Asses modelbehavior	
+phylosim <- phyloSim(tree = pruned.tree, method = "all", nsim = 100, reps = 99)	
+plot.phylosim(phylosim, what = "pval", stacked.methods = TRUE)	
+```	
+
+
+RESULTS: while there were significant differences between psyllid species (see betta results), there were no significant associations with phylogeny
+
+Would be better to integrate this with a phylogenetic glmm - see mcmc.OTU package
+
+
+# Phylosymbiosis
+
+## Figure 2 - BDTT 
 
 ```{r timeslice}
 library(ape)
 library(castor)
 library(abind)
 library(Matrix)
+
+## TRY WITHOUT ENTERO
+#ps2 <- ps2 %>%
+#  subset_taxa(Family  != "Enterobacteriaceae") %>%
+#  filter_taxa(function(x) mean(x) > 0, TRUE)#Drop missing taxa from table
+#
+#ps2 <- prune_samples(sample_sums(ps2) >0 , ps2)
 #Look at depth categories in tree
 hist(get_all_node_depths(phy_tree(ps2)))
 
 #Set slices
-slices=seq(0,1.6,0.1)
+slices=seq(0,1.6,0.01)
 
 #Plot trees at slices
 treelist <- vector("list", length=length(slices))
@@ -422,10 +656,11 @@ for (i in 1:length(slices)){
 }
 
 class(treelist) <- "multiPhylo"
-ggtree(treelist) + facet_wrap(~.id, scale="free") + theme_tree2()
+names(treelist) <- paste0("Timeslice = ",slices)
+gg.tree <- ggtree(treelist) + facet_wrap(~.id, scale="free", nrow=1) + theme_tree2()
 
 #Conduct slices and calculate beta diversity
-Betas=BDTT(similarity_slices = slices, tree = phy_tree(ps2), sampleOTUs = t(otu_table(ps2)))
+Betas=BDTT(similarity_slices = slices, tree = phy_tree(ps2), sampleOTUs = t(otu_table(ps2)), metrics=c("Bray","Jaccard","Aitchison","Philr", "Unifrac", "WUnifrac"), zeroes="Impute", parallel=FALSE, quiet=FALSE)
 ```
 
 ### Prepare distance matrices
@@ -493,26 +728,45 @@ spat.dist <- spDists(as.matrix(envData %>% dplyr::select(-psyllid_spp)), longlat
 ### Adonis tests
 ```{r Adonis}
 # Construct sequence table
+
 predictors="psyllid_spp"
-StatsRes=expand.grid(similarity_slices=as.character(slices),predictors=predictors,metric=c("Jac","Bray","Aitch"))
+StatsRes=expand.grid(similarity_slices=as.character(slices), predictors=predictors, metric=dimnames(Betas)[[2]])
 StatsRes[["F.Model"]]=StatsRes[["R2"]]=StatsRes[["Pr(>F)"]]=NA
 head(StatsRes)
 
-## ADONIS
+samples <- rownames(otu_table(ps2)) 
+metadata <- sample_data(ps2) %>%
+  as_data_frame()
+
+# Generalise to work with multiple predictors
+
 for (i in as.character(slices)){
-  res=unlist(adonis(Betas[i,"Jac",samples,samples]~ psyllid_spp, method = "euclidean",
-                           data = metadata)$aov.tab[1,c(6,5,4)])
-  StatsRes[(StatsRes$metric=="Jac")&(StatsRes$similarity_slices==i),4:6]=res
-  res=unlist(adonis(Betas[i,"Bray",samples,samples]~ psyllid_spp, method = "euclidean",
-                    data = metadata)$aov.tab[1,c(6,5,4)])
+  #Jaccard
+  res=unlist(adonis(Betas[i,"Jaccard",samples,samples]~ psyllid_spp, method = "euclidean", data = metadata)$aov.tab[1,c(6,5,4)])
+  StatsRes[(StatsRes$metric=="Jaccard")&(StatsRes$similarity_slices==i),4:6]=res
+  #Bray Curtis
+  res=unlist(adonis(Betas[i,"Bray",samples,samples]~ psyllid_spp, method = "euclidean", data = metadata)$aov.tab[1,c(6,5,4)])
   StatsRes[(StatsRes$metric=="Bray")&(StatsRes$similarity_slices==i),4:6]=res
-  res=unlist(adonis(Betas[i,"Aitch",samples,samples]~ psyllid_spp, method = "euclidean",
-                    data = metadata)$aov.tab[1,c(6,5,4)])
-  StatsRes[(StatsRes$metric=="Aitch")&(StatsRes$similarity_slices==i),4:6]=res
+  #Aitchison
+  res=unlist(adonis(Betas[i,"Aitchison",samples,samples]~ psyllid_spp, method = "euclidean", data = metadata)$aov.tab[1,c(6,5,4)])
+  StatsRes[(StatsRes$metric=="Aitchison")&(StatsRes$similarity_slices==i),4:6]=res
+  #Philr
+  res=unlist(adonis(Betas[i,"Philr",samples,samples]~ psyllid_spp, method = "euclidean", data = metadata)$aov.tab[1,c(6,5,4)])
+  StatsRes[(StatsRes$metric=="Philr")&(StatsRes$similarity_slices==i),4:6]=res
+  #Unifrac
+  res=unlist(adonis(Betas[i,"Unifrac",samples,samples]~ psyllid_spp, method = "euclidean", data = metadata)$aov.tab[1,c(6,5,4)])
+  StatsRes[(StatsRes$metric=="Unifrac")&(StatsRes$similarity_slices==i),4:6]=res
+  #WUnifrac
+  res=unlist(adonis(Betas[i,"WUnifrac",samples,samples]~ psyllid_spp, method = "euclidean", data = metadata)$aov.tab[1,c(6,5,4)])
+  StatsRes[(StatsRes$metric=="WUnifrac")&(StatsRes$similarity_slices==i),4:6]=res
 }
 
+
 # Profile for all
-ggplot(aes(y=R2,x=similarity_slices,colour=predictors,group=factor(predictors)),data=StatsRes)+geom_point()+geom_line()+facet_wrap(~metric)
+ggplot(StatsRes, aes(y=R2, x=similarity_slices, colour=predictors, group=factor(predictors)))+
+  geom_point() +
+  geom_line() +
+  facet_wrap(~metric)
 
 ```
 
@@ -522,9 +776,11 @@ samples <- rownames(otu_table(ps2))
 dists <- c("phylo.dist","plant.dist", "spat.dist")
 mantlist_distances <- vector("list", length=length(dists))
 
+# Generalise these to a function. Get names from the slices object
+
 for (d in 1:length(dists)){
   test.dist <- get(dists[d])
-  
+
   samples_to_use <- samples[samples %in% colnames(as.matrix(test.dist))]
   
   manlist <- vector("list", length=length(slices))
@@ -532,33 +788,45 @@ for (d in 1:length(dists)){
     
     nslice <- as.character(slices[i])
     #Jac
-    M <- mantel(Betas[nslice,"Jac",samples_to_use,samples_to_use], test.dist[samples_to_use,samples_to_use])
-    man_jac <- data.frame(metric="Jac", test=dists[d], stat=M$statistic,  signif=M$signif)
+    man_jac <- mantel(Betas[nslice,"Jaccard",samples_to_use,samples_to_use], test.dist[samples_to_use,samples_to_use])
     #Bray
-    M <- mantel(Betas[nslice,"Bray",samples_to_use,samples_to_use], test.dist[samples_to_use,samples_to_use])
-    man_bray <- data.frame(metric="Bray", test=dists[d], stat=M$statistic,  signif=M$signif)
-    #Aitch_psedo
-    M <- mantel(Betas[nslice,"Aitch_pseudo",samples_to_use,samples_to_use], test.dist[samples_to_use,samples_to_use])
-    man_aitch_pseudo <- data.frame(metric="Aitch_pseudo", test=dists[d], stat=M$statistic,  signif=M$signif)
-    #Aitch_rep
-    M <- mantel(Betas[nslice,"Aitch_rep",samples_to_use,samples_to_use], test.dist[samples_to_use,samples_to_use])
-    man_aitch_rep <- data.frame(metric="Aitch_rep", test=dists[d], stat=M$statistic,  signif=mantel$signif)
-    manlist[[i]] <- bind_rows(man_jac, man_bray, man_aitch_pseudo, man_aitch_rep) %>%
-      mutate(slice=slices[i])
+    man_bray<- mantel(Betas[nslice,"Bray",samples_to_use,samples_to_use], test.dist[samples_to_use,samples_to_use])
+    #Aitch
+    man_aitch <- mantel(Betas[nslice,"Aitchison",samples_to_use,samples_to_use], test.dist[samples_to_use,samples_to_use])
+    #PhilR
+    man_philr <- mantel(Betas[nslice,"Philr",samples_to_use,samples_to_use], test.dist[samples_to_use,samples_to_use])
+    #Unifrac
+    man_unifrac <- mantel(Betas[nslice,"Unifrac",samples_to_use,samples_to_use], test.dist[samples_to_use,samples_to_use])
+    #Weighted Unifrac
+    man_wunifrac <- mantel(Betas[nslice,"WUnifrac",samples_to_use,samples_to_use], test.dist[samples_to_use,samples_to_use])
+
+    manlist[[i]] <- tribble(
+      ~metric, ~stat, ~signif,
+      "Jaccard (Qualitative)", man_jac$statistic, man_jac$signif,
+      "Bray-Curtis(Quantitative)", man_bray$statistic, man_bray$signif,
+      "Aitchison (Quantitative, Compositional)", man_aitch$statistic, man_aitch$signif,
+      "PhilR (Quantitative, Phylogenetic, Compositional)", man_philr$statistic, man_philr$signif,
+      "Unifrac (Qualitative, Phylogenetic)", man_unifrac$statistic, man_unifrac$signif,
+      "Weighted Unifrac (Quantitative, Phylogenetic)", man_wunifrac$statistic, man_wunifrac$signif
+    ) %>%
+      mutate(distance=dists[d], slice=slices[i])
   }
   mantlist_distances[[d]] <- bind_rows(manlist)
 }
 
-matrix_stats <- bind_rows(mantlist_distances) %>%
-  mutate(signif_test = case_when(
-    signif < 0.01 ~ TRUE,
-    signif > 0.01 ~ FALSE
-  ))
-gg.mantel <- ggplot(matrix_stats, aes(y=stat,x=slice, colour=test, group=factor(test)))+
-  geom_point(aes(shape=signif_test)) +
-  geom_line()+ 
+gg.mantel <- bind_rows(mantlist_distances) %>%
+  mutate(Comparison = paste0("microbe~",distance)) %>%
+  ggplot(aes(y=stat,x=slice, colour=distance, group=factor(distance))) +
+  geom_path(linetype="dashed")+
+  geom_line(data=bind_rows(mantlist_distances) %>% mutate(stat = case_when (signif > 0.01 ~ as.double(NA), signif < 0.01 ~ stat)), linetype="solid") +
   geom_hline(yintercept=0) +
-  facet_wrap(~metric) 
+  facet_wrap(~metric) +
+     theme_classic2()   +
+     theme(legend.position = "right",
+           panel.grid.major.y = element_line(colour="grey", size=0.5, linetype="dashed"),
+           strip.background = element_rect(fill = "grey92", 
+                                           colour = "black", size = 1)
+     )  + scale_color_brewer(palette="Paired")
 ```
 
 ### Partial mantel tests
@@ -566,100 +834,151 @@ gg.mantel <- ggplot(matrix_stats, aes(y=stat,x=slice, colour=test, group=factor(
 samples <- rownames(otu_table(ps2))
 dists <- expand_grid(dist1 = c("phylo.dist","plant.dist", "spat.dist"), dist2=c("phylo.dist","plant.dist", "spat.dist")) %>%
   filter(!dist1==dist2)
-mantlist_distances <- vector("list", length=length(dists))
+PMlist_distances <- vector("list", length=length(dists))
 
 for (d in 1:nrow(dists)){
   test.dist <- get(dists$dist1[d])
   control.dist <- get(dists$dist2[d])
   
   samples_to_use <- samples[samples %in% colnames(as.matrix(test.dist))]
+  samples_to_use <- samples_to_use[samples_to_use %in% colnames(as.matrix(control.dist))]
   
-  manlist <- vector("list", length=length(slices))
+  PMlist <- vector("list", length=length(slices))
   for (i in 1:length(slices)){
     
     nslice <- as.character(slices[i])
     #Jac
-    PM <- mantel.partial(Betas[nslice,"Jac",samples_to_use,samples_to_use],
-                         test.dist[samples_to_use,samples_to_use],
-                          control.dist[samples_to_use,samples_to_use])
-    PM_jac <- data.frame(metric="Jac", dist1=dists$dist1[d], dist2=dists$dist2[d], stat=PM$statistic,  signif=PM$signif)
+    PM_jac <- mantel.partial(Betas[nslice, "Jaccard", samples_to_use, samples_to_use],
+                         test.dist[samples_to_use, samples_to_use],
+                          control.dist[samples_to_use, samples_to_use])
+    
     #Bray
-    PM <- mantel.partial(Betas[nslice,"Bray",samples_to_use,samples_to_use],
+    PM_bray <- mantel.partial(Betas[nslice,"Bray",samples_to_use,samples_to_use],
                          test.dist[samples_to_use,samples_to_use],
                          control.dist[samples_to_use,samples_to_use])
-    PM_bray <- data.frame(metric="Bray", dist1=dists$dist1[d], dist2=dists$dist2[d], stat=PM$statistic,  signif=PM$signif)
-    #Aitch_psedo
-    PM <- mantel.partial(Betas[nslice,"Aitch_pseudo",samples_to_use,samples_to_use], 
+    #Aitch
+    PM_aitch <- mantel.partial(Betas[nslice,"Aitchison",samples_to_use,samples_to_use], 
                          test.dist[samples_to_use,samples_to_use], 
                          control.dist[samples_to_use,samples_to_use])
-    PM_aitch_pseudo <- data.frame(metric="Aitch_pseudo", dist1=dists$dist1[d], dist2=dists$dist2[d], stat=PM$statistic,  signif=PM$signif)
-    #Aitch_rep
-    PM <- mantel.partial(Betas[nslice,"Aitch_rep",samples_to_use,samples_to_use], 
+    #Philr
+    PM_philr <- mantel.partial(Betas[nslice,"Philr",samples_to_use,samples_to_use], 
                          test.dist[samples_to_use,samples_to_use], 
                          control.dist[samples_to_use,samples_to_use])
-    PM_aitch_rep <- data.frame(metric="Aitch_rep", dist1=dists$dist1[d], dist2=dists$dist2[d], stat=PM$statistic,  signif=PM$signif)
-    manlist[[i]] <- bind_rows(PM_jac, PM_bray, PM_aitch_pseudo, PM_aitch_rep) %>%
-      mutate(slice=slices[i])
-  }
-  mantlist_distances[[d]] <- bind_rows(manlist)
+    #Unifrac
+    PM_unifrac <- mantel.partial(Betas[nslice,"Unifrac",samples_to_use,samples_to_use], 
+                         test.dist[samples_to_use,samples_to_use], 
+                         control.dist[samples_to_use,samples_to_use])
+    #Weighted Unifrac
+    PM_wunifrac <- mantel.partial(Betas[nslice,"WUnifrac",samples_to_use,samples_to_use], 
+                         test.dist[samples_to_use,samples_to_use], 
+                         control.dist[samples_to_use,samples_to_use])
+    PMlist[[i]] <- tribble(
+      ~metric, ~stat, ~signif,
+      "Jaccard (Qualitative)", PM_jac$statistic, PM_jac$signif,
+      "Bray (Quantitative)", PM_bray$statistic, PM_bray$signif,
+      "Aitchison (Quantitative, Compositional)", PM_aitch$statistic, PM_aitch$signif,
+      "PhilR (Quantitative, Phylogenetic, Compositional)", PM_philr$statistic, PM_philr$signif,
+      "Unifrac (Qualitative, Phylogenetic)", PM_unifrac$statistic, PM_unifrac$signif,
+      "Weighted Unifrac (Quantitative, Phylogenetic)", PM_wunifrac$statistic, PM_wunifrac$signif
+    ) %>%
+      mutate(dist1=dists$dist1[d], dist2=dists$dist2[d], slice=slices[i])
+    }
+  PMlist_distances[[d]] <- bind_rows(PMlist)
 }
 
-matrix_stats <- bind_rows(mantlist_distances) %>%
-  mutate(signif_test = case_when(
-    signif < 0.01 ~ TRUE,
-    signif > 0.01 ~ FALSE
-  )) %>%
-  mutate(test = paste0("microbe~",dist1,"~",dist2))
-gg.mantel <- ggplot(matrix_stats, aes(y=stat,x=slice, colour=test, group=factor(test)))+
-  geom_point(aes(shape=signif_test)) +
-  geom_line()+ 
+
+gg.pmantel <- bind_rows(PMlist_distances) %>%
+  mutate(Comparison = paste0("microbe~",dist1,"~",dist2)) %>%
+  ggplot(aes(y=stat, x=slice, colour=Comparison, group=factor(Comparison)))+ 
+  geom_line(linetype="dashed") +
+  geom_line(data=bind_rows(PMlist_distances) %>% mutate(Comparison = paste0("microbe~",dist1,"~",dist2)) %>% mutate(stat = case_when (signif > 0.01 ~ as.double(NA), signif < 0.01 ~ stat)), linetype="solid") +
   geom_hline(yintercept=0) +
-  facet_wrap(~metric) 
+  facet_wrap(~metric) +
+     theme_classic2()   +
+     theme(legend.position = "right",
+           panel.grid.major.y = element_line(colour="grey", size=0.5, linetype="dashed"),
+           strip.background = element_rect(fill = "grey92", 
+                                           colour = "black", size = 1)
+     )  + scale_color_brewer(palette="Paired")
+
 ```
 
-### Procrustes
+
+### Procrustes tests
 ```{r Procrustes}
 samples <- rownames(otu_table(ps2))
 dists <- c("phylo.dist","plant.dist", "spat.dist")
-mantlist_distances <- vector("list", length=length(dists))
+proc_distances <- vector("list", length=length(dists))
 
 for (d in 1:length(dists)){
   test.dist <- get(dists[d])
   
   samples_to_use <- samples[samples %in% colnames(as.matrix(test.dist))]
   
-  manlist <- vector("list", length=length(slices))
+  proclist <- vector("list", length=length(slices))
   for (i in 1:length(slices)){
     
+      
     nslice <- as.character(slices[i])
     #Jac
-    proc <- protest(monoMDS(Betas[nslice,"Jac",samples_to_use,samples_to_use]), monoMDS(test.dist[samples_to_use,samples_to_use]))
-    proc_jac <- data.frame(metric="Jac", test=dists[d], stat=proc$t0, scale=proc$scale, signif=proc$signif)
+    proc_jac <- protest(monoMDS(Betas[nslice,"Jaccard",samples_to_use,samples_to_use]), monoMDS(test.dist[samples_to_use,samples_to_use])) 
     #Bray
-    proc <- protest(monoMDS(Betas[nslice,"Bray",samples_to_use,samples_to_use]), monoMDS(test.dist[samples_to_use,samples_to_use]))
-    proc_bray <- data.frame(metric="Bray", test=dists[d], stat=proc$t0, scale=proc$scale, signif=proc$signif)
-    #Aitch_psedo
-    proc <- protest(monoMDS(Betas[nslice,"Aitch_pseudo",samples_to_use,samples_to_use]), monoMDS(test.dist[samples_to_use,samples_to_use]))
-    proc_aitch_pseudo <- data.frame(metric="Aitch_pseudo", test=dists[d], stat=proc$t0, scale=proc$scale, signif=proc$signif)
-    #Aitch_rep
-    proc <- protest(monoMDS(Betas[nslice,"Aitch_pseudo",samples_to_use,samples_to_use]), monoMDS(test.dist[samples_to_use,samples_to_use]))
-    proc_aitch_rep <- data.frame(metric="Aitch_rep", test=dists[d], stat=proc$t0, scale=proc$scale, signif=proc$signif)
-    manlist[[i]] <- bind_rows(proc_jac, proc_bray, proc_aitch_pseudo, proc_aitch_rep) %>%
-      mutate(slice=slices[i])
+    proc_bray <- protest(monoMDS(Betas[nslice,"Bray",samples_to_use,samples_to_use]), monoMDS(test.dist[samples_to_use,samples_to_use])) 
+    #Aitch
+    proc_aitch <- protest(monoMDS(Betas[nslice,"Aitchison",samples_to_use,samples_to_use]), monoMDS(test.dist[samples_to_use,samples_to_use]))
+    #PhilR
+    proc_philr <- protest(monoMDS(Betas[nslice,"Philr",samples_to_use,samples_to_use]), monoMDS(test.dist[samples_to_use,samples_to_use]))
+    #Unifrac
+    proc_unifrac <- protest(monoMDS(Betas[nslice,"Unifrac",samples_to_use,samples_to_use]), monoMDS(test.dist[samples_to_use,samples_to_use]))
+    #Weighted Unifrac
+    proc_wunifrac <- protest(monoMDS(Betas[nslice,"WUnifrac",samples_to_use,samples_to_use]), monoMDS(test.dist[samples_to_use,samples_to_use]))
+
+    proclist[[i]] <- tribble(
+      ~metric, ~stat, ~scale, ~signif,
+      "Jaccard (Qualitative)", proc_jac$t0, proc_jac$scale, proc_jac$signif,
+      "Bray-Curtis(Quantitative)", proc_bray$t0, proc_bray$scale, proc_bray$signif,
+      "Aitchison (Quantitative, Compositional)", proc_aitch$t0, proc_aitch$scale, proc_aitch$signif,
+      "PhilR (Quantitative, Phylogenetic, Compositional)", proc_philr$t0, proc_philr$scale, proc_philr$signif,
+      "Unifrac (Qualitative, Phylogenetic)", proc_unifrac$t0, proc_unifrac$scale, proc_unifrac$signif,
+      "Weighted Unifrac (Quantitative, Phylogenetic)", proc_wunifrac$t0, proc_wunifrac$scale, proc_wunifrac$signif
+    ) %>%
+      mutate(distance=dists[d], slice=slices[i])
   }
-  mantlist_distances[[d]] <- bind_rows(manlist)
+  proc_distances[[d]] <- bind_rows(proclist)
 }
 
-matrix_stats <- bind_rows(mantlist_distances) %>%
-  mutate(signif_test = case_when(
+
+gg.proc <- bind_rows(proc_distances) %>%
+  mutate(Comparison = paste0("microbe~",distance)) %>%
+  ggplot(aes(y=stat,x=slice, colour=distance, group=factor(distance))) +
+  geom_path(linetype="dashed")+
+  geom_line(data=bind_rows(mantlist_distances) %>% mutate(stat = case_when (signif > 0.01 ~ as.double(NA), signif < 0.01 ~ stat)), linetype="solid") +
+  geom_hline(yintercept=0) +
+  facet_wrap(~metric) +
+     theme_classic2()   +
+     theme(legend.position = "right",
+           panel.grid.major.y = element_line(colour="grey", size=0.5, linetype="dashed"),
+           strip.background = element_rect(fill = "grey92", 
+                                           colour = "black", size = 1)
+     )  + scale_color_brewer(palette="Paired")
+
+gg.proc <- bind_rows(proc_distances) %>%
+  mutate(Significance = case_when(
     signif < 0.01 ~ TRUE,
     signif > 0.01 ~ FALSE
-  ))
-gg.mantel <- ggplot(matrix_stats, aes(y=stat,x=slice, colour=test, group=factor(test)))+
-  geom_point(aes(shape=signif_test)) +
+  ), Comparison = paste0("microbe~",distance)) %>%
+  ggplot(aes(y=stat,x=slice, colour=distance, group=factor(distance)))+
+  geom_point(aes(shape=Significance)) +
   geom_line()+ 
   geom_hline(yintercept=0) +
-  facet_wrap(~metric) 
+  facet_wrap(~metric) +
+     theme_classic2()   +
+     theme(legend.position = "right",
+           panel.grid.major.y = element_line(colour="grey", size=0.5, linetype="dashed"),
+           strip.background = element_rect(fill = "grey92", 
+                                           colour = "black", size = 1)
+     )
+
 ```
 
 
@@ -728,26 +1047,35 @@ gg.mantel <- ggplot(matrix_stats, aes(y=stat,x=slice, colour=test, group=factor(
 
 ```
 
-## Beta diversity association over Phylogenetic scale 
+# Cophylogeny
 
+
+## Psyllid hostplant cophylogeny
+
+```{r}
+
+
+```
 
 ## Cophylogeny over Phylogenetic scale
 
 
 ```{r randomtapas}
 ## Prepare interaction table
-#used merged by species
 # Merge species
 ps.sppmerged <- ps2 %>%
     merge_samples(group = "psyllid_spp")
 
-#This loses the sample metadata - Need to add it agian
-samdf <- read.csv("sample_data/Sample_info.csv", header=TRUE) %>%
+sample_data(ps.sppmerged) <- read.csv("sample_data/Sample_info.csv", header=TRUE) %>%
   filter(!duplicated(psyllid_spp)) %>%
   set_rownames(.$psyllid_spp) %>%
   dplyr::select(c("SampleID", "Sample.Name", "seqrun", "psyllid_spp", "psyllid_genus", "psyllid_family", "hostplant_spp","Collection","Collection.Date"))
 
-sample_data(ps.sppmerged) <- samdf
+# subset to just carsonella
+ps.sppmerged <- ps.merged %>%
+  subset_taxa( Genus == "Candidatus_Carsonella"
+  )
+
 ps4 <- filter_taxa(ps.sppmerged, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
 
 #Rename taxa
@@ -1158,7 +1486,6 @@ gg.manteline  <- ggplot(mantel, aes(x=glom, y=stat, colour=call)) +
 
 This suggests that species significantly cluster, and so do hostplants. However when accounting for species, hostplants are not significant. Therefore it should be justified to redo the barchart merging by species 
 
-# Figures 
 
 
 ## Map of colleciton locations
@@ -1426,76 +1753,6 @@ gg.entero <- plot_tree(ps3.carson, ladderize="left",  color="psyllid_spp", label
 #, label.tips="psyllid_spp
 
 ```
-
-## Secondary symbionts
-
-Subset to clades within the 16S gene tree, do a paco analysis with that clade. Return test statistics.
-
-
-
-### Fit neutral model
-
-Cluster at a rate that approximates genus (95%?) Before fititng neutral model
-Loop through those that are above the predicitons, doing a mantel test for each
-
-Specifically, points above the prediction represent taxa that are found more frequently than expected, suggesting that they are actively being maintained and selected for by the host, while points found below the prediction represent taxa found less frequently than expected, suggesting that they are either selected against by the host or are especially dispersal limited. 
-
-
-```{r}
-library(reltools)
-library(minpack.lm)
-library(Hmisc)
-
-ps.neutral <- speedyseq::tax_glom(ps2, taxrank="Genus")
-
-ps.neutral <- tip_glom(ps2, h=0.3)
-
-spp <- otu_table(ps.neutral)@.Data
-spp.out <- fit_sncm(spp, pool=spp, taxon=data.frame(tax_table(ps.neutral)))
-
-df <- data.frame(t(table(spp.out$predictions$fit_class)))
-df <- df[,c(2,3)]
-colnames(df) <- c("Prediction", "AVS Abundance")
-  
-library(ggrepel)
-gg.neutral <- ggplot(data = spp.out$predictions) + 
-  geom_point(aes(x = log(p), y = freq, fill = fit_class),
-        shape = 21, color = "black", size = 2, alpha = 0.75) +
-  scale_fill_manual(name = "Prediction", 
-        values = c(`Above prediction` = "cyan4", 
-            `As predicted` = "blue", `Below prediction` = "goldenrod", 
-            `NA` = "white"), breaks = c("Above prediction", 
-            "As predicted", "Below prediction", 
-            "NA"), labels = c(paste0("Above prediction (", 
-            round((df[1, 2]/spp.out$fitstats$Richness) * 
-              100, 1), "%)"), paste0("As predicted (", 
-            round((df[2, 2]/spp.out$fitstats$Richness) * 
-              100, 1), "%)"), paste0("Below Prediction (", 
-            round((df[3, 2]/spp.out$fitstats$Richness) * 
-              100, 1), "%)"), paste0("NA (", df[4, 2], ")"))) +
-  geom_line(aes(x = log(p), y = freq.pred), color = "blue") + 
-  geom_line(aes(x = log(p), y = pred.lwr), color = "blue", linetype = "dashed") + 
-  geom_line(aes(x = log(p), y = pred.upr), color = "blue", linetype = "dashed") +
-  theme_bw() +
-  #geom_label_repel(data = (spp.out$predictions %>% filter(fit_class == "Above prediction")), aes(x = log(p), y = freq,  label=Genus))+
-  xlab("log(Mean Relative Abundance)") +
-  ylab("Frequency") +
-  annotate("text", x = mean(log(spp.out$predictions$p), na.rm = TRUE),
-           y = 0.95, size = 5, label =  paste("r^2 ==", round(spp.out$fitstats$Rsqr, 4)), parse = TRUE) +  
-  annotate("text", x = mean(log(spp.out$predictions$p), na.rm = TRUE),
-           y = 0.9, size = 5, label =  paste("m ==", round(spp.out$fitstats$m,  4)), parse = TRUE)
-
-
-```
-
-
-## Community assembly
-
-SEE: https://www.nature.com/articles/s41467-019-10191-3#Sec10
-
-Our findings that host evolutionary history significantly explain microbiome diversity indicate that environmental filtering plays a substantial role in microbial community assembly. 
-
-n order to further test this notion and to assess how environmental filtering may differ among host clades, we utilized two ecophylogenetics analyses: mean phylogenetic distance (MPD) and mean nearest taxon distance (MNTD). These tests assess the degree of phylogenetic clustering within each sample (host) relative to a permuted null model. Assuming phylogenetic niche conservatism (i.e., closely related taxa overlap along niche axes), then host diet or gut physiology may select for phylogenetically clustered taxa with overlapping niches, while in the absence of such strong selection, competition via niche conservatism would lead to phylogenetic overdispersion40. Phylogenetic overdispersion may also result from facilitation (i.e., beneficial microbe–microbe interactions), such as when distantly related taxa form consortia to break down complex plant polymers40. MPD is more sensitive to overall patterns of phylogenetic clustering and evenness, while MNTD is more sensitive to patterns at the tree tips41.
 
 
 

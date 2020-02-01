@@ -451,7 +451,6 @@ tax <- subset(tax, select=c("Kingdom", "Phylum","Class", "Order", "Family", "Gen
 #Propagate high order ranks to unassigned ASV's
 tax <- propagate_tax(tax,from="Phylum") 
 
-
 #Check Output
 taxa.print <- tax # Removing sequence rownames for display only
 rownames(taxa.print) <- NULL
