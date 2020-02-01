@@ -1072,7 +1072,7 @@ sample_data(ps.sppmerged) <- read.csv("sample_data/Sample_info.csv", header=TRUE
   dplyr::select(c("SampleID", "Sample.Name", "seqrun", "psyllid_spp", "psyllid_genus", "psyllid_family", "hostplant_spp","Collection","Collection.Date"))
 
 # subset to just carsonella
-ps.sppmerged <- ps.merged %>%
+ps.sppmerged <- ps.sppmerged %>%
   subset_taxa( Genus == "Candidatus_Carsonella"
   )
 
@@ -1124,17 +1124,17 @@ psyllid_tree$tip.label[!psyllid_tree$tip.label %in%  pruned.tree$tip.label]
 #cophenetic <- cophenetic(pruned.tree)
 
 HS <- otu[pruned.tree$tip.label,]
-TreeH <- psyllid_tree
+TreeH <- pruned.tree
 TreeS <- phy_tree(ps4)
 
 # Optional: Draw a tanglegram
 
 HS.lut <- which(HS ==1, arr.ind=TRUE)
 linkhs <- cbind(rownames(HS)[HS.lut[,1]], colnames(HS)[HS.lut[,2]])
-obj <- cophylo(TreeH,TreeS, linkhs, rotate=FALSE) # Rotate crashes it, because too many nodes?
-plot.cophylo(obj, link.lwd=1, link.lty=2, fsize=0.5, pts=FALSE,
-             link.type="curved")
+obj <- cophylo(tr1=TreeH, tr2=TreeS, assoc=linkhs, rotate=TRUE) 
+plot.cophylo(obj, link.lwd=1, link.lty=2, fsize=0.5, pts=FALSE, link.type="curved")
 dev.off() #reset graphics device
+
 
 
 # 1. Find minimum value with which all runs can be completed - Establish N
