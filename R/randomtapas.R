@@ -378,8 +378,10 @@ PACO <- sapply(THS, paco.ss, treeH=TreeH, treeS= TreeS, ei.correct= "sqrt.D",
 ######### extract h-s association frequencies
 LFGD01 <- link.freq(THS, GD, HS, percentile=0.01)
 LFPACO01 <- link.freq(THS, PACO, HS, percentile=0.01)
-#
 
+
+# edit trees down
+mTreeH <- mTreeH[1:20]
 
 # Procedure to compute CIs from Bootstrap trees
 GD01 <- matrix(NA, length(mTreeH), nrow(LFGD01))

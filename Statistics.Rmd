@@ -11,14 +11,16 @@ editor_options:
 
 ```{r install & Load packages} 
 #Set required packages
-.cran_packages <- c("ggplot2", "gridExtra", "tidyverse", "scales", "stringdist", "patchwork", "vegan", "ggpubr", "seqinr", "viridis", "ape", "sp", "data.table", "RColorBrewer", "ggtree")
+.cran_packages <- c("ggplot2", "gridExtra", "tidyverse", "scales", "stringdist", "patchwork", "vegan", "ggpubr", "seqinr", "viridis", "ape", "sp", "data.table", "RColorBrewer", "ggtree", "castor", "abind", "Matrix", "minpack.lm", "Hmisc")
 .bioc_packages <- c("dada2", "phyloseq", "DECIPHER","Biostrings","ShortRead","psadd","microbiome","philr")
 
-sapply(c(.cran_packages,.bioc_packages), require, character.only = TRUE)
+.github_packages <- c("reltools")
+
+sapply(c(.cran_packages,.bioc_packages, .github_packages), require, character.only = TRUE)
 
 #Load helper functions 
 source('R/helper_functions.R')
-
+source('R/BDTT.R')
 options(stringsAsFactors = FALSE)
 
 ```
@@ -151,7 +153,7 @@ gg.reps <- ggplot(data=pc_samp, aes(x=PC1, y=PC2, colour=SampleID, label=SampleI
 print(gg.reps)
 
 
-## Bar plots of pairwise similarity between reps, species, species~hostplant
+## box and whisker plots of pairwise similarity between reps, species, species~hostplant
 
 ```
 
@@ -421,9 +423,6 @@ grid.draw(gt) # plot with grid draw
 ## Neutral model
 
 ```{r Neutral model}
-library(reltools)
-library(minpack.lm)
-library(Hmisc)
 
 # Fit neutral model
 spp <- otu_table(ps2)@.Data
@@ -436,8 +435,7 @@ slices=seq(0,1.6,0.1)
 
 neutral <- NMTT(similarity_slices = slices, sampleOTUs = otu_table(ps2), tree = phy_tree(ps2), quiet = FALSE, return="summary")
   
-ggplot(test, aes(x=slice, y=freq, fill=fit_class)) + 
-      geom_bar(stat="identity")
+neutral$plots
 ```
 
 ## Phylogenetic community assembly
@@ -454,7 +452,7 @@ comm <- as(phyloseq::otu_table(ps2), "matrix")
 pdtable <- picante::pd(comm, phy, include.root = F)	
 
 # Calculate Faith's PD-index with SES	
-sespd <- picante::ses.pd(comm, phy, null.model = "taxa.labels", include.root = F, runs = 99) %>% 
+sespd <- picante::ses.pd(comm, phy, null.model = "taxa.labels", include.root = F, runs = 10) %>% 
   rownames_to_column("Sample.Name") %>%
   left_join(read.csv("sample_data/Sample_info.csv", header=TRUE)  %>%
   dplyr::filter(!duplicated(SampleID)) %>%
@@ -631,17 +629,12 @@ Would be better to integrate this with a phylogenetic glmm - see mcmc.OTU packag
 ## Figure 2 - BDTT 
 
 ```{r timeslice}
-library(ape)
-library(castor)
-library(abind)
-library(Matrix)
-
 ## TRY WITHOUT ENTERO
-#ps2 <- ps2 %>%
-#  subset_taxa(Family  != "Enterobacteriaceae") %>%
-#  filter_taxa(function(x) mean(x) > 0, TRUE)#Drop missing taxa from table
-#
-#ps2 <- prune_samples(sample_sums(ps2) >0 , ps2)
+ps2 <- ps2 %>%
+  subset_taxa(Family  != "Enterobacteriaceae") %>%
+  filter_taxa(function(x) mean(x) > 0, TRUE)#Drop missing taxa from table
+
+ps2 <- prune_samples(sample_sums(ps2) >0 , ps2)
 #Look at depth categories in tree
 hist(get_all_node_depths(phy_tree(ps2)))
 
@@ -660,7 +653,7 @@ names(treelist) <- paste0("Timeslice = ",slices)
 gg.tree <- ggtree(treelist) + facet_wrap(~.id, scale="free", nrow=1) + theme_tree2()
 
 #Conduct slices and calculate beta diversity
-Betas=BDTT(similarity_slices = slices, tree = phy_tree(ps2), sampleOTUs = t(otu_table(ps2)), metrics=c("Bray","Jaccard","Aitchison","Philr", "Unifrac", "WUnifrac"), zeroes="Impute", parallel=FALSE, quiet=FALSE)
+Betas=BDTT(similarity_slices = slices, tree = phy_tree(ps2), sampleOTUs = t(otu_table(ps2)), metrics=c("Bray","Jaccard","Aitchison","Philr", "Unifrac", "WUnifrac"), zeroes="pseudo", parallel=FALSE, quiet=FALSE)
 ```
 
 ### Prepare distance matrices
@@ -763,7 +756,7 @@ for (i in as.character(slices)){
 
 
 # Profile for all
-ggplot(StatsRes, aes(y=R2, x=similarity_slices, colour=predictors, group=factor(predictors)))+
+gg.adonis <- ggplot(StatsRes, aes(y=R2, x=similarity_slices, colour=predictors, group=factor(predictors)))+
   geom_point() +
   geom_line() +
   facet_wrap(~metric)
@@ -787,6 +780,7 @@ for (d in 1:length(dists)){
   for (i in 1:length(slices)){
     
     nslice <- as.character(slices[i])
+    print(paste0(nslice, " for ", dists[d]))
     #Jac
     man_jac <- mantel(Betas[nslice,"Jaccard",samples_to_use,samples_to_use], test.dist[samples_to_use,samples_to_use])
     #Bray
@@ -847,6 +841,7 @@ for (d in 1:nrow(dists)){
   for (i in 1:length(slices)){
     
     nslice <- as.character(slices[i])
+    print(paste0(nslice, " for ",dists$dist1[d], " ~ ", dists$dist2[d]))
     #Jac
     PM_jac <- mantel.partial(Betas[nslice, "Jaccard", samples_to_use, samples_to_use],
                          test.dist[samples_to_use, samples_to_use],
@@ -946,7 +941,6 @@ for (d in 1:length(dists)){
   }
   proc_distances[[d]] <- bind_rows(proclist)
 }
-
 
 gg.proc <- bind_rows(proc_distances) %>%
   mutate(Comparison = paste0("microbe~",distance)) %>%
@@ -1057,8 +1051,7 @@ gg.mantel <- ggplot(matrix_stats, aes(y=stat,x=slice, colour=test, group=factor(
 
 ```
 
-## Cophylogeny over Phylogenetic scale
-
+## Whole dataset cophylogeny
 
 ```{r randomtapas}
 ## Prepare interaction table
@@ -1072,14 +1065,14 @@ sample_data(ps.sppmerged) <- read.csv("sample_data/Sample_info.csv", header=TRUE
   dplyr::select(c("SampleID", "Sample.Name", "seqrun", "psyllid_spp", "psyllid_genus", "psyllid_family", "hostplant_spp","Collection","Collection.Date"))
 
 # subset to just carsonella
-ps.sppmerged <- ps.sppmerged %>%
-  subset_taxa( Genus == "Candidatus_Carsonella"
-  )
+#ps.sppmerged <- ps.sppmerged %>%
+#  subset_taxa( Genus == "Candidatus_Carsonella"
+#  )
 
 ps4 <- filter_taxa(ps.sppmerged, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
 
 #Rename taxa
-taxa_names(ps4) <- paste0("SV", seq(ntaxa(ps4)),"-",tax_table(ps4)[,6])
+#taxa_names(ps4) <- paste0("SV", seq(ntaxa(ps4)),"-",tax_table(ps4)[,6])
 
 #rename problem samples
 sample_names(ps4) <- sample_names(ps4) %>% str_replace_all("'","")
@@ -1124,17 +1117,18 @@ psyllid_tree$tip.label[!psyllid_tree$tip.label %in%  pruned.tree$tip.label]
 #cophenetic <- cophenetic(pruned.tree)
 
 HS <- otu[pruned.tree$tip.label,]
+mode(HS) <- "integer"
 TreeH <- pruned.tree
 TreeS <- phy_tree(ps4)
 
-# Optional: Draw a tanglegram
+# Optional: Draw a tanglegram - filter this beforehand
 
 HS.lut <- which(HS ==1, arr.ind=TRUE)
 linkhs <- cbind(rownames(HS)[HS.lut[,1]], colnames(HS)[HS.lut[,2]])
+linkhs[,1] <- str_replace_all(linkhs[,1], " ", "_")
 obj <- cophylo(tr1=TreeH, tr2=TreeS, assoc=linkhs, rotate=TRUE) 
 plot.cophylo(obj, link.lwd=1, link.lty=2, fsize=0.5, pts=FALSE, link.type="curved")
 dev.off() #reset graphics device
-
 
 
 # 1. Find minimum value with which all runs can be completed - Establish N
@@ -1154,7 +1148,7 @@ for(i in 1:length(X)) {
 plot(X,Y, type="b", xlab="Number of unique H-S associations",
      ylab="Number of runs accomplished")
 # 3. We choose 8
-n=50
+n=54
 THS <- trimHS.maxC(N, HS, n=n, check.unique=TRUE)
 THS[sapply(THS, is.null)] <- NULL
 
@@ -1168,6 +1162,227 @@ PACO <- sapply(THS, paco.ss, treeH=TreeH, treeS= TreeS, ei.correct= "sqrt.D",
 LFGD01 <- link.freq(THS, GD, HS, percentile=0.01)
 LFPACO01 <- link.freq(THS, PACO, HS, percentile=0.01)
 #
+```
+
+
+
+## Carsonella copylogeny
+
+Maybe this should be done just for carsonella tree
+
+These samples were sequenced using combinatorial indexes. Therefore this data will contain index switching. We therefore need to select an optimal filtering threshold to remove switched taxa, but not real taxa. We will optimise our filtering threshold by relying on assumption that all psyllid species should contain only one (or few very closely related ASVs) of Carsonella.
+
+```{r thresholds}
+
+ps2.carson <- ps2 %>% subset_taxa( Genus == "Candidatus_Carsonella")
+
+#Rename taxa
+taxa_names(ps2.carson) <- paste0("SV", seq(ntaxa(ps2.carson)),"-",tax_table(ps2.carson)[,6])
+
+#Flag top abundance carsonella
+top_carson <-  ps2.carson %>%
+  transform_sample_counts(function (x) x/sum(x)) %>%
+  speedyseq::psmelt() %>%
+  filter(Genus=="Candidatus_Carsonella") %>%
+  group_by(Sample) %>%
+  top_n(1, wt=Abundance) %>%
+  mutate(top = TRUE)  %>%
+  filter(Abundance > 0)
+  
+#Flag lower abundance carsonella
+carson <-  ps2.carson %>%
+  transform_sample_counts(function (x) x/sum(x)) %>%
+  speedyseq::psmelt() %>%
+  filter(Genus=="Candidatus_Carsonella") %>%
+  left_join(top_carson) %>%
+  mutate(top = case_when(
+    is.na(top) ~ FALSE,
+    !is.na(top) ~ top
+  ))
+
+## THis needs to be changed - things should be flagged as switched when less than 100* the top!, or combine both - ie 
+
+test <- carson %>%
+    filter(Abundance > 0) %>%
+    dplyr::select(OTU, top, seqrun, Abundance) %>%
+    unique() %>%
+    group_by(OTU, seqrun) %>%
+    add_tally() %>%
+    mutate(switched = case_when(
+      n>1 & top== FALSE  ~ TRUE,
+      n>1 & top== TRUE ~ FALSE,
+      n==1 ~ FALSE,
+    ))
+
+
+otu <- carson %>%
+  left_join(test) %>%
+  dplyr::select(-n) %>%
+  filter(Genus=="Candidatus_Carsonella", top==TRUE) %>%
+  select(OTU, psyllid_spp, SampleID, Abundance) %>%
+  dplyr::group_by(OTU, psyllid_spp) %>%
+    summarise(Abundance = sum(Abundance)) %>%
+  pivot_wider(id_cols = psyllid_spp,
+              names_from = OTU,
+              values_from=Abundance,
+              values_fill = list(Abundance = 0))  %>%
+  column_to_rownames("psyllid_spp") %>%
+    as.matrix() %>% 
+  apply(2, function(x) ifelse(x > 0, 1, 0))
+
+
+#Cophenetic distance
+psyllid_tree <- read.tree(text=readLines("sample_data/psyllid_beast_tree.nwk"))
+
+# Match names with alpha diversity
+psyllid_tree$tip.label <- psyllid_tree$tip.label %>%
+  str_replace_all(pattern="\\.", replacement=" ") %>%
+  str_replace_all(pattern="sp$", replacement="sp. ") %>%
+  str_replace_all(pattern="Acizzia hakae", replacement="Acizzia hakeae") %>%
+  str_replace_all(pattern="POLLENISLAND", replacement="POLLEN ISLAND") %>%
+  str_replace_all(pattern="Ctenarytaina fuchsiae$", replacement="Ctenarytaina fuchsia A") %>%
+  str_replace_all(pattern="Ctenarytaina fuchsiaeB", replacement="Ctenarytaina fuchsia B") %>%
+  str_replace_all(pattern="Ctenarytaina fuchsiaeC", replacement="Ctenarytaina fuchsia C") %>%
+  str_replace_all(pattern="Ctenarytaina clavata", replacement="Ctenarytaina clavata sp. ") %>%
+  str_replace_all(pattern="Ctenarytaina clavata sp. $", replacement="Ctenarytaina clavata sp. A") %>%
+  str_replace_all(pattern="Ctenarytaina sp$", replacement="Ctenarytaina sp. ") %>%
+  str_replace_all(pattern="Ctenarytaina unknown", replacement="Ctenarytaina insularis") %>%  
+  str_replace_all(pattern="Psylla apicalis A", replacement="Psylla frodobagginsi") %>%
+  str_replace_all(pattern="Psylla apicalis B", replacement="Psylla apicalis") %>%
+  str_replace_all(pattern="carmichaeliae", replacement="carmichaeliae ") %>%
+  str_replace_all(pattern="Psylla apicalis", replacement="Psylla apicalis ") %>% # Should these be A,B or?
+  str_replace_all(pattern="Trioza sp", replacement="Trioza sp. ") %>%
+  str_replace_all(pattern="Trioza acutaB", replacement="Trioza Acuta B") %>%
+  str_replace_all(pattern="BRENDAMAY", replacement="BRENDA MAY") %>%
+  str_replace_all(pattern="PRICES", replacement="PRICES VALLEY") %>%
+  trimws(which="right")
+
+psyllid_tree$tip.label[!psyllid_tree$tip.label %in% rownames(otu)]
+
+#cophenetic <- cophenetic(pruned.tree)
+
+HS <- otu[pruned.tree$tip.label,]
+HS <- HS[,colSums(HS) > 0]
+TreeH <- drop.tip(psyllid_tree, psyllid_tree$tip.label[!psyllid_tree$tip.label %in% rownames(HS)] )
+TreeS <-  drop.tip(phy_tree(ps2.carson), phy_tree(ps2.carson)$tip.label[!phy_tree(ps2.carson)$tip.label %in% colnames(HS)] )
+
+# Optional: Draw a tanglegram - filter this beforehand
+
+HS.lut <- which(HS ==1, arr.ind=TRUE)
+linkhs <- cbind(rownames(HS)[HS.lut[,1]], colnames(HS)[HS.lut[,2]])
+linkhs[,1] <- str_replace_all(linkhs[,1], " ", "_")
+obj <- cophylo(tr1=TreeH, tr2=TreeS, assoc=linkhs, rotate=TRUE) 
+plot.cophylo(obj, link.lwd=1, link.lty=2, fsize=0.5, pts=FALSE, link.type="curved")
+dev.off() #reset graphics device
+
+
+# Find the maximum n for which one-to-one unique associations can be picked in trimHS.maxC over  a number of runs.
+N=100
+One2one.f(HS,N) 
+# 2. Let's evaluate 62-75
+X <- 62:75
+Y <- rep(NA, length(X))
+
+for(i in 1:length(X)) {
+  THS <- trimHS.maxC(N, HS, n=X[i], check.unique=TRUE)
+  Y[i] <- length(THS)
+}
+plot(X,Y, type="b", xlab="Number of unique H-S associations",
+     ylab="Number of runs accomplished")
+# 3. We choose 8
+n=62
+THS <- trimHS.maxC(N, HS, n=n, check.unique=TRUE)
+THS[sapply(THS, is.null)] <- NULL
+#
+
+####### Apply 2 global-fit methods: GD and PACo ##########
+# NOTE PACo symmetric= TRUE in this example!!!!
+GD <- sapply(THS, geo.D, treeH=TreeH, treeS= TreeS)
+PACO <- sapply(THS, paco.ss, treeH=TreeH, treeS= TreeS, ei.correct= "sqrt.D",
+               symmetric=TRUE)
+#
+######### extract h-s association frequencies
+LFGD01 <- link.freq(THS, GD, HS, percentile=0.01)
+LFPACO01 <- link.freq(THS, PACO, HS, percentile=0.01)
+
+# Plot Gini values
+GiniGD <- unlist(Gini_RSV(LFGD01[,5]))
+GiniPA <- unlist(Gini_RSV(LFPACO01[,5]))
+
+boxplot(GiniGD, GiniPA, names = c("GD", "PACo"),
+        ylab="Normalized Gini coefficient", col="lightblue", las=3)
+text(1,GiniGD,"*",cex=2, col="darkblue")
+text(2,GiniPA,"*",cex=2, col="darkblue")
+dev.off()
+
+
+# Tanglegram - trees are 1st rendered ultramteric to separate nodes
+# (facilitates visualization)
+trh <- compute.brtime(TreeH, TreeH$Nnode:1)
+trs <- compute.brtime(TreeS, TreeS$Nnode:1)
+# Set color scale - this one is supposed to be color-blind friendly
+col.scale <- c("darkred","gray90", "darkblue")
+
+# map GD results:
+tangle.gram(trh, trs, HS, colscale= "diverging", colgrad=col.scale, 
+            nbreaks=50, LFPACO01, res.fq=TRUE, link.lwd=1, link.lty=1, fsize=0.5,
+            pts=FALSE, link.type="curved", node.tag=TRUE,
+            cexpt=1.2)
+```
+
+```{r subsetting}
+library(plotly)
+
+#filter threshold to ge
+#ps2.carson <- transform_sample_counts(ps2, fun = proportions, thresh=0.0045)
+
+#ps2.carson <- subset_taxa(ps2.carson, Genus == "Candidatus_Carsonella")
+#ps2.carson <- filter_taxa(ps2.carson, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
+#ps2.carson <- prune_samples(sample_sums(ps2.carson)>0, ps2.carson) # Drop empty samples
+
+library(RColorBrewer)
+col <- colorRampPalette(brewer.pal(11, "Spectral"))(74)
+
+
+ps2.carson <- subset_taxa(ps2, Species == "Candidatus Carsonella")
+gg.carson <- plot_tree(ps2.carson, ladderize="left",  color="psyllid_spp") +   theme(legend.position = "none") + #
+    scale_colour_manual(values=col) + scale_fill_manual(values=col)
+  ggtitle("Carsonella 16S gene tree")
+#gg.ncarson
+  
+## Aquabacterium
+gg.tree <- plot_tree(subset_taxa(ps2, Species == "Sulfuritalea"), ladderize="left",  color="psyllid_spp") +   theme(legend.position = "none") + #
+    scale_colour_manual(values=col) + scale_fill_manual(values=col)
+  ggtitle("Carsonella 16S gene tree")
+#gg.ncarson
+
+#Write out fasta
+
+carson_out <- speedyseq::psmelt(ps3.carson) %>%
+  filter(Abundance > 0) %>%
+  select(OTU, Sample.Name, psyllid_spp, Species) %>%
+  group_by(OTU, Species) %>%
+  summarize(samples = paste(Sample.Name, collapse=";"),
+            psyllid_spp = paste(unique(psyllid_spp), collapse=";")
+            ) %>%
+  rownames_to_column() %>%
+  unite(seqname, c("Species","rowname","psyllid_spp","samples"), sep="|")
+
+carson_fasta <- DNAStringSet(carson_out$OTU)
+names(carson_fasta) <- carson_out$seqname
+
+writeXStringSet(carson_fasta, "carsonella_seqs.fa")
+
+
+## S-Symbionts
+ps3.carson <- subset_taxa(ps3, Family == "Enterobacteriaceae")
+taxa_names(ps3.carson) <- paste0("SV", seq(ntaxa(ps3.carson)),"-",tax_table(ps3.carson)[,7])
+
+gg.entero <- plot_tree(ps3.carson, ladderize="left",  color="psyllid_spp", label.tips="taxa_names") +   theme(legend.position = "none") +     #scale_colour_manual(values=col) +
+  ggtitle("Enterobacidae 16S gene tree")
+
+#, label.tips="psyllid_spp
+
 ```
 
 Use paco https://besjournals.onlinelibrary.wiley.com/doi/full/10.1111/2041-210X.12736
@@ -1541,218 +1756,6 @@ gg.nzmap <- ggplot(envData) +
 ## Primary symbiont
 
 
-## Minimum abundance threshold
-
-Maybe this should be done just for carsonella tree
-
-These samples were sequenced using combinatorial indexes. Therefore this data will contain index switching. We therefore need to select an optimal filtering threshold to remove switched taxa, but not real taxa. We will optimise our filtering threshold by relying on assumption that all psyllid species should contain only one (or few very closely related ASVs) of Carsonella.
-
-```{r thresholds}
-#Flag top abundance carsonella
-top_carson <-  ps2 %>%
-  transform_sample_counts(function (x) x/sum(x)) %>%
-  speedyseq::psmelt() %>%
-  filter(Genus=="Candidatus_Carsonella") %>%
-  group_by(Sample) %>%
-  top_n(1, wt=Abundance) %>%
-  mutate(top = TRUE)  %>%
-  filter(Abundance > 0)
-  
-#Flag lower abundance carsonella
-carson <-  ps2 %>%
-  transform_sample_counts(function (x) x/sum(x)) %>%
-  speedyseq::psmelt() %>%
-  filter(Genus=="Candidatus_Carsonella") %>%
-  left_join(top_carson) %>%
-  mutate(top = case_when(
-    is.na(top) ~ FALSE,
-    !is.na(top) ~ top
-  ))
-
-## THis needs to be changed - things should be flagged as switched when less than 100* the top!, or combine both - ie 
-
-carson <- carson %>%
-  left_join(carson %>%
-    filter(Abundance > 0) %>%
-    dplyr::select(OTU, top, seqrun) %>%
-    unique() %>%
-    group_by(OTU, seqrun) %>%
-    add_tally() %>%
-    mutate(switched = case_when(
-      n>1 & top== FALSE ~ TRUE,
-      n>1 & top== TRUE ~ FALSE,
-      n==1 ~ FALSE,
-    )) %>%
-  dplyr::select(-n)
-  )
-
-## Plot true and false carsonellas by run - this shows may need to filter seperately by run, as seqrun2 has much higher than others.
-gg.switch <- carson %>% 
-  group_by(seqrun, switched) %>%
-  filter(!is.na(switched)) %>%
-  filter(Abundance > 0) %>%
-  summarise(n = n()) %>%
-  mutate(freq = n / sum(n)) %>%
-  ggplot(aes(x=seqrun, y=freq, group=switched, fill=switched)) +
-  geom_bar(stat="identity")
-
-
-#to check if index switching could explain the multiple OTU's check if top=FALSE carsonella exist as top in another sample in the same run
-
-thresholds <- seq(0,0.05,0.0001)
-out <- vector("list", length=3)
-for (r in 1:3) {
-  df <- data.frame(thresh = thresholds, TP= thresholds, FP = thresholds, seqrun = r)
-  for(i in 1:length(thresholds)){
-    filt <- carson %>%
-      filter(seqrun==r) %>%
-      filter(Abundance > thresholds[i]) %>%
-      group_by(top) %>%
-      summarise(sum=n())
-    df$FP[i] <- filt$sum[1]
-    df$TP[i] <- filt$sum[2]
-  }
-  out[[r]] <- df
-}
-
-gg.filt <- out %>%
-  bind_rows() %>%
-  gather(key=type, value=n, -thresh, -seqrun) %>%
-  ggplot(aes(x=thresh, y=n, fill=type)) + 
-  geom_density(stat="identity", alpha=0.5) + 
-  scale_x_continuous(breaks=seq(0,0.05,0.001)) +
-  facet_grid(~seqrun) +
-  theme(axis.text.x = element_text(angle=45,hjust=1)) + 
-  geom_vline(xintercept = 0.0035)+ 
-  geom_vline(xintercept = 0.001)
-
-print(gg.filt)
-
-## Filter run 2 
-run2_ps <- ps2 %>% 
-  subset_samples(seqrun==2)
-
-run2_pass <- run2_ps %>%
-    transform_sample_counts(function (x) x/sum(x)) %>%  # Convert to proportions
-    transform_sample_counts(function (x) (x > 0.001) * 1)
-
-newotu1 <- otu_table(run2_ps) * otu_table(run2_pass)
-
-run2_newps <- run2_ps
-otu_table(run2_newps) <- otu_table(newotu1, taxa_are_rows = FALSE) 
-
-#Filter run 1 and 3 
-  
-run13_ps <- ps2 %>%
-    subset_samples(!seqrun == 2)
-                   
-run13_pass <- run13_ps %>%
-    transform_sample_counts(function (x) x/sum(x)) %>%  # Convert to proportions
-    transform_sample_counts(function (x) (x > 0.0005) * 1)
-
-newotu2  <- otu_table(run13_ps) * otu_table(run13_pass)
-
-run13_newps <- run13_ps
-otu_table(run13_newps) <- otu_table(newotu2, taxa_are_rows = FALSE) 
-
-# Create new phyloseq and drop missing taxa
-ps3 <- merge_phyloseq(run2_newps, run13_newps) %>%
-  filter_taxa(function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
-ps3 <- prune_samples(sample_sums(ps3) >0 , ps3) # Drop empty samples
-
-#Count number of overall taxa pre and post filtering
-print(paste(ntaxa(ps2) - ntaxa(ps3), " taxa Dropped when using filtering threshold of: ", 0.0035, " for run 2 and ", 0.001, "for run 1 and 3"))
-
-# Count number of carsonella OTU's per sample pre and post filtering
-n_carson <- speedyseq::psmelt(ps2) %>% 
-  filter(Genus == "Candidatus_Carsonella") %>%
-  filter(Abundance > 0) %>%
-  dplyr::select(Sample.Name, OTU) %>%
-  group_by(Sample.Name) %>%
-  add_tally() %>%
-  dplyr::select(-OTU) %>%
-  unique() %>%
-  mutate(type = "pre") %>%
-  bind_rows(.,speedyseq::psmelt(ps3) %>% 
-  filter(Genus == "Candidatus_Carsonella") %>%
-  filter(Abundance > 0) %>%
-  dplyr::select(Sample.Name, OTU) %>%
-  group_by(Sample.Name) %>%
-  add_tally() %>%
-  dplyr::select(-OTU) %>%
-  unique() %>%
-  mutate(type = "post"))
-
-gg.ncarson <- ggplot(n_carson, aes(x=reorder(Sample.Name, -n), y=n)) + 
-  geom_bar(stat="identity") +
-  facet_grid(~type) + 
-  xlab("Sample.Name") +
-  ylab("Number of carsonella OTU's per sample") +
-  theme(axis.text.x = element_text(angle=90, hjust = 1, vjust=0))
-
-print(gg.ncarson)
-
-#check if any samples dont have carsonella
-table(!n_carson$Sample.Name %in% speedyseq::psmelt(ps2)$Sample.Name)
-
-## Get the name of taxa that dont have carsonella after filtering
-
-```
-
-```{r subsetting}
-library(plotly)
-
-#filter threshold to ge
-#ps2.carson <- transform_sample_counts(ps2, fun = proportions, thresh=0.0045)
-
-#ps2.carson <- subset_taxa(ps2.carson, Genus == "Candidatus_Carsonella")
-#ps2.carson <- filter_taxa(ps2.carson, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
-#ps2.carson <- prune_samples(sample_sums(ps2.carson)>0, ps2.carson) # Drop empty samples
-
-library(RColorBrewer)
-col <- colorRampPalette(brewer.pal(11, "Spectral"))(74)
-
-
-ps2.carson <- subset_taxa(ps2, Species == "Candidatus Carsonella")
-gg.carson <- plot_tree(ps2.carson, ladderize="left",  color="psyllid_spp") +   theme(legend.position = "none") + #
-    scale_colour_manual(values=col) + scale_fill_manual(values=col)
-  ggtitle("Carsonella 16S gene tree")
-#gg.ncarson
-  
-## Aquabacterium
-gg.tree <- plot_tree(subset_taxa(ps2, Species == "Sulfuritalea"), ladderize="left",  color="psyllid_spp") +   theme(legend.position = "none") + #
-    scale_colour_manual(values=col) + scale_fill_manual(values=col)
-  ggtitle("Carsonella 16S gene tree")
-#gg.ncarson
-
-#Write out fasta
-
-carson_out <- speedyseq::psmelt(ps3.carson) %>%
-  filter(Abundance > 0) %>%
-  select(OTU, Sample.Name, psyllid_spp, Species) %>%
-  group_by(OTU, Species) %>%
-  summarize(samples = paste(Sample.Name, collapse=";"),
-            psyllid_spp = paste(unique(psyllid_spp), collapse=";")
-            ) %>%
-  rownames_to_column() %>%
-  unite(seqname, c("Species","rowname","psyllid_spp","samples"), sep="|")
-
-carson_fasta <- DNAStringSet(carson_out$OTU)
-names(carson_fasta) <- carson_out$seqname
-
-writeXStringSet(carson_fasta, "carsonella_seqs.fa")
-
-
-## S-Symbionts
-ps3.carson <- subset_taxa(ps3, Family == "Enterobacteriaceae")
-taxa_names(ps3.carson) <- paste0("SV", seq(ntaxa(ps3.carson)),"-",tax_table(ps3.carson)[,7])
-
-gg.entero <- plot_tree(ps3.carson, ladderize="left",  color="psyllid_spp", label.tips="taxa_names") +   theme(legend.position = "none") +     #scale_colour_manual(values=col) +
-  ggtitle("Enterobacidae 16S gene tree")
-
-#, label.tips="psyllid_spp
-
-```
 
 
 

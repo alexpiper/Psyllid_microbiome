@@ -59,7 +59,7 @@ getNew_OTUs_sample_matrix=function(similarity,sampleOTUs,tree){
 # Get Beta diversity ------------------------------------------------------
 
 getBDTT <- function(similarity, tree, sampleOTUs, metrics=c("Bray","Jaccard","Aitchison","Philr"), zeroes="Impute", parallel=FALSE, onlyBeta=TRUE, quiet=FALSE){
-  New_OTUs_sample_matrix=getNew_OTUs_sample_matrix(similarity=similarity,sampleOTUs=sampleOTUs,tree=tree)
+  New_OTUs_sample_matrix=getNew_OTUs_sample_matrix(similarity=similarity, sampleOTUs=sampleOTUs, tree=tree)
   OTU_table=t(New_OTUs_sample_matrix$NewSample)
   newtree <- New_OTUs_sample_matrix$tree
   
