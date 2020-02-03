@@ -4,5 +4,7 @@
 .Ruserdata
 .fa
 .fasta
+.fastq.gz
+.fastq
 .gz
 
