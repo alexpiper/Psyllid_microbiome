@@ -16,6 +16,7 @@ library(biofiles)
 library(DECIPHER)
 library(Biostrings)
 library(insect)
+library(taxreturn)
 ```
 
 # Introduction
@@ -23,21 +24,81 @@ library(insect)
 First we will determine which publicly available reference database has the best coverage of insect endosymbions
 
 ```{r fetch training sequences}
-#Fetch SILVA training set 
+dir.create("reference")
+#Fetch SILVA 132 training set 
 httr::GET("https://zenodo.org/record/1172783/files/silva_nr_v132_train_set.fa.gz?download=1", httr::write_disk("reference/silva_nr_v132_train_set.fa.gz", overwrite=TRUE))
+makeblastdb("reference/silva_nr_v132_train_set.fa.gz")
 
 #Fetch GreenGenes training set 
 httr::GET("https://zenodo.org/record/158955/files/gg_13_8_train_set_97.fa.gz?download=1", httr::write_disk("reference/gg_13_8_train_set_97.fa.gz", overwrite=TRUE))
+makeblastdb("reference/gg_13_8_train_set_97.fa.gz")
 
 #Fetch RDP training set 
 httr::GET("https://zenodo.org/record/801828/files/rdp_train_set_16.fa.gz?download=1", httr::write_disk("reference/rdp_train_set_16.fa.gz", overwrite=TRUE))
+makeblastdb("reference/rdp_train_set_16.fa.gz")
 
 #Fetch RefSEQ + RDP training set
 httr::GET("https://zenodo.org/record/2541239/files/RefSeq-RDP16S_v2_May2018.fa.gz?download=1", httr::write_disk("reference/RefSeq-RDP16S_v2_May2018.fa.gz", overwrite=TRUE))
+makeblastdb("reference/RefSeq-RDP16S_v2_May2018.fa.gz")
 
 #Fetch Genome Taxonomy DB training set
 httr::GET("https://zenodo.org/record/2541239/files/GTDB_bac-arc_ssu_r86.fa.gz?download=1", httr::write_disk("reference/GTDB_bac-arc_ssu_r86.fa.gz", overwrite=TRUE))
+makeblastdb("reference/GTDB_bac-arc_ssu_r86.fa.gz")
+
+#Fetch SILVA 138 Ref NR 99 training set
+#httr::GET("https://www.arb-silva.de/fileadmin/silva_databases/release_138/ARB_files/SILVA_138_SSURef_NR99_05_01_20_opt.arb.gz", httr::write_disk("reference/SILVA_138_SSURef_NR99_05_01_20_opt.arb.gz", overwrite=TRUE))
+#makeblastdb("SILVA_138_SSURef_NR99_05_01_20_opt.arb.gz")
+
+makeblastdb("training_set.138_SSURef_NR99.fa.gz")
+
+#Fetch full SILVA 138 Ref training set
+#httr::GET("https://www.arb-silva.de/fileadmin/silva_databases/release_138/ARB_files/SILVA_138_SSURef_05_01_20_opt.arb.gz", httr::write_disk("reference/SILVA_138_SSURef_05_01_20_opt.arb", overwrite=TRUE))
+#makeblastdb(SILVA_138_SSURef_05_01_20_opt.arb)
+
+makeblastdb("training_set.138_SSURef.fa.gz")
+
 ```
+
+## BLAST top hit distribution
+
+
+```{ r blast}
+# read in seqs
+seqtab <- readRDS("seqtab_final.rds")
+seqs <- insect::char2dna(colnames(seqtab))
+
+
+#Silva 132
+silva_132 <- blast_top_hit(query=seqs, db="reference/silva_nr_v132_train_set.fa", threshold = 50)
+write_csv(silva_132, "silva_132_tophit.csv")
+
+#Greengenes
+greengenes <- blast_top_hit(query=seqs, db="reference/gg_13_8_train_set_97.fa", threshold = 50)
+write_csv(greengenes, "greengenes_tophit.csv")
+
+#RDP
+rdp <- blast_top_hit(query=seqs, db="reference/rdp_train_set_16.fa", threshold = 50)
+write_csv(rdp, "rdp_tophit.csv")
+
+#Refseq+RDP
+refseq <- blast_top_hit(query=seqs, db="RefSeq-RDP16S_v2_May2018.fa", threshold = 50)
+write_csv(refseq, "refseq_tophit.csv")
+
+#GTDB
+gtdb <- blast_top_hit(query=seqs, db="GTDB_bac-arc_ssu_r86.fa", threshold = 50)
+write_csv(gtdb, "gtdb_tophit.csv")
+
+#SILVA138 nr99
+s138_nr99 <- blast_top_hit(query=seqs, db="training_set.138_SSURef_NR99.fa", threshold = 50)
+write_csv(s138_nr99, "s138_nr99_tophit.csv")
+
+#SILVA138
+s138 <- blast_top_hit(query=seqs, db="training_set.138_SSURef.fa.gz", threshold = 50)
+write_csv(s138, "s138_tophit.csv")
+
+```
+
+
 
 
 ### Evaluate taxonomic coverage of reference databases
