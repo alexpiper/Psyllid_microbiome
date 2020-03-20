@@ -37,7 +37,7 @@ sum_reads <- speedyseq::psmelt(ps) %>%
   gather("Rank","Name",rank_names(ps)) %>%
   group_by(Rank) %>% 
   mutate(Name = replace(Name, str_detect(Name, "__"),NA)) %>% # This line turns the "__" we added to lower ranks back to NA's
-  summarize(Reads_classified = sum(Abundance * !is.na(Name))) %>%
+  dplyr::summarise(Reads_classified = sum(Abundance * !is.na(Name))) %>%
   mutate(Frac_reads = Reads_classified / sum(sample_sums(ps))) %>%
   mutate(Rank = factor(Rank, rank_names(ps))) %>%
   arrange(Rank)
@@ -49,7 +49,7 @@ sum_otu <- tax_table(ps) %>%
   gather("Rank","Name",rank_names(ps)) %>%
   group_by(Rank) %>%
   mutate(Name = replace(Name, str_detect(Name, "__"),NA)) %>% # This line turns the "__" we added to lower ranks back to NA's
-  summarize(OTUs_classified = sum(!is.na(Name))) %>%
+  dplyr::summarise(OTUs_classified = sum(!is.na(Name))) %>%
   mutate(Frac_OTUs = OTUs_classified / ntaxa(ps)) %>%
   mutate(Rank = factor(Rank, rank_names(ps))) %>%
   arrange(Rank)
@@ -154,7 +154,75 @@ print(gg.reps)
 
 
 ## box and whisker plots of pairwise similarity between reps, species, species~hostplant
+ps.reps
 
+
+# Distance between replicates
+samples <- unique(sample_data(ps.reps)$Sample.Name)
+repdist <- vector("list", length=length(samples))
+for (i in 1:length(samples)){
+  dist <- ps.reps %>% 
+    subset_samples(Sample.Name ==samples[i]) %>%
+    filter_taxa(function(x) mean(x) > 0, TRUE) %>%
+    otu_table() %>%
+    vegan::vegdist(method="bray") %>%
+    as.matrix()
+      filter_taxa(function(x) mean(x) > 0, TRUE) %>%
+xy <- t(combn(colnames(dist), 2))
+  pw <- data.frame(xy, dist = dist[xy]) 
+  repdist[[i]] <- pw
+}
+repdist <- bind_rows(repdist)
+
+# Distance between species
+psyllid_spp <- unique(sample_data(ps1)$psyllid_spp)
+sppdist <- vector("list", length=length(psyllid_spp))
+for (i in 1:length(psyllid_spp)){
+  dist <- ps1 %>% 
+    subset_samples(psyllid_spp == psyllid_spp[i]) %>%
+    filter_taxa(function(x) mean(x) > 0, TRUE) %>%
+    otu_table() 
+  
+  if(length(dist[,1]) > 1){
+    dist <- dist   %>%
+      vegan::vegdist(method="jaccard") %>%
+      as.matrix()
+  xy <- t(combn(colnames(dist), 2))
+  pw <- data.frame(xy, dist = dist[xy]) 
+  sppdist[[i]] <- pw
+  } else{
+    sppdist[[i]] <- NULL
+    }
+}
+sppdist <- bind_rows(sppdist)
+
+# Distance between psyllids on same hostplat
+#      psyllopsis fraxini 94- 107 - 113
+# psyllopsis fraxinicola 93 - 106 - 112
+# 93+94 were the same tree, 106+107 on the same tree and 112+113 were the same treee
+
+dist <- ps1 %>% 
+    subset_samples(Sample.Name %in%  c("93", "94","106", "107","112", "113")) %>%
+    filter_taxa(function(x) mean(x) > 0, TRUE) %>%
+    otu_table()  %>%
+    vegan::vegdist(method="jaccard")
+
+factoextra::fviz_pca(prcomp(dist))
+
+# Otther set
+#psylla apicalis 200 - 201
+#psylla frodobagginsi 200 - 201 #in this case they are named after their tree - ie 200 and 200 were same tree, i shoul drename thes ein some way
+
+dist2 <- ps1 %>% 
+    subset_samples(Sample.Name %in%  c("200", "94","106", "107","112", "113")) %>%
+    filter_taxa(function(x) mean(x) > 0, TRUE) %>%
+    otu_table()  %>%
+    vegan::vegdist(method="jaccard")
+
+# could i do some cluster analysis here?
+
+# Or is adonis besst
+#adonis(~ psyllid_spp, method = "euclidean", data = metadata))
 ```
 
 ### Merge technical replicates
