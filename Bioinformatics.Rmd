@@ -518,60 +518,6 @@ saveRDS(fitGTR, "output/rds/phytree.rds")
 
 ```
 
-
-## Make Phyloseq object
-
-Following taxonomic assignment, the sequence table and taxonomic table are merged into a single phyloseq object alongside the sample info csv.
-
-We then make a plot to evaluate the effectiveness of taxonomic assignment to each rank
-
-```{r create PS, eval = FALSE}
-seqtab.nochim <- readRDS("output/rds/seqtab_final.rds")
-tax_plus <- readRDS("output/rds/tax_RDP_final.rds") 
-fitGTR <- readRDS("output/rds/phytree.rds") 
-
-#Load sample information
-## ---- samdat ----
-samdf <- read.csv("sample_data/Sample_info.csv", header=TRUE)  %>%
-  dplyr::filter(!duplicated(SampleID)) %>%
-  mutate(replicated = Sample.Name %in% ( samdf %>% group_by(Sample.Name) %>% # Flag replicated samples
-                                           filter(n()>1) %>% 
-                                           pull(Sample.Name))) %>%
-  set_rownames(.$SampleID) %>%
-  dplyr::select(c("SampleID", "Sample.Name", "seqrun", "psyllid_spp", "psyllid_genus", "psyllid_family", "hostplant_spp","Collection.Date","replicated")) #Collection
-
-#Display samDF
-head(samdf)
-
-## ---- phyloseq ----
-ps <- phyloseq(tax_table(tax_plus), sample_data(samdf),
-               otu_table(seqtab.nochim, taxa_are_rows = FALSE),
-               phy_tree(fitGTR$tree))
-
-if(nrow(seqtab.nochim) > nrow(sample_data(ps))){warning("Warning: All samples not included in phyloseq object, check sample names match the sample metadata")}
-
-##save phyloseq object
-saveRDS(ps, "output/rds/ps_rdp.rds")
-
-#Output tables of results
-dir.create("output/csv")
-dir.create("output/csv/unfiltered/")
-
-##Export raw csv
-speedyseq::psmelt(ps) %>%
-  write.csv(file = "output/csv/rawdata.csv")
-
-#Summary export
-summarize_taxa(ps, "Species", "SampleID") %>%
-  spread(key="SampleID", value="totalRA") %>%
-  write.csv(file = "output/csv/unfiltered/spp_sum.csv")
-
-summarize_taxa(ps, "Genus", "SampleID") %>%
-  spread(key="SampleID", value="totalRA") %>%
-  write.csv(file = "output/csv/unfiltered/gen_sum.csv")
-```
-
-
 # Sessioninfo
 
 ```{r sessioninfo}

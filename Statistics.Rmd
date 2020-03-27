@@ -14,24 +14,104 @@ editor_options:
 .cran_packages <- c("ggplot2", "gridExtra", "tidyverse", "scales", "stringdist", "patchwork", "vegan", "ggpubr", "seqinr", "viridis", "ape", "sp", "data.table", "RColorBrewer", "ggtree", "castor", "abind", "Matrix", "minpack.lm", "Hmisc")
 .bioc_packages <- c("dada2", "phyloseq", "DECIPHER","Biostrings","ShortRead","psadd","microbiome","philr")
 
-.github_packages <- c("reltools")
+.inst <- .cran_packages %in% installed.packages()
+if(any(!.inst)) {
+   install.packages(.cran_packages[!.inst])
+}
+.inst <- .bioc_packages %in% installed.packages()
+if(any(!.inst)) {
+  if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+  BiocManager::install(.bioc_packages[!.inst], ask = F)
+}
 
-sapply(c(.cran_packages,.bioc_packages, .github_packages), require, character.only = TRUE)
+sapply(c(.cran_packages,.bioc_packages), require, character.only = TRUE)
 
-#Load helper functions 
+# Github packages
+devtools::install_github("alexpiper/taxreturn")
+library(taxreturn)
+devtools::install_github("alexpiper/seqateurs")
+library(seqateurs)
+
+#Source internal functions
 source('R/helper_functions.R')
 source('R/BDTT.R')
 options(stringsAsFactors = FALSE)
-
 ```
 
 
 
-### Read in phyloseq and Summarise taxonomic assignment
+## Make Phyloseq object
+
+Following taxonomic assignment, the sequence table and taxonomic table are merged into a single phyloseq object alongside the sample info csv.
+
+We then make a plot to evaluate the effectiveness of taxonomic assignment to each rank
+
+```{r create PS, eval = FALSE}
+seqtab.nochim <- readRDS("output/rds/seqtab_final.rds")
+tax_plus <- readRDS("output/rds/tax_RDP_final.rds") 
+fitGTR <- readRDS("output/rds/phytree.rds") 
+
+#Load sample information (Put all collection and geographic distances here?)
+## ---- samdat ----
+samdf <- read_csv("sample_data/Sample_info.csv")  %>%
+  dplyr::filter(!duplicated(SampleID)) %>%
+  dplyr::rename_all(funs( stringr::str_replace_all(., '\\ ', '_')) )
+
+# Flag replicated samples
+samdf <- samdf %>%
+  dplyr::mutate(replicated = Sample_Name %in% (samdf %>% group_by(Sample_Name) %>% 
+                                                 add_count() %>%
+                                           filter(n >1) %>% 
+                                           pull(Sample_Name))) %>%
+  separate(Collection, into= c("Lat", "Long"), sep=" ", remove = TRUE) %>%
+  separate(Lat, paste("lat",c("d","m","s"), sep="_")) %>%
+  separate(Long, paste("long",c("d","m","s"), sep="_" )) %>%
+  mutate_at(vars(starts_with("lat")), .funs=as.numeric) %>%
+  mutate_at(vars(starts_with("long")), .funs=as.numeric) %>%
+  mutate(lat=-(lat_d + lat_m/60 + lat_s/60^2),
+            long=long_d + long_m/60 + long_s/60^2) %>%
+  dplyr::select(c("SampleID", "Sample_Name", "seqrun", "psyllid_spp", "psyllid_genus", "psyllid_family", "hostplant_spp","Collection_Date","replicated", "lat", "long")) %>%
+  magrittr::set_rownames(.$SampleID) #Collection
+
+#Display samDF
+head(samdf)
+
+## ---- phyloseq ----
+ps <- phyloseq(tax_table(tax_plus), sample_data(samdf),
+               otu_table(seqtab.nochim, taxa_are_rows = FALSE),
+               phy_tree(fitGTR$tree))
+
+if(nrow(seqtab.nochim) > nrow(sample_data(ps))){warning("Warning: All samples not included in phyloseq object, check sample names match the sample metadata")}
+
+##save phyloseq object
+saveRDS(ps, "output/rds/ps_rdp.rds")
+
+#Output tables of results
+dir.create("output/csv")
+dir.create("output/csv/unfiltered/")
+
+##Export raw csv
+speedyseq::psmelt(ps) %>%
+  write.csv(file = "output/csv/rawdata.csv")
+
+seqateurs::summarise_taxa(ps, "Species", "SampleID") %>%
+  spread(key="SampleID", value="totalRA") %>%
+  write.csv(file = "output/csv/unfiltered/spp_sum.csv")
+
+seqateurs::summarise_taxa(ps, "Genus", "SampleID") %>%
+  spread(key="SampleID", value="totalRA") %>%
+  write.csv(file = "output/csv/unfiltered/gen_sum.csv")
+
+#Output fasta of all ASV's
+seqateurs::ps_to_fasta(ps, "output/all_taxa.fasta", rank="Species")
+```
+
+
+
+### Summarise taxonomic assignment
 
 ```{r sum taxa}
-ps <- readRDS("output/rds/ps_rdp.rds")
-
 #Fraction of reads assigned to each taxonomic rank
 sum_reads <- speedyseq::psmelt(ps) %>%
   gather("Rank","Name",rank_names(ps)) %>%
@@ -66,16 +146,16 @@ Detecting and potentially removing samples outliers (those samples with underlyi
 ```{r sample-removal-identification}
 ## Remove mocks
 rm_mocks <- c("mockA_S51", "MockEven_S193", "Mock_S192", "PCRctrl_S191", "MockStaggered_S194", "PCRctrl_S191", "91_S167")
-nsamples(ps)
-ps0 <- ps %>% subset_samples(!sample_names(ps) %in% rm_mocks) %>% #Remove mocks
-       
-        filter_taxa(function(x) mean(x) > 0, TRUE) #Drop missing taxa from table 
-nsamples(ps0)
+ps0 <- ps %>% 
+  subset_samples(!sample_names(ps) %in% rm_mocks) %>% #Remove mocks
+  filter_taxa(function(x) mean(x) > 0, TRUE) #Drop missing taxa from table 
+
+message((nsamples(ps) - nsamples(ps0)), " outlier samples dropped")
 
 # Format a data table to combine sample summary data with sample variable data
 ss.df <- merge(as.data.frame(sample_data(ps0)), data.frame("ASV" = sample_sums(ps0)), by ="row.names")
 
-# Plot Count of ASVs and read s
+# Plot Count of ASVs and reads
 threshold = 1000
 
 gg.asv.boxplot <- merge(as.data.frame(sample_data(ps0)), data.frame("Reads" = sample_sums(ps0)), by ="row.names") %>%
@@ -94,9 +174,9 @@ gg.rich <- plot_richness(ps0, measures="Observed")
 print(gg.rich)
 
 #Remove all samples under the minimum read threshold 
-ps1 <- prune_samples(sample_sums(ps0)>=threshold, ps0) # 
+ps1 <- prune_samples(sample_sums(ps0)>=threshold, ps0) 
 ps1 <- filter_taxa(ps1, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
-print(paste(nsamples(ps) - nsamples(ps1), " Samples and ", ntaxa(ps) - ntaxa(ps1), " taxa Dropped"))
+message(nsamples(ps) - nsamples(ps1), " Samples and ", ntaxa(ps) - ntaxa(ps1), " taxa under read threshold Dropped")
 ```
 
 
@@ -155,7 +235,6 @@ print(gg.reps)
 
 ## box and whisker plots of pairwise similarity between reps, species, species~hostplant
 ps.reps
-
 
 # Distance between replicates
 samples <- unique(sample_data(ps.reps)$Sample.Name)
@@ -322,6 +401,7 @@ philr phylogenetic transform is based on balances (binary partitions) along an e
 
 ## Figure 1 - Community Diversity
 
+Perhaps use a more traditional estimator such as picante to just get it done
 Dendrogram and bar plots
 
 Merge species, arrange microbiome by phylogeny, try the mantel tests on the merged data as well (but the seperate is probs more statistically better)
@@ -724,6 +804,7 @@ gg.tree <- ggtree(treelist) + facet_wrap(~.id, scale="free", nrow=1) + theme_tre
 Betas=BDTT(similarity_slices = slices, tree = phy_tree(ps2), sampleOTUs = t(otu_table(ps2)), metrics=c("Bray","Jaccard","Aitchison","Philr", "Unifrac", "WUnifrac"), zeroes="pseudo", parallel=FALSE, quiet=FALSE)
 ```
 
+
 ### Prepare distance matrices
 ```{r prepare distances}
 ## Make distance matrices
@@ -758,19 +839,6 @@ plant.dist <- read_csv("sample_data/plant_distance.csv") %>%
   #dplyr::select(one_of(colnames(as.matrix(comm.dist)))) %>%
   as.matrix()
 
-# Spatial distance
-envData <- read.csv("sample_data/Sample_info.csv", header=TRUE)  %>%
-  dplyr::filter(!duplicated(SampleID)) %>%
-  set_rownames(.$SampleID) %>%
-  separate(Collection, into= c("Lat", "Long"), sep=" ", remove = FALSE) %>%
-  separate(Lat, paste("lat",c("d","m","s"), sep="_") ) %>%
-  separate(Long, paste("long",c("d","m","s"), sep="_" ) ) %>%
-  mutate_at(vars(-SampleID, -psyllid_spp), funs(as.numeric)) %>%
-  mutate(lat=-(lat_d + lat_m/60 + lat_s/60^2),
-            long=long_d + long_m/60 + long_s/60^2) %>%
-  dplyr::select(SampleID, psyllid_spp, lat, long) %>%
-  column_to_rownames("SampleID") %>%
-  drop_na()
 
 #Make spatial distance matrix
 spat.dist <- spDists(as.matrix(envData %>% dplyr::select(-psyllid_spp)), longlat=TRUE) %>%
@@ -830,6 +898,8 @@ gg.adonis <- ggplot(StatsRes, aes(y=R2, x=similarity_slices, colour=predictors, 
   facet_wrap(~metric)
 
 ```
+
+
 
 ### Mantel tests
 ```{r Mantel} 
