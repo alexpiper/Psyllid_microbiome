@@ -47,7 +47,7 @@ We then make a plot to evaluate the effectiveness of taxonomic assignment to eac
 
 ```{r create PS, eval = FALSE}
 seqtab_final <- readRDS("output/rds/seqtab_final.rds")
-tax <- readRDS("output/rds/tax_RDP_final.rds") 
+tax <- readRDS("output/rds/tax_IdTaxaExact.rds") 
 fitGTR <- readRDS("output/rds/phytree.rds") 
 
 #Load sample information (Put all collection and geographic distances here?)
@@ -80,7 +80,7 @@ ps <- phyloseq(tax_table(tax), sample_data(samdf),
                otu_table(seqtab_final, taxa_are_rows = FALSE),
                phy_tree(fitGTR$tree))
 
-if(nrow(seqtab.nochim) > nrow(sample_data(ps))){warning("Warning: All samples not included in phyloseq object, check sample names match the sample metadata")}
+if(nrow(seqtab_final) > nrow(sample_data(ps))){warning("Warning: All samples not included in phyloseq object, check sample names match the sample metadata")}
 
 ##save phyloseq object
 saveRDS(ps, "output/rds/ps.rds")
