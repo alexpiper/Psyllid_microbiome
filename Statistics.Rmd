@@ -39,8 +39,6 @@ source('R/BDTT.R')
 options(stringsAsFactors = FALSE)
 ```
 
-
-
 ## Make Phyloseq object
 
 Following taxonomic assignment, the sequence table and taxonomic table are merged into a single phyloseq object alongside the sample info csv.
@@ -48,8 +46,8 @@ Following taxonomic assignment, the sequence table and taxonomic table are merge
 We then make a plot to evaluate the effectiveness of taxonomic assignment to each rank
 
 ```{r create PS, eval = FALSE}
-seqtab.nochim <- readRDS("output/rds/seqtab_final.rds")
-tax_plus <- readRDS("output/rds/tax_RDP_final.rds") 
+seqtab_final <- readRDS("output/rds/seqtab_final.rds")
+tax <- readRDS("output/rds/tax_RDP_final.rds") 
 fitGTR <- readRDS("output/rds/phytree.rds") 
 
 #Load sample information (Put all collection and geographic distances here?)
@@ -78,14 +76,14 @@ samdf <- samdf %>%
 head(samdf)
 
 ## ---- phyloseq ----
-ps <- phyloseq(tax_table(tax_plus), sample_data(samdf),
-               otu_table(seqtab.nochim, taxa_are_rows = FALSE),
+ps <- phyloseq(tax_table(tax), sample_data(samdf),
+               otu_table(seqtab_final, taxa_are_rows = FALSE),
                phy_tree(fitGTR$tree))
 
 if(nrow(seqtab.nochim) > nrow(sample_data(ps))){warning("Warning: All samples not included in phyloseq object, check sample names match the sample metadata")}
 
 ##save phyloseq object
-saveRDS(ps, "output/rds/ps_rdp.rds")
+saveRDS(ps, "output/rds/ps.rds")
 
 #Output tables of results
 dir.create("output/csv")
@@ -95,18 +93,17 @@ dir.create("output/csv/unfiltered/")
 speedyseq::psmelt(ps) %>%
   write.csv(file = "output/csv/rawdata.csv")
 
-seqateurs::summarise_taxa(ps, "Species", "SampleID") %>%
+seqateurs::summarise_taxa(ps, "species", "SampleID") %>%
   spread(key="SampleID", value="totalRA") %>%
   write.csv(file = "output/csv/unfiltered/spp_sum.csv")
 
-seqateurs::summarise_taxa(ps, "Genus", "SampleID") %>%
+seqateurs::summarise_taxa(ps, "genus", "SampleID") %>%
   spread(key="SampleID", value="totalRA") %>%
   write.csv(file = "output/csv/unfiltered/gen_sum.csv")
 
 #Output fasta of all ASV's
-seqateurs::ps_to_fasta(ps, "output/all_taxa.fasta", rank="Species")
+seqateurs::ps_to_fasta(ps, "output/all_taxa.fasta", rank="species")
 ```
-
 
 
 ### Summarise taxonomic assignment

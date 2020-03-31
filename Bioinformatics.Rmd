@@ -255,8 +255,6 @@ print(filtered_out)
 
 ```
 
-
-
 # Sequence processing
 
 ## Infer sequence variants for each run
@@ -293,13 +291,13 @@ for (i in seq(along=runs)){
   dadaFs <- dada(filtFs, err=errF, multithread=TRUE, pool="pseudo")
   dadaRs <- dada(filtRs, err=errR, multithread=TRUE, pool="pseudo")
  
-  mergers <- mergePairs(dadaFs, filtFs, dadaRs, filtRs, verbose=TRUE, minOverlap = 20)
+  mergers <- mergePairs(dadaFs, filtFs, dadaRs, filtRs, verbose=TRUE, minOverlap = 20, trimOverhang = TRUE )
   
 # Construct sequence table
 
-seqtab <- makeSequenceTable(mergers)
+  seqtab <- makeSequenceTable(mergers)
 
-saveRDS(seqtab, paste0(path,"/seqtab.rds")) # CHANGE ME to where you want sequence table saved
+ saveRDS(seqtab, paste0("output/rds/", runs[i], "_seqtab.rds"))
 }
 ```
 
@@ -309,23 +307,12 @@ Now that the sequence tables are created for each run, they need to be merged in
 
 
 ```{r merge runs and remove chimeras}
-runs <- dir("data/", pattern="run_")
-stlist <- vector()
-
-for (i in seq(along=runs)){
-  path <- paste0("data/",runs[i],"/trimmed/" )
-  seqs <- list.files(path, pattern="seqtab.rds", full.names = TRUE)
-  
-  assign(paste("st", i, sep = ""),readRDS(seqs))
-  stlist <- append(stlist, paste("st", i, sep = ""), after=length(seqs))
-}
-
-st.all <- mergeSequenceTables(st1, st2, st3)
+seqtabs <- list.files("output/rds/", pattern="seqtab.rds", full.names = TRUE)
+st.all <- mergeSequenceTables(tables=seqtabs)
 
 #Test collapsed
 #st.all <- collapseNoMismatch(st.all, minOverlap = 20, orderBy = "abundance",
 #                                   vec = TRUE, verbose = TRUE)
-
 
 #Remove chimeras
 seqtab.nochim <- removeBimeraDenovo(st.all, method="consensus", multithread=TRUE, verbose=TRUE)
@@ -336,11 +323,8 @@ print(paste(sum(seqtab.nochim)/sum(st.all),"of the abundance remaining after chi
 #Check complexity
 hist(seqComplexity(seqtab.nochim), 100)
 
-
 #Look at seqlengths
 plot(table(nchar(getSequences(seqtab.nochim))))
-
-backup <- seqtab.nochim
 
 #cut to expected size
 seqtab.nochim <- seqtab.nochim[,nchar(colnames(seqtab.nochim)) %in% 400:435]
@@ -360,143 +344,98 @@ saveRDS(seqtab.nochim, "output/rds/seqtab_final.rds") # CHANGE ME to where you w
 
 ```
 
-# Assign taxonomy 
-
-
-
-Do a search for carsonella in each of these, and perhaps just do an asignment with the different datasets
+# Assign taxonomy with IDTAXA
 
 We will use the IDTAXA algorithm of Murali et al 2018 - https://doi.org/10.1186/s40168-018-0521-5
 
-This requires training on a curated reference database - The pre-trained file can be found in the reference folder, alternatively see the taxreturn scripts to curate a reference database and train a new classifier.
-
 Folllowing assignment with IDTAXA, we will also use exact matching with a reference database to assign more sequences (including the synthetic positive controls) to species level
 
-### Assign Taxonomy using RDP
-
-```{r assign taxonomy}
-seqtab.nochim <- readRDS("output/rds/seqtab_final.rds")
-
-# Assign Kingdom:Genus taxonomy using RDP classifier
-tax <- assignTaxonomy(seqtab.nochim, "reference/silva_v132_symbionts_trainset_trimmed.fa.gz", multithread=TRUE, minBoot=60, outputBootstraps=FALSE)
-colnames(tax) <- c("Root", "Phylum", "Class", "Order", "Family", "Genus")
-
-##add species to taxtable using exact matching
-tax_plus <- addSpecies(tax, "reference/silva_species_assignment_v132.fa.gz", allowMultiple=TRUE)
-
-##join genus and species name in species rank column - need to make this part of addspecies
-sptrue <- !is.na(tax_plus[,7])
-tax_plus[sptrue,7] <- paste(tax_plus[sptrue,6],tax_plus[sptrue,7], sep=" ")
-
-tax_plus <- propagate_tax(tax_plus,from="Phylum")
-
-#add Genus_SPP
-#for(col in seq(7,ncol(tax_plus))) { 
-# propagate <- is.na(tax_plus[,col]) & !is.na(tax_plus[,col-1])
-#  tax_plus[propagate,col:ncol(tax_plus)] <-  "spp."
-#}
-
-#Check Output
-taxa.print <- tax_plus # Removing sequence rownames for display only
-rownames(taxa.print) <- NULL
-head(taxa.print)
-
-
-# Write taxonomy table to disk
-saveRDS(tax_plus, "output/rds/tax_RDP_final.rds") 
-```
-
-
-##Assign taxonomy with IDTAXA
-
-Do assigntaxonomy with the full length IDTAXA silva databse
-
-then do assign species with the one supplemented with the hall et al etc data
+supplement with the hall et al etc data?
 
 ```{r IDTAXA}
-seqtab.nochim <- readRDS("output/rds/seqtab_final.rds")
+seqtab_final <- readRDS("output/rds/seqtab_final.rds")
 
-#trainingSet <- readRDS("reference/SILVA_SSU_r132_March2018.RData")
-load("C:/Users/ap0y/Dropbox/workprojects/PHD/Metabarcoding/Psyllid_microbiome/reference/SILVA_SSU_r132_March2018.RData")
-dna <- DNAStringSet(getSequences(seqtab.nochim)) # Create a DNAStringSet from the ASVs
+# Load trainingset
+load("reference/SILVA_SSU_r138_2019.RData")
 
-##Decide on threshold
-ids <- IdTaxa(dna, trainingSet, processors=1, threshold = 60, verbose=TRUE)  
+# Create a DNAStringSet from the ASVs
+dna <- DNAStringSet(getSequences(seqtab_final)) 
 
-#delete existing file
-cat("",file="idtaxa.csv")
-for (i in 1:length(ids)){
- lines <- as.data.frame(t(cbind(ids[[i]]$taxon,ids[[i]]$confidence)))
- rownames(lines) <- c("taxa","confidence")
-write.table(lines,file="idtaxa.csv",sep=",",append=TRUE, col.names=FALSE)
-}
+# Assign taxonomy
+ids <- IdTaxa(dna, trainingSet, processors=12, threshold = 60, verbose=TRUE)  
 
-ranks <-  c("Kingdom", "Phylum","Class", "Order", "Family", "Genus","Species") # ranks of interest
+# Output plot of ids
+pdf(paste0("output/idtaxa.pdf"), width = 11, height = 8 , paper="a4r")
+  plot(ids)
+try(dev.off(), silent=TRUE)
+
 #Convert the output object of class "Taxa" to a matrix analogous to the output from assignTaxonomy
+ranks <- ids[[1]]$rank # ranks of interest
 tax <- t(sapply(ids, function(x) {
-        taxa <- x$taxon
-        taxa[startsWith(taxa, "unclassified_")] <- NA
-        taxa
-}))
-
-library(stringi)
-tax <- stri_list2matrix(lapply(tax, unlist), byrow=TRUE, fill=NA)
-
-#Add sequences and column names to matrix
-colnames(tax) <- ranks; rownames(tax) <- getSequences(seqtab.nochim)
-
-#Subset to remove the root rank
-tax <- subset(tax, select=c("Kingdom", "Phylum","Class", "Order", "Family", "Genus","Species"))
-
-#Propagate high order ranks to unassigned ASV's
-tax <- propagate_tax(tax,from="Phylum") 
-
-#Check Output
-taxa.print <- tax # Removing sequence rownames for display only
-rownames(taxa.print) <- NULL
-head(taxa.print)
+    taxa <- paste0(x$taxon,"_", x$confidence)
+    taxa[startsWith(taxa, "unclassified_")] <- NA
+    taxa
+  })) %>%
+  purrr::map(unlist) %>%
+  stringi::stri_list2matrix(byrow=TRUE, fill=NA) %>%
+  magrittr::set_colnames(ranks) %>%
+  magrittr::set_rownames(getSequences(seqtab_final)) %>%
+  as.data.frame()  %T>%
+  write.csv("output/idtaxa_results.csv") %>%  #Write out logfile with confidence levels
+  mutate_all(str_replace,pattern="(?:.(?!_))+$", replacement="") %>%
+  #taxreturn::propagate_tax(from="Phylum") %>% #Propagate high order ranks to unassigned ASV'
+  magrittr::set_rownames(getSequences(seqtab_final)) %>%
+  as.matrix()
 
 # Write taxonomy table to disk
-saveRDS(tax, "tax_IdTaxa.rds") 
+saveRDS(tax, "output/rds/tax_IdTaxa.rds") 
 
-#tax <- readRDS("output/rds/tax_IdTaxa.rds") 
+#Add species using exact matching
+exact <- assignSpecies(seqtab_final, "reference/silva_species_assignment_v138.fa.gz", allowMultiple =TRUE, tryRC = TRUE, verbose = FALSE)
 
-#Add missed species using exact matching
+exact <- exact %>%
+  as.data.frame(stringsAsFactors=FALSE) %>%
+  rownames_to_column("otu") %>%
+  mutate(species =  case_when(!is.na(Species) ~  paste0(Genus,"_",Species)))
 
-#
-exact <- assignSpecies(seqtab.nochim, "reference/silva_v132_symbionts_species.fa.gz", allowMultiple = TRUE, tryRC = TRUE,
-  n = 100, verbose = FALSE)
-
-exact <- exact %>% 
-  as.tibble() %>%
-  mutate(binomial =  case_when(!is.na(Species) ~  paste0(Genus,"_",Species)))
-
-
-exact <- exact %>% 
-  as_tibble() %>%
-  mutate(binomial =  case_when(!is.na(Species) ~  paste0(Genus,"_",Species)))
-
-
-#merge together
-#For exact where Species is not NA, replace tax$Species where Species contains K__,P__,C__,O__,F__,G__
-pattern <- c("K__","P__","C__","O__","F__","G__")
-for (row in 1:nrow(tax)){
-  if   (str_detect(tax[row,7], paste(pattern, collapse="|")) && !is.na(exact$binomial[row]) == TRUE ) {
-  tax[row,7] <- exact$binomial[row]
+#merge together and propagate tax
+propagate_tax <- function(tax, colstart = 2) {
+  col.prefix <- substr(colnames(tax), 1, 1)
+  for (col in seq(colstart, ncol(tax))) {
+    prop <- is.na(tax[, col]) & !is.na(tax[, col - 1])
+    newtax <- tax[prop, col - 1]
+    needs.prefix <- !grepl("^[A-z]__", newtax)
+    newtax[needs.prefix] <- paste(col.prefix[col - 1], newtax[needs.prefix], sep = "__")
+    tax[prop, col] <- newtax
   }
+  tax
 }
 
-# Write taxonomy table to disk
-saveRDS(tax, "tax_IdTaxaExact.rds") 
+tax_exact <- tax %>%
+  as.data.frame(stringsAsFactors=FALSE) %>%
+  rownames_to_column("otu") %>%
+  left_join(exact %>% select(otu, species), by="otu") %>%
+  magrittr::set_rownames(.$otu) %>%
+  select(-otu) %>%
+  propagate_tax(colstart=3) %>% #Propagate high order ranks to unassigned ASV'
+  as.matrix()
 
+
+# Write taxonomy table to disk
+saveRDS(tax_exact, "output/rds/tax_IdTaxaExact.rds") 
 ```
 
 ## Create phylogenetic tree
 
-```{r phylogenetic tree}
-seqtab.nochim <- readRDS("output/rds/seqtab_final.rds")
+would be better to use the SINA algorithm for this, as its recommended in the BDTT papers
+https://github.com/epruesse/SINA
 
-seqs <- getSequences(seqtab.nochim)
+see paper: https://www.nature.com/articles/ncomms14319#Sec12
+
+```{r phylogenetic tree}
+seqtab_final <- readRDS("output/rds/seqtab_final.rds")
+
+seqs <- getSequences(seqtab_final)
 names(seqs) <- seqs # This propagates to the tip labels of the tree
 alignment <- AlignSeqs(DNAStringSet(seqs), anchor=NA)
 
@@ -515,7 +454,6 @@ detach("package:phangorn", unload=TRUE)
 
 # Write taxonomy table to disk
 saveRDS(fitGTR, "output/rds/phytree.rds") 
-
 ```
 
 # Sessioninfo
