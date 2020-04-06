@@ -62,7 +62,7 @@ makeblastdb("training_set.138_SSURef.fa.gz")
 ## BLAST top hit distribution
 
 
-```{ r blast}
+```{r blast}
 # read in seqs
 seqtab <- readRDS("seqtab_final.rds")
 seqs <- insect::char2dna(colnames(seqtab))
