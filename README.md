@@ -2,7 +2,7 @@
 
 This repository hosts the R based reproducible workflow that performed the analyses presented for the manuscript: Martoni et al
 
-The reproducible workflow to conduct the analyses is seperated into 2 components, firstly the [bioinformatic](https://alexpiper.github.io/HemipteraMetabarcodingMS/hemiptera_metabarcoding.html) processing of sequencing reads, and then the [statistical](https://alexpiper.github.io/HemipteraMetabarcodingMS/hemiptera_metabarcoding.html) analyses.
+The reproducible workflow to conduct the analyses is seperated into 2 components, firstly the [bioinformatic](https://alexpiper.github.io/Psyllid_microbiome/Bioinformatics.html) processing of sequencing reads, and then the [statistical](https://alexpiper.github.io/Psyllid_microbiome/Statistics.html) analyses.
 
 The input sequencing data are not included in the repository for size reasons, and are instead available from the SRA under accession: PENDING. However RDS files holding intermediate data objects such as the OTU and taxonomy tables suitable for performing the analyses are contained inside the output directory.
 
