@@ -504,34 +504,9 @@ phylosim <- phyloSim(tree = pruned.tree, method = "all", nsim = 100, reps = 99)
 plot.phylosim(phylosim, what = "pval", stacked.methods = TRUE)	
 ```	
 
-## MCMCGLM
-Would be better to integrate this with a phylogenetic glmm - see mcmc.OTU package or mcmcGLMM
-
-Guide to calculating lambda using mcmcglmm - http://www.mpcm-evolution.com/practice/online-practical-material-chapter-11/chapter-11-1-simple-model-mcmcglmm
-
-
-```{r mcmc glmm}
-library(ape)
-library(MCMCglmm)
-phylo <- pruned.tree
-data <- dat
-head(data)
-
-inv.phylo<-inverseA(pruned.tree, nodes="ALL")
-
-
-prior<-list(G=list(G1=list(V=1,nu=0.02)),R=list(V=1,nu=0.02))
-  
-model_simple<-MCMCglmm(phen~cofactor, random=~phylo, 
-  family="gaussian", ginverse=list(phylo=inv.phylo$Ainv) ,prior=prior,
-  data=data, nitt=5000000, burnin=1000, thin=500)
-
-summary(model_simple)
-```
-
 # Beta diversity
 
-### Figure 1 
+### Barplot
 
 Merge species, arrange microbiome by phylogeny, try the mantel tests on the merged data as well (but the seperate is probs more statistically better)
 
@@ -603,7 +578,6 @@ gg.spp <- as_tibble(sample_data(ps2)) %>%
   geom_tile() +
   coord_flip() + theme_void() +
   scale_fill_distiller(palette = "Reds", direction=1)
-        
 
 Fig1 + gg.spp 
   
@@ -619,21 +593,20 @@ grid.draw(gt) # plot with grid draw
 
 ```
 
-## Phylosymbiosis
-
 ## PCA plot
 ```{r}
 
 
 ```
 
+## Phylosymbiosis
 
 ### Prepare distance matrices
 ```{r prepare distances}
-#Filter to those in ps2 
+#Filter to those in ps2 - shouldnt need to do this as we are filterign later!
 samples <- sample_names(ps2)
 
-## Make distance matrices (cophenetic vs dist,nodes)
+## Psyllid phylogeny cophenetic distance matrix
 phylo.dist <- cophenetic(pruned.tree) %>%
   as.data.frame() %>%
   rownames_to_column("psyllid_spp.x") %>%
@@ -657,7 +630,7 @@ phylo.dist <- cophenetic(pruned.tree) %>%
   dplyr::select(-Sample_Name.x)%>%
   as.matrix()
 
-# COI Genetic distance
+# COI Genetic distance matrix
 coi.dist <- read_csv("sample_data/genetic_distance.csv", col_names = TRUE) %>%
   column_to_rownames("SampleID") 
 coi.dist[upper.tri(coi.dist)] <- 0
@@ -674,7 +647,7 @@ coi.dist <- coi.dist %>%
   dplyr::select(one_of(samples)) %>%
   as.matrix()
 
-# Hostplant distance
+# Hostplant genetic distance matrix
 plant.dist <- read_csv("sample_data/plant_distance.csv") %>%
   dplyr::select(-one_of("X1", "Host plants")) %>%
   column_to_rownames("SampleID") %>%
@@ -687,8 +660,7 @@ plant.dist <- read_csv("sample_data/plant_distance.csv") %>%
   dplyr::select(one_of(samples))%>%
   as.matrix()
 
-
-#Make spatial distance matrix
+# Spatial distance matrix
 envData <- sample_data(ps2) %>%
   as_tibble() %>%
   dplyr::select(Sample_Name, lat, long) %>%
@@ -715,8 +687,6 @@ Partial mantel test
 Heirarchial clustering, robinson foulds, matching cluster
 
 The dendrogram approach first produces a hierarchical dendrogram depicting microbiota beta diversity using the UPGMA. It then quantifies the match between the microbial dendrogram and the host phylogeny using the normalized Robinson-Foulds metric. Significance is based on 999 permutations of host tip label phylogeny. Note that this is different from the original dendrogram-based approach that uses random phylogenies with the same numbers of tips as null expectations. However, the two null models gave nearly exactly the same results (Fig. S8), so we present only the tip-shuffling null model in the main text. T
-
-
 see: https://github.com/FloMazel/Phylosymbiosis-Ecological-model
 
 http://www.phytools.org/static.help/multiRF.html
@@ -731,7 +701,7 @@ otutab_n0 <- as.matrix(zCompositions::cmultRepl(otutab, method="CZM", output="pr
 #Root phylogenetic tree
 phy_tree(ps2) <- multi2di(phy_tree(ps2))
 
-#Calculate distances
+#Calculate different distance metrics
 metrics <- c("Bray", "Jaccard", "Aitchison", "Unifrac", "WUnifrac") # "Philr"
 distlist <- vector("list", length=length(metrics))
 names(distlist) <- metrics
@@ -757,7 +727,7 @@ adonis_results <- distlist %>%
 })  %>%
   bind_rows(.id="dist")
 
-# Mantel & partial Mantel tests
+# Matrix correlations
 #only use samples present in all
 samples <- rownames(otu_table(ps2))
 samples <- samples[(samples %in% colnames(phylo.dist)) &
@@ -765,73 +735,7 @@ samples <- samples[(samples %in% colnames(phylo.dist)) &
                               (samples %in% colnames(plant.dist)) &
                               (samples %in% colnames(spat.dist))]
 
-pmantel_results <- distlist %>%
-  map(function(x){
-    run_pm(x, dists=dists, samples=samples)
-    
-  }) %>%
-  bind_rows(.id="dist") 
-
-mantel_results <- distlist %>%
-  map(function(x) {
-    bind_rows(
-    mantel(x[samples, samples], phylo.dist[samples, samples])[c("statistic","signif", "permutations")],
-    mantel(x[samples, samples], coi.dist[samples, samples])[c("statistic","signif", "permutations")],
-    mantel(x[samples, samples], plant.dist[samples, samples])[c("statistic","signif", "permutations")],
-    mantel(x[samples, samples], spat.dist[samples, samples])[c("statistic","signif", "permutations")]
-    )
-})  %>%
-  bind_rows(.id="dist") %>%
-      group_by(dist) %>% 
-      mutate(dist2 = c("phylo.dist","coi.dist","plant.dist", "spat.dist"))
-
-# Partial Mantel tests
-mantel_dists <-  c("phylo.dist","coi.dist","plant.dist", "spat.dist")
-pm_dists <- expand_grid(dist1 = c("phylo.dist","coi.dist", "plant.dist", "spat.dist"), dist2=c("phylo.dist","plant.dist", "spat.dist")) %>%
-  filter(!dist1==dist2)
-
-# get a type argument here? if type == mantel, do mantel with dist1, if type = partial.mantel, do pm with dist1 + dist2
-
-run_mantel <- function(matrix, dists, samples, type="mantel"){
-  if(type=="mantel" && class(dists)=="character"){
-    dists <- enframe(dists) %>% dplyr::rename(dist1 = value)
-  } else if (type=="partial" && class(dists)=="character"){
-    message("Expanding all possible combinations for partial mantel")
-    dists <- expand_grid(dist1 = dists, dist2=dists) %>%
-        filter(!dist1==dist2)
-  }
-  if(type=="mantel"){
-    out <- dists %>% 
-    split(rownames(.)) %>%
-    purrr::map(function(y){
-      as.data.frame(mantel(matrix[samples, samples],
-                           get(y$dist1)[samples, samples]
-                           )[c("statistic","signif", "permutations")]) %>%
-        mutate(dist1 = y$dist1, type="mantel") 
-    })%>%
-    bind_rows()
-  }else if (type=="partial"){
-  out <- dists %>% 
-    split(rownames(.)) %>%
-    purrr::map(function(y){
-      as.data.frame(mantel.partial(matrix[samples, samples],
-                            get(y$dist1)[samples, samples], 
-                            get(y$dist2)[samples,samples]
-                            )[c("statistic","signif", "permutations")]) %>%
-        mutate(dist1 = y$dist1, dist2=y$dist2, type="partial_mantel") 
-    }) %>%
-    bind_rows()
-  }
-  return(out)
-}
-
-pmantel_results <- distlist %>%
-  map(function(x){
-    run_mantel(x, dists=c("phylo.dist","coi.dist","plant.dist", "spat.dist"),
-               samples=samples, type="partial")
-  }) %>%
-  bind_rows(.id="dist") 
-
+# Mantel test
 mantel_results <- distlist %>%
   map(function(x){
     run_mantel(x, dists=c("phylo.dist","coi.dist","plant.dist", "spat.dist"),
@@ -839,27 +743,92 @@ mantel_results <- distlist %>%
   }) %>%
   bind_rows(.id="dist") 
 
-
 # Partial Mantel Test
+pmantel_results <- distlist %>%
+  map(function(x){
+    run_mantel(x, dists=c("phylo.dist","coi.dist","plant.dist", "spat.dist"),
+               samples=samples, type="partial")
+  }) %>%
+  bind_rows(.id="dist") 
 
 # Robinson foulds metric
 
+# Write out results as CSV
 ```
 
+### Without Entero
+```{r phylosymbiosis}
+## TRY WITHOUT ENTERO
+ps2_noent <- ps2 %>%
+ subset_taxa(family  != "Enterobacteriaceae") %>%
+ filter_taxa(function(x) mean(x) > 0, TRUE)#Drop missing taxa from table
+ps2_noent <- prune_samples(sample_sums(ps2_noent) >0 , ps2_noent)
 
-PCA plot
-Tests of association
-ddpcoa coloured by relevant covariate. Report results of mantel tests Robinson foulds etc. Then follow this up with the BDTT Analysis with just partial mantels 
+# Get OTU tables
+otutab <- otu_table(ps2_noent)
+#Impute zeroes for compositional distances
+otutab_n0 <- as.matrix(zCompositions::cmultRepl(otutab, method="CZM", output="prop", suppress.print=quiet))
+#Root phylogenetic tree
+phy_tree(ps2_noent) <- multi2di(phy_tree(ps2_noent))
 
-### BDTT Partial mantel
+#Calculate different distance metrics
+metrics <- c("Bray", "Jaccard", "Aitchison", "Unifrac", "WUnifrac") # "Philr"
+distlist <- vector("list", length=length(metrics))
+names(distlist) <- metrics
+
+distlist$Jaccard <- as.matrix(vegdist(otutab, method="jac",binary = T))
+distlist$Bray <- as.matrix(vegdist(otutab, method="bray"))
+distlist$Aitchison <- as.matrix(vegdist(CoDaSeq::codaSeq.clr(otutab_n0), method="euclidean"))
+#distlist$Philr <- as.matrix(vegdist(philr::philr(otutab_n0, phy_tree(ps2_noent),
+#                                                part.weights='enorm.x.gm.counts',
+#                                                ilr.weights='blw.sqrt'), method="euclidean"))
+distlist$Unifrac <- as.matrix(phyloseq::UniFrac(ps2_noent, weighted=FALSE, parallel = TRUE))
+distlist$WUnifrac <- as.matrix(phyloseq::UniFrac(ps2_noent, weighted=TRUE, parallel = parallel))
+
+# Adonis test
+metadata <- sample_data(ps2_noent) %>%
+  as_data_frame()
+adonis_results <- distlist %>%
+  map(function(x) {
+    bind_rows(
+    broom::tidy(adonis(x~psyllid_spp, method="euclidean", data=metadata)$aov.tab) %>% dplyr::slice(1),
+    broom::tidy(adonis(x~hostplant_spp, method="euclidean", data=metadata)$aov.tab)%>% dplyr::slice(1)
+    )
+})  %>%
+  bind_rows(.id="dist")
+
+# Matrix correlations
+#only use samples present in all
+samples <- rownames(otu_table(ps2_noent))
+samples <- samples[(samples %in% colnames(phylo.dist)) &
+                              (samples %in% colnames(coi.dist))  &
+                              (samples %in% colnames(plant.dist)) &
+                              (samples %in% colnames(spat.dist))]
+
+# Mantel test
+mantel_results <- distlist %>%
+  map(function(x){
+    run_mantel(x, dists=c("phylo.dist","coi.dist","plant.dist", "spat.dist"),
+               samples=samples, type="mantel")
+  }) %>%
+  bind_rows(.id="dist") 
+
+# Partial Mantel Test
+pmantel_results <- distlist %>%
+  map(function(x){
+    run_mantel(x, dists=c("phylo.dist","coi.dist","plant.dist", "spat.dist"),
+               samples=samples, type="partial")
+  }) %>%
+  bind_rows(.id="dist") 
+
+# Robinson foulds metric
+
+# Write out results as CSV
+```
+
+### BDTT
 
 ```{r timeslice}
-## TRY WITHOUT ENTERO
-#ps2 <- ps2 %>%
-#  subset_taxa(Family  != "Enterobacteriaceae") %>%
-#  filter_taxa(function(x) mean(x) > 0, TRUE)#Drop missing taxa from table
-#
-ps2 <- prune_samples(sample_sums(ps2) >0 , ps2)
 #Look at depth categories in tree
 hist(get_all_node_depths(phy_tree(ps2)))
 
@@ -875,71 +844,31 @@ class(treelist) <- "multiPhylo"
 names(treelist) <- paste0("Timeslice = ",slices)
 gg.tree <- ggtree(treelist) + facet_wrap(~.id, scale="free", nrow=1) + theme_tree2()
 
-Betas <- BDTT(ps2, slices, metrics=c("Bray", "Jaccard", "Aitchison", "Philr", "Unifrac", "WUnifrac"), zeroes="Impute", cores=1, quiet=FALSE)
+Betas <- BDTT(ps2, slices, metrics=c("Bray", "Aitchison", "Philr"), zeroes="Impute", cores=1, quiet=FALSE) #"Unifrac", "WUnifrac"
 
-# Partial mantel 
+# Matrix correlations
+#only use samples present in all
 samples <- rownames(otu_table(ps2))
-dists <- expand_grid(dist1 = c("phylo.dist","coi.dist", "plant.dist", "spat.dist"), dist2=c("phylo.dist","plant.dist", "spat.dist")) %>%
-  filter(!dist1==dist2)
-PMlist_distances <- vector("list", length=length(dists))
+samples <- samples[(samples %in% colnames(phylo.dist)) &
+                              (samples %in% colnames(coi.dist))  &
+                              (samples %in% colnames(plant.dist)) &
+                              (samples %in% colnames(spat.dist))]
 
-for (d in 1:nrow(dists)){
-  test.dist <- get(dists$dist1[d])
-  control.dist <- get(dists$dist2[d])
-  
-  samples_to_use <- samples[samples %in% colnames(as.matrix(test.dist))]
-  samples_to_use <- samples_to_use[samples_to_use %in% colnames(as.matrix(control.dist))]
-  
-  PMlist <- vector("list", length=length(slices))
-  for (i in 1:length(slices)){
-    
-    nslice <- as.character(slices[i])
-    print(paste0(nslice, " for ",dists$dist1[d], " ~ ", dists$dist2[d]))
-    #Jac
-    PM_jac <- mantel.partial(Betas[nslice, "Jaccard", samples_to_use, samples_to_use],
-                         test.dist[samples_to_use, samples_to_use],
-                          control.dist[samples_to_use, samples_to_use])
-    
-    #Bray
-    PM_bray <- mantel.partial(Betas[nslice,"Bray",samples_to_use,samples_to_use],
-                         test.dist[samples_to_use,samples_to_use],
-                         control.dist[samples_to_use,samples_to_use])
-    #Aitch
-    PM_aitch <- mantel.partial(Betas[nslice,"Aitchison",samples_to_use,samples_to_use], 
-                         test.dist[samples_to_use,samples_to_use], 
-                         control.dist[samples_to_use,samples_to_use])
-    #Philr
-    PM_philr <- mantel.partial(Betas[nslice,"Philr",samples_to_use,samples_to_use], 
-                         test.dist[samples_to_use,samples_to_use], 
-                         control.dist[samples_to_use,samples_to_use])
-    #Unifrac
-    PM_unifrac <- mantel.partial(Betas[nslice,"Unifrac",samples_to_use,samples_to_use], 
-                         test.dist[samples_to_use,samples_to_use], 
-                         control.dist[samples_to_use,samples_to_use])
-    #Weighted Unifrac
-    PM_wunifrac <- mantel.partial(Betas[nslice,"WUnifrac",samples_to_use,samples_to_use], 
-                         test.dist[samples_to_use,samples_to_use], 
-                         control.dist[samples_to_use,samples_to_use])
-    PMlist[[i]] <- tribble(
-      ~metric, ~stat, ~signif,
-      "Jaccard (Qualitative)", PM_jac$statistic, PM_jac$signif,
-      "Bray (Quantitative)", PM_bray$statistic, PM_bray$signif,
-      "Aitchison (Quantitative, Compositional)", PM_aitch$statistic, PM_aitch$signif,
-      "PhilR (Quantitative, Phylogenetic, Compositional)", PM_philr$statistic, PM_philr$signif,
-      "Unifrac (Qualitative, Phylogenetic)", PM_unifrac$statistic, PM_unifrac$signif,
-      "Weighted Unifrac (Quantitative, Phylogenetic)", PM_wunifrac$statistic, PM_wunifrac$signif
-    ) %>%
-      mutate(dist1=dists$dist1[d], dist2=dists$dist2[d], slice=slices[i])
-    }
-  PMlist_distances[[d]] <- bind_rows(PMlist)
-}
+# MANTEL
+BTDD_mantel <- Betas %>%
+  map_depth(.depth=2, function(x){
+    run_mantel(x, dists=c("phylo.dist","coi.dist","plant.dist", "spat.dist"),
+               samples=samples, type="mantel")
+  }) %>%
+  map(bind_rows,.id="metric") %>%
+  bind_rows(.id="slice")
 
 
-gg.pmantel <- bind_rows(PMlist_distances) %>%
-  mutate(Comparison = paste0("microbe~",dist1,"~",dist2)) %>%
-  ggplot(aes(y=stat, x=slice, colour=Comparison, group=factor(Comparison)))+ 
+gg.mantel <- BTDD_mantel %>%
+  mutate(Comparison = paste0("microbe~", dist1)) %>%
+  ggplot(aes(y=statistic, x=slice, colour=Comparison, group=factor(Comparison)))+ 
   geom_line(linetype="dashed") +
-  geom_line(data=bind_rows(PMlist_distances) %>% mutate(Comparison = paste0("microbe~",dist1,"~",dist2)) %>% mutate(stat = case_when (signif > 0.01 ~ as.double(NA), signif < 0.01 ~ stat)), linetype="solid") +
+  geom_line(data=BTDD_mantel %>% mutate(Comparison = paste0("microbe~",dist1)) %>% mutate(statistic = case_when (signif > 0.01 ~ as.double(NA), signif < 0.01 ~ statistic)), linetype="solid") +
   geom_hline(yintercept=0) +
   facet_wrap(~metric) +
      #theme_classic2()   +
@@ -948,10 +877,37 @@ gg.pmantel <- bind_rows(PMlist_distances) %>%
            strip.background = element_rect(fill = "grey92", 
                                            colour = "black", size = 1)
      )  + scale_color_brewer(palette="Paired")
+
+gg.mantel 
+
+# Partial Mantel
+BTDD_pm <- Betas %>%
+  map_depth(.depth=2, function(x){
+    run_mantel(x, dists=c("phylo.dist","coi.dist","plant.dist", "spat.dist"),
+               samples=samples, type="partial")
+  }) %>%
+  map(bind_rows,.id="dist") %>%
+  bind_rows(.id="metric")
+
+gg.pmantel <- BTDD_pm %>%
+  mutate(Comparison = paste0("microbe~",dist1,"~",dist2)) %>%
+  ggplot(aes(y=statistic, x=slice, colour=Comparison, group=factor(Comparison)))+ 
+  geom_line(linetype="dashed") +
+  geom_line(data=BTDD_pm %>% mutate(Comparison = paste0("microbe~",dist1,"~",dist2)) %>% mutate(statistic = case_when (signif > 0.01 ~ as.double(NA), signif < 0.01 ~ statistic)), linetype="solid") +
+  geom_hline(yintercept=0) +
+  facet_wrap(~metric) +
+     #theme_classic2()   +
+     theme(legend.position = "right",
+           panel.grid.major.y = element_line(colour="grey", size=0.5, linetype="dashed"),
+           strip.background = element_rect(fill = "grey92", 
+                                           colour = "black", size = 1)
+     )  + scale_color_brewer(palette="Paired")
+
+gg.pmantel
 ```
 
 # Cophylogeny
-
+Due to the association with close branches we looked for patterns of cophylogeny
 
 ## Psyllid hostplant cophylogeny
 

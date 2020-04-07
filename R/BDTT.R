@@ -65,9 +65,9 @@ BDTT <- function(ps, slices, metrics=c("Bray","Jaccard","Aitchison","Philr"), ze
       WUnifrac <- as.matrix(phyloseq::UniFrac(ps_new, weighted=TRUE, parallel = parallel))
       if(!quiet) {message("Unweighted Unifrac distance complete")}
     }
-    # Abind only those that are in metrics
-    AllBetas <- abind(lapply(metrics, get, envir=sys.frame(sys.parent(0))), along = 0)
-    dimnames(AllBetas)[[1]] <- metrics
+    # Abind only those that are in metrics - Do i have to abind?
+    AllBetas <- lapply(metrics, get, envir=sys.frame(sys.parent(0)))
+    names(AllBetas) <- metrics
     out <- AllBetas
     return(out)
   }
@@ -85,15 +85,14 @@ BDTT <- function(ps, slices, metrics=c("Bray","Jaccard","Aitchison","Philr"), ze
       cores <- parallel::makeCluster(cores)
       junk <- parallel::clusterEvalQ(cores, sapply(c("phyloseq","stringr",
                                                      "philr", "zCompositions",
-                                                     "CoDaSeq",
-                                                     "abind", "vegan", "ape"),
+                                                     "CoDaSeq", "vegan", "ape"),
                                                    require, character.only = TRUE)) # Discard result
       Betas <- parallel::parLapply(cores, slices, getBDTT, ps=ps, metrics=metrics, zeroes=zeroes, parallel = FALSE, quiet=quiet)
       parallel::stopCluster(cores)
     }
   }
   names(Betas) <- slices
-  out <- do.call(function(...){abind(..., along=0)}, Betas)
+  out <- Betas
   return(out)
 }
 
