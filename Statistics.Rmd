@@ -1,18 +1,54 @@
 ---
-title: "Psyllid microbiome Statistics"
+title: "Psyllid microbiome - Statistics"
 author: "Alexander Piper"
-date: "14/08/2019"
-output: html_document
+date: "07/04/2020"
+output:
+  html_document:
+    highlighter: null
+    theme: "flatly"
+    code_download: true
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    df_print: paged
+  pdf_document: default
 editor_options: 
   chunk_output_type: console
 ---
 
-## Load packages 
+```{r setup, include=FALSE}
+# Knitr global setup - change eval to true to run code
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE, eval=FALSE, message=FALSE, error=FALSE,fig.show = "hold", fig.keep = "all")
+opts_chunk$set(dev = 'png')
+```
+
+# Load packages 
 
 ```{r install & Load packages} 
 #Set required packages
-.cran_packages <- c("tidyverse", "patchwork", "vegan", "seqinr", "viridis", "ape", "sp", "data.table", "RColorBrewer", "ggtree", "castor", "abind", "Matrix", "minpack.lm", "Hmisc", "data.tree", "entropy", "picante", "MCMCglmm", "phylosignal", "adephylo")
-.bioc_packages <- c("dada2", "phyloseq", "DECIPHER","Biostrings","ShortRead", "microbiome","philr", "ALDEx2")
+.cran_packages <- c("tidyverse", 
+                    "patchwork", 
+                    "vegan", 
+                    "seqinr",
+                    "ape", 
+                    "sp",
+                    "data.table", 
+                    "RColorBrewer",
+                    "ggtree", 
+                    "castor", 
+                    "picante", 
+                    "MCMCglmm", 
+                    "phylosignal", 
+                    "adephylo")
+.bioc_packages <- c("dada2",
+                    "phyloseq", 
+                    "DECIPHER",
+                    "Biostrings",
+                    "ShortRead", 
+                    "philr",
+                    "ALDEx2")
 
 .inst <- .cran_packages %in% installed.packages()
 if(any(!.inst)) {
@@ -46,7 +82,7 @@ source('R/phylosymbiosis.R')
 options(stringsAsFactors = FALSE)
 ```
 
-## Make Phyloseq object
+# Make Phyloseq object
 
 Following taxonomic assignment, the sequence table and taxonomic table are merged into a single phyloseq object alongside the sample info csv.
 
@@ -135,11 +171,7 @@ print(sum_otu)
 ```
 
 
-# Curate with LULU
-
-Need to fix ps_to_fasta - Allow writing of asv sequences as names
-
-Need to allow blast to take in
+## Curate with LULU
 
 ```{r LULU}
 library(lulu)
@@ -757,7 +789,7 @@ pmantel_results <- distlist %>%
 ```
 
 ### Without Entero
-```{r phylosymbiosis}
+```{r phylosymbiosis no entero}
 ## TRY WITHOUT ENTERO
 ps2_noent <- ps2 %>%
  subset_taxa(family  != "Enterobacteriaceae") %>%

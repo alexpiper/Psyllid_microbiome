@@ -1,8 +1,20 @@
 ---
-title: "Reference DB"
+title: "Psyllid Microbiome - Reference DB"
 author: "Alexander Piper"
-date: "10/11/2019"
-output: html_document
+date: "07/04/2020"
+output:
+  html_document:
+    highlighter: null
+    theme: "flatly"
+    code_download: true
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    df_print: paged
+  pdf_document: default
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}

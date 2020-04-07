@@ -1,61 +1,76 @@
 ---
-title: "Psyllid microbiome Bioinformatics"
+title: "Psyllid microbiome - Bioinformatics"
 author: "Alexander Piper"
-date: "14/08/2019"
-output: html_notebook
+date: "07/04/2020"
+output:
+  html_document:
+    highlighter: null
+    theme: "flatly"
+    code_download: true
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    df_print: paged
+  pdf_document: default
+editor_options: 
+  chunk_output_type: console
 ---
 
 
 ```{r setup, include=FALSE}
 # Knitr global setup - change eval to true to run code
-
 library(knitr)
 knitr::opts_chunk$set(echo = TRUE, eval=FALSE, message=FALSE,error=FALSE,fig.show = "hold", fig.keep = "all")
-opts_knit$set(root.dir = 'C:/Users/ap0y/Dropbox/workprojects/Agriculture Victoria/Psyllid_microbiome')
-setwd("C:/Users/ap0y/Dropbox/workprojects/PHD/Metabarcoding/Psyllid_microbiome")
 opts_chunk$set(dev = 'png')
 ```
 
-## Load packages 
+# Load packages 
 
 ```{r install & Load packages} 
 #Set required packages
-.cran_packages <- c("ggplot2", "gridExtra", "tidyverse", "scales", "stringdist", "patchwork", "vegan", "ggpubr", "seqinr", "viridis","ape", "data.table", "RColorBrewer")
-.bioc_packages <- c("dada2", "phyloseq", "DECIPHER","Biostrings","ShortRead","psadd","microbiome","philr")
-#.github_packages <- c("metacal", "taxreturn", "piperline","speedyseq")
+.cran_packages <- c("ggplot2", 
+                    "gridExtra",
+                    "tidyverse", 
+                    "scales", 
+                    "stringdist", 
+                    "patchwork",
+                    "seqinr",
+                    "viridis", 
+                    "ape", 
+                    "data.table",
+                    "RColorBrewer")
+.bioc_packages <- c("dada2",
+                    "phyloseq", 
+                    "DECIPHER",
+                    "Biostrings",
+                    "ShortRead")
 
-#.inst <- .cran_packages %in% installed.packages()
-#if(any(!.inst)) {
-#   install.packages(.cran_packages[!.inst])
-#}
-#.inst <- .bioc_packages %in% installed.packages()
-#if(any(!.inst)) {
-#  if (!requireNamespace("BiocManager", quietly = TRUE))
-#    install.packages("BiocManager")
-#  BiocManager::install(.bioc_packages[!.inst], ask = F)
-#}
-#
+.inst <- .cran_packages %in% installed.packages()
+if(any(!.inst)) {
+   install.packages(.cran_packages[!.inst])
+}
+.inst <- .bioc_packages %in% installed.packages()
+if(any(!.inst)) {
+  if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+  BiocManager::install(.bioc_packages[!.inst], ask = F)
+}
+
 #Load all packages
 sapply(c(.cran_packages,.bioc_packages), require, character.only = TRUE)
 
 #Load helper functions 
-source('R/helper_functions.R')
-
-#devtools::install_github("benjjneb/dada2")
-#devtools::install_github("mikemc/speedyseq")
-#devtools::install_github("alexpiper/taxreturn")
-#library(taxreturn)
-
+devtools::install_github("alexpiper/seqateurs")
+library(seqateurs)
 options(stringsAsFactors = FALSE)
-
 ```
 
 # Quality Control
 
 ## Split files by seqrun
-```{r}
+```{r Split files}
 samdf <- read.csv("sample_data/sample_info.csv")
-
 run1 <- samdf %>%
   filter(seqrun==1) %>%
   pull(SampleID) %>%
@@ -73,12 +88,10 @@ run3 <- samdf %>%
   pull(SampleID) %>%
   as.character()
 write_lines(run3,path="Run3.txt")
-
 ```
 
 
 ```{bash split files}
-
 mkdir run_1
 cat Run1.txt | while read i; do
 payload=$(ls | grep $i)
@@ -108,18 +121,13 @@ run_1 - @M01895:3:000000000-AFED3:1:1101:11856:1005 1:N:0:89
 run_2 - @M00598:140:000000000-ALTW6:1:1104:15177:9425 2:N:0:120
 run_3 - @M00933:9:000000000-BFR4B:1:1101:13542:1780 1:N:0:86
 
-
 ## Sequence quality control
-
-```{r Pooling of libraries}
+```{r QC}
 library(ShortRead)
-
 runs <- dir("data/", pattern="run_")
 
 for (i in seq(along=runs)){
-path <- paste0("data/",runs[i]) # CHANGE ME to the directory containing your demultiplexed forward-read fastq files
-
-  #path <- paste0("data/",runs[i])
+path <- paste0("data/", runs[i])
 
 #Plot number of reads
 dat <- as.data.frame(countLines(dirPath=path, pattern=".fastq")) %>%
@@ -128,7 +136,6 @@ dat <- as.data.frame(countLines(dirPath=path, pattern=".fastq")) %>%
   filter(str_detect(Sample,"R1"))
 
 #Plot pooling
-
 gg.pooling <- ggplot(data=dat, aes(x=Sample,y=Reads),stat="identity") + 
   geom_bar(aes(fill=Reads),stat="identity")  + 
   scale_fill_viridis(name = "Reads", begin=0.1) + 
@@ -143,7 +150,6 @@ plot(gg.pooling)
 }
 ```
 
-
 ## Trim primers
 
 DADA2 requires Non-biological nucleotides i.e. primers, adapters, linkers, etc to be removed. Prior to begining this workflow, samples were demultiplexed and illumina adapters were removed by the MiSeq software, however primer sequences still remain in the reads and must be removed prior to use with the DADA2 algorithm.
@@ -156,38 +162,30 @@ All reads were trimmed to 300bp, then primers were removed. All reads for which 
 
 ```{r trim primers,message=FALSE}
 #Install bbmap
-#bbmap_install()
-
-#Problem - maxlength is removing run 2 - Why tf is this over 300bp reads??
+seqateurs::bbmap_install()
 
 #Loop over runs - Maxlength set to remove any untrimmed reads
 runs <- dir("data/", pattern="run_")
 
 for (i in seq(along=runs)){
-path <- paste0("data/",runs[i]) # CHANGE ME to the directory containing your demultiplexed forward-read fastq files
-
-#Trim forward primers - Set a maxlength to remove all those that werent trimemd
-fastqFs <- sort(list.files(path, pattern="_R1", full.names = TRUE))
-fastqRs <- sort(list.files(path, pattern="_R2_", full.names = TRUE))
-
-bbtools_trim(install="bin/bbmap", fwd=fastqFs,rev=fastqRs, primers=c("CCTACGGGNGGCWGCAG","GACTACHVGGGTATCTAATCC"), copyundefined=TRUE, outpath="trimmed",ktrim="l", ordered=TRUE,mink=FALSE, hdist=2, overwrite=TRUE, samelength=TRUE, forcetrimright = 300, maxlength = 285)
+  path <- paste0("data/",runs[i])
+  
+  #Trim forward primers - Set a maxlength to remove all those that werent trimemd
+  fastqFs <- sort(list.files(path, pattern="_R1", full.names = TRUE))
+  fastqRs <- sort(list.files(path, pattern="_R2_", full.names = TRUE))
+  
+  bbtools_trim(install="bin/bbmap", fwd=fastqFs,rev=fastqRs, primers=c("CCTACGGGNGGCWGCAG","GACTACHVGGGTATCTAATCC"), copyundefined=TRUE, outpath="trimmed",ktrim="l", ordered=TRUE, mink=FALSE, hdist=2, overwrite=TRUE, samelength=TRUE, forcetrimright = 300, maxlength = 285)
 }
-
 ```
 
 ## Plot read quality & lengths
 
-Note - something is going wierd with run 3
-
-Run2 reverse, most reads drop off early
-
-Run1 reversse are pretty awful, drop below Q20 at about 200
-```{r QA plot, eval = TRUE, cache= TRUE}
+```{r QA plot}
 runs <- dir("data/", pattern="run_")
 readcounts <- vector("list", length=length(runs))
 
 for (i in seq(along=runs)){
- path <- paste0("data/",runs[i],"/trimmed" )# CHANGE ME to the directory containing your demultiplexed forward-read fastq files
+ path <- paste0("data/",runs[i],"/trimmed" )
 
   filtFs <- sort(list.files(path, pattern="_R1_", full.names = TRUE))
   filtRs <- sort(list.files(path, pattern="_R2_", full.names = TRUE))
@@ -202,7 +200,6 @@ for (i in seq(along=runs)){
   
   #Get lengths
   readcounts[[i]] <- cbind(width(readFastq(file.path(path, fastqFs))), width(readFastq(file.path(path, fastqRs))))
-
 }
 ```
 
@@ -223,8 +220,8 @@ filtered_out <- vector("list", length=length(runs))
 readlengths <- vector("list", length=length(runs))
 
 for (i in 1:length(runs)){
-  path <- paste0("data/",runs[i],"/trimmed/") # CHANGE ME to the directory containing your demultiplexed forward-read fastq files
-  filtpath <- file.path(path, "filtered") # Filtered forward files go into the path/filtered/ subdirectory
+  path <- paste0("data/",runs[i],"/trimmed/") 
+  filtpath <- file.path(path, "filtered")
   dir.create(filtpath)
   fastqFs <- sort(list.files(path, pattern="R1_001.*"))
   fastqRs <- sort(list.files(path, pattern="R2_001.*"))
@@ -250,9 +247,7 @@ for (i in 1:length(runs)){
   #Get lengths post filter
   readlengths[[i]] <- cbind(width(readFastq(file.path(filtFs))), width(readFastq(file.path(filtRs))))
 }
-  
 print(filtered_out)
-
 ```
 
 # Sequence processing
@@ -270,15 +265,13 @@ runs <- dir("data/", pattern="run_")
 set.seed(100)
 
 for (i in seq(along=runs)){
- path <- paste0("data/",runs[i],"/trimmed/" )# CHANGE ME to the directory containing your demultiplexed forward-read fastq files
-  filtpath <- file.path(path, "filtered") # Filtered forward files go into the path/filtered/ subdirectory
+ path <- paste0("data/",runs[i],"/trimmed/" )
+  filtpath <- file.path(path, "filtered")
   
   filtFs <- list.files(filtpath, pattern="R1_001.*", full.names = TRUE)
   filtRs <- list.files(filtpath, pattern="R2_001.*", full.names = TRUE)
   
-    # Learn error rates from samples
-  # nread tells the function how many reads to use in error learning, this can be increased for more accuracy at the expense of runtime
-  
+  # Learn error rates from samples
   errF <- learnErrors(filtFs, multithread=TRUE, randomize=TRUE)
   errR <- learnErrors(filtRs, multithread=TRUE, randomize=TRUE)
   
@@ -287,16 +280,12 @@ for (i in seq(along=runs)){
   print(plotErrors(errR, nominalQ=TRUE)+ ggtitle(paste0(runs[i]," Reverse Reads")))
   
   #Error inference and merger of reads - Using pseudo pooling for increased sensitivity
-
   dadaFs <- dada(filtFs, err=errF, multithread=TRUE, pool="pseudo")
   dadaRs <- dada(filtRs, err=errR, multithread=TRUE, pool="pseudo")
- 
   mergers <- mergePairs(dadaFs, filtFs, dadaRs, filtRs, verbose=TRUE, minOverlap = 20, trimOverhang = TRUE )
   
-# Construct sequence table
-
+  # Construct sequence table
   seqtab <- makeSequenceTable(mergers)
-
  saveRDS(seqtab, paste0("output/rds/", runs[i], "_seqtab.rds"))
 }
 ```
@@ -305,14 +294,9 @@ for (i in seq(along=runs)){
 
 Now that the sequence tables are created for each run, they need to be merged into a larger table representing the entire study. Looking at the length of the sequences, we see some off target amplification. There are 3 large peaks, the first one at 280, second at 402bp, and third at 427. The 427bp peak contains the majority of the sequences and is the expected size, while the 402bp peak contains wolbachia which have a 24bp deletion. We will cut the sequences to between 400 and 450, which should take into account any length variation, and remove the 280bp peak (which is the length of the forward read and most likely artefactual). Following this, chimeric sequences are identified and removed using removeBimeraDenovo
 
-
 ```{r merge runs and remove chimeras}
 seqtabs <- list.files("output/rds/", pattern="seqtab.rds", full.names = TRUE)
 st.all <- mergeSequenceTables(tables=seqtabs)
-
-#Test collapsed
-#st.all <- collapseNoMismatch(st.all, minOverlap = 20, orderBy = "abundance",
-#                                   vec = TRUE, verbose = TRUE)
 
 #Remove chimeras
 seqtab.nochim <- removeBimeraDenovo(st.all, method="consensus", multithread=TRUE, verbose=TRUE)
@@ -340,17 +324,12 @@ rownames(seqtab.nochim) <- rownames(seqtab.nochim) %>%
   pull(SampleID)
 
 dir.create("output/rds/")
-saveRDS(seqtab.nochim, "output/rds/seqtab_final.rds") # CHANGE ME to where you want sequence table saved
-
+saveRDS(seqtab.nochim, "output/rds/seqtab_final.rds")
 ```
 
 # Assign taxonomy with IDTAXA
 
-We will use the IDTAXA algorithm of Murali et al 2018 - https://doi.org/10.1186/s40168-018-0521-5
-
-Folllowing assignment with IDTAXA, we will also use exact matching with a reference database to assign more sequences (including the synthetic positive controls) to species level
-
-supplement with the hall et al etc data?
+We will use the IDTAXA algorithm of Murali et al 2018 - https://doi.org/10.1186/s40168-018-0521-5 Folllowing phylum to genus assignment with IDTAXA, we will also use exact matching with a reference database to assign to species level.
 
 ```{r IDTAXA}
 seqtab_final <- readRDS("output/rds/seqtab_final.rds")
@@ -426,7 +405,6 @@ saveRDS(tax_exact, "output/rds/tax_IdTaxaExact.rds")
 ```
 
 ## Create phylogenetic tree
-
 would be better to use the SINA algorithm for this, as its recommended in the BDTT papers
 https://github.com/epruesse/SINA
 
