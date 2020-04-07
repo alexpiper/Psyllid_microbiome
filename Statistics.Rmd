@@ -42,14 +42,13 @@ library(reltools)
 #Source internal functions
 source('R/helper_functions.R')
 source('R/BDTT.R')
+source('R/phylosymbiosis.R')
 options(stringsAsFactors = FALSE)
 ```
 
 ## Make Phyloseq object
 
 Following taxonomic assignment, the sequence table and taxonomic table are merged into a single phyloseq object alongside the sample info csv.
-
-We then make a plot to evaluate the effectiveness of taxonomic assignment to each rank
 
 ```{r create PS, eval = FALSE}
 seqtab_final <- readRDS("output/rds/seqtab_final.rds")
@@ -175,10 +174,7 @@ message(ntaxa(ps) - ntaxa(ps_curated), " removed by LULU curation")
 
 ```
 
-
-Look at the taxa in the mocks + pcr controls. COuld i use these with decontam?
-
-## Detect and remove outlier Samples
+## Remove outlier Samples
 
 Detecting and potentially removing samples outliers (those samples with underlying data that do not conform to experimental or biological expectations) can be useful for minimizing technical variance. This can be caused by a number of reasons, including low-reads assigned to that sample. In this case we remove all samples below 1000 reads, as these include all samples contributing to lower than usual ASV counts.
 
@@ -533,14 +529,14 @@ model_simple<-MCMCglmm(phen~cofactor, random=~phylo,
 summary(model_simple)
 ```
 
+# Beta diversity
 
-# Figure 1 
+### Figure 1 
 
 Merge species, arrange microbiome by phylogeny, try the mantel tests on the merged data as well (but the seperate is probs more statistically better)
 
 RESULTS: while there were significant differences between psyllid species (see betta results), there were no significant associations with phylogeny
 ```{r Figure 1}
-
 # Merge species for beta diversity
 ps.sppmerged <- ps2 %>%
     merge_samples(group = "psyllid_spp", fun=mean)
@@ -623,33 +619,12 @@ grid.draw(gt) # plot with grid draw
 
 ```
 
-# Phylosymbiosis
+## Phylosymbiosis
 
-### BDTT 
+## PCA plot
+```{r}
 
-```{r timeslice}
-## TRY WITHOUT ENTERO
-#ps2 <- ps2 %>%
-#  subset_taxa(Family  != "Enterobacteriaceae") %>%
-#  filter_taxa(function(x) mean(x) > 0, TRUE)#Drop missing taxa from table
-#
-ps2 <- prune_samples(sample_sums(ps2) >0 , ps2)
-#Look at depth categories in tree
-hist(get_all_node_depths(phy_tree(ps2)))
 
-#Set slices
-slices=seq(0,1.6,0.1)
-
-treelist <- vector("list", length=length(slices))
-for (i in 1:length(slices)){
-  newps <- speedyseq::tree_glom(ps2, resolution = slices[i])
-  treelist[[i]] <- phy_tree(newps)
-}
-class(treelist) <- "multiPhylo"
-names(treelist) <- paste0("Timeslice = ",slices)
-gg.tree <- ggtree(treelist) + facet_wrap(~.id, scale="free", nrow=1) + theme_tree2()
-
-Betas <- BDTT(ps2, slices, metrics=c("Bray", "Jaccard", "Aitchison", "Philr", "Unifrac", "WUnifrac"), zeroes="Impute", cores=1, quiet=FALSE)
 ```
 
 
@@ -734,112 +709,175 @@ spat.dist <- spDists(as.matrix(envData), longlat=TRUE) %>%
   as.matrix()
 ```
 
-### Adonis tests
-```{r Adonis}
-# Construct sequence table
-predictors="psyllid_spp"
-StatsRes=expand.grid(similarity_slices=as.character(slices), predictors=predictors, metric=dimnames(Betas)[[2]])
-StatsRes[["F.Model"]]=StatsRes[["R2"]]=StatsRes[["Pr(>F)"]]=NA
-head(StatsRes)
+Adonis test
+Mantel test
+Partial mantel test
+Heirarchial clustering, robinson foulds, matching cluster
 
-samples <- rownames(otu_table(ps2)) 
+The dendrogram approach first produces a hierarchical dendrogram depicting microbiota beta diversity using the UPGMA. It then quantifies the match between the microbial dendrogram and the host phylogeny using the normalized Robinson-Foulds metric. Significance is based on 999 permutations of host tip label phylogeny. Note that this is different from the original dendrogram-based approach that uses random phylogenies with the same numbers of tips as null expectations. However, the two null models gave nearly exactly the same results (Fig. S8), so we present only the tip-shuffling null model in the main text. T
+
+
+see: https://github.com/FloMazel/Phylosymbiosis-Ecological-model
+
+http://www.phytools.org/static.help/multiRF.html
+
+But also see how this paper has done it with PACO https://www.nature.com/articles/s41467-019-10191-3.pdf Using random subsampling? Then pull out the most associated also file:///C:/Users/ap0y/Dropbox/workprojects/Papers/10.1002_ecy.1955.pdf
+
+```{r phylosymbiosis}
+# Get OTU tables
+otutab <- otu_table(ps2)
+#Impute zeroes for compositional distances
+otutab_n0 <- as.matrix(zCompositions::cmultRepl(otutab, method="CZM", output="prop", suppress.print=quiet))
+#Root phylogenetic tree
+phy_tree(ps2) <- multi2di(phy_tree(ps2))
+
+#Calculate distances
+metrics <- c("Bray", "Jaccard", "Aitchison", "Unifrac", "WUnifrac") # "Philr"
+distlist <- vector("list", length=length(metrics))
+names(distlist) <- metrics
+
+distlist$Jaccard <- as.matrix(vegdist(otutab, method="jac",binary = T))
+distlist$Bray <- as.matrix(vegdist(otutab, method="bray"))
+distlist$Aitchison <- as.matrix(vegdist(CoDaSeq::codaSeq.clr(otutab_n0), method="euclidean"))
+#distlist$Philr <- as.matrix(vegdist(philr::philr(otutab_n0, phy_tree(ps2),
+#                                                part.weights='enorm.x.gm.counts',
+#                                                ilr.weights='blw.sqrt'), method="euclidean"))
+distlist$Unifrac <- as.matrix(phyloseq::UniFrac(ps2, weighted=FALSE, parallel = TRUE))
+distlist$WUnifrac <- as.matrix(phyloseq::UniFrac(ps2, weighted=TRUE, parallel = parallel))
+
+# Adonis test
 metadata <- sample_data(ps2) %>%
   as_data_frame()
+adonis_results <- distlist %>%
+  map(function(x) {
+    bind_rows(
+    broom::tidy(adonis(x~psyllid_spp, method="euclidean", data=metadata)$aov.tab) %>% dplyr::slice(1),
+    broom::tidy(adonis(x~hostplant_spp, method="euclidean", data=metadata)$aov.tab)%>% dplyr::slice(1)
+    )
+})  %>%
+  bind_rows(.id="dist")
 
-# Generalise to work with multiple predictors
-i=1
-for (i in as.character(slices)){
-  #Jaccard
-  res=unlist(adonis(Betas[i,"Jaccard",samples,samples]~ psyllid_spp, method = "euclidean", data = metadata)$aov.tab[1,c(6,5,4)])
-  StatsRes[(StatsRes$metric=="Jaccard")&(StatsRes$similarity_slices==i),4:6]=res
-  #Bray Curtis
-  res=unlist(adonis(Betas[i,"Bray",samples,samples]~ psyllid_spp, method = "euclidean", data = metadata)$aov.tab[1,c(6,5,4)])
-  StatsRes[(StatsRes$metric=="Bray")&(StatsRes$similarity_slices==i),4:6]=res
-  #Aitchison
-  res=unlist(adonis(Betas[i,"Aitchison",samples,samples]~ psyllid_spp, method = "euclidean", data = metadata)$aov.tab[1,c(6,5,4)])
-  StatsRes[(StatsRes$metric=="Aitchison")&(StatsRes$similarity_slices==i),4:6]=res
-  #Philr
-  res=unlist(adonis(Betas[i,"Philr",samples,samples]~ psyllid_spp, method = "euclidean", data = metadata)$aov.tab[1,c(6,5,4)])
-  StatsRes[(StatsRes$metric=="Philr")&(StatsRes$similarity_slices==i),4:6]=res
-  #Unifrac
-  res=unlist(adonis(Betas[i,"Unifrac",samples,samples]~ psyllid_spp, method = "euclidean", data = metadata)$aov.tab[1,c(6,5,4)])
-  StatsRes[(StatsRes$metric=="Unifrac")&(StatsRes$similarity_slices==i),4:6]=res
-  #WUnifrac
-  res=unlist(adonis(Betas[i,"WUnifrac",samples,samples]~ psyllid_spp, method = "euclidean", data = metadata)$aov.tab[1,c(6,5,4)])
-  StatsRes[(StatsRes$metric=="WUnifrac")&(StatsRes$similarity_slices==i),4:6]=res
-}
-
-# Profile for all
-gg.adonis <- ggplot(StatsRes, aes(y=R2, x=similarity_slices, colour=predictors, group=factor(predictors)))+
-  geom_point() +
-  geom_line() +
-  facet_wrap(~metric)
-
-```
-
-### Mantel tests
-```{r Mantel} 
+# Mantel & partial Mantel tests
+#only use samples present in all
 samples <- rownames(otu_table(ps2))
-dists <- c("phylo.dist","coi.dist","plant.dist", "spat.dist")
-mantlist_distances <- vector("list", length=length(dists))
+samples <- samples[(samples %in% colnames(phylo.dist)) &
+                              (samples %in% colnames(coi.dist))  &
+                              (samples %in% colnames(plant.dist)) &
+                              (samples %in% colnames(spat.dist))]
 
-# Generalise these to a function. Get names from the slices object
-
-
-for (d in 1:length(dists)){
-  test.dist <- get(dists[d])
-
-  samples_to_use <- samples[samples %in% colnames(as.matrix(test.dist))]
-  
-  manlist <- vector("list", length=length(slices))
-  for (i in 1:length(slices)){
+pmantel_results <- distlist %>%
+  map(function(x){
+    run_pm(x, dists=dists, samples=samples)
     
-    nslice <- as.character(slices[i])
-    print(paste0(nslice, " for ", dists[d]))
-    #Jac
-    man_jac <- mantel(Betas[nslice,"Jaccard",samples_to_use,samples_to_use], test.dist[samples_to_use,samples_to_use])
-    #Bray
-    man_bray<- mantel(Betas[nslice,"Bray",samples_to_use,samples_to_use], test.dist[samples_to_use,samples_to_use])
-    #Aitch
-    man_aitch <- mantel(Betas[nslice,"Aitchison",samples_to_use,samples_to_use], test.dist[samples_to_use,samples_to_use])
-    #PhilR
-    man_philr <- mantel(Betas[nslice,"Philr",samples_to_use,samples_to_use], test.dist[samples_to_use,samples_to_use])
-    #Unifrac
-    man_unifrac <- mantel(Betas[nslice,"Unifrac",samples_to_use,samples_to_use], test.dist[samples_to_use,samples_to_use])
-    #Weighted Unifrac
-    man_wunifrac <- mantel(Betas[nslice,"WUnifrac",samples_to_use,samples_to_use], test.dist[samples_to_use,samples_to_use])
+  }) %>%
+  bind_rows(.id="dist") 
 
-    manlist[[i]] <- tribble(
-      ~metric, ~stat, ~signif,
-      "Jaccard (Qualitative)", man_jac$statistic, man_jac$signif,
-      "Bray-Curtis(Quantitative)", man_bray$statistic, man_bray$signif,
-      "Aitchison (Quantitative, Compositional)", man_aitch$statistic, man_aitch$signif,
-      "PhilR (Quantitative, Phylogenetic, Compositional)", man_philr$statistic, man_philr$signif,
-      "Unifrac (Qualitative, Phylogenetic)", man_unifrac$statistic, man_unifrac$signif,
-      "Weighted Unifrac (Quantitative, Phylogenetic)", man_wunifrac$statistic, man_wunifrac$signif
-    ) %>%
-      mutate(distance=dists[d], slice=slices[i])
+mantel_results <- distlist %>%
+  map(function(x) {
+    bind_rows(
+    mantel(x[samples, samples], phylo.dist[samples, samples])[c("statistic","signif", "permutations")],
+    mantel(x[samples, samples], coi.dist[samples, samples])[c("statistic","signif", "permutations")],
+    mantel(x[samples, samples], plant.dist[samples, samples])[c("statistic","signif", "permutations")],
+    mantel(x[samples, samples], spat.dist[samples, samples])[c("statistic","signif", "permutations")]
+    )
+})  %>%
+  bind_rows(.id="dist") %>%
+      group_by(dist) %>% 
+      mutate(dist2 = c("phylo.dist","coi.dist","plant.dist", "spat.dist"))
+
+# Partial Mantel tests
+mantel_dists <-  c("phylo.dist","coi.dist","plant.dist", "spat.dist")
+pm_dists <- expand_grid(dist1 = c("phylo.dist","coi.dist", "plant.dist", "spat.dist"), dist2=c("phylo.dist","plant.dist", "spat.dist")) %>%
+  filter(!dist1==dist2)
+
+# get a type argument here? if type == mantel, do mantel with dist1, if type = partial.mantel, do pm with dist1 + dist2
+
+run_mantel <- function(matrix, dists, samples, type="mantel"){
+  if(type=="mantel" && class(dists)=="character"){
+    dists <- enframe(dists) %>% dplyr::rename(dist1 = value)
+  } else if (type=="partial" && class(dists)=="character"){
+    message("Expanding all possible combinations for partial mantel")
+    dists <- expand_grid(dist1 = dists, dist2=dists) %>%
+        filter(!dist1==dist2)
   }
-  mantlist_distances[[d]] <- bind_rows(manlist)
+  if(type=="mantel"){
+    out <- dists %>% 
+    split(rownames(.)) %>%
+    purrr::map(function(y){
+      as.data.frame(mantel(matrix[samples, samples],
+                           get(y$dist1)[samples, samples]
+                           )[c("statistic","signif", "permutations")]) %>%
+        mutate(dist1 = y$dist1, type="mantel") 
+    })%>%
+    bind_rows()
+  }else if (type=="partial"){
+  out <- dists %>% 
+    split(rownames(.)) %>%
+    purrr::map(function(y){
+      as.data.frame(mantel.partial(matrix[samples, samples],
+                            get(y$dist1)[samples, samples], 
+                            get(y$dist2)[samples,samples]
+                            )[c("statistic","signif", "permutations")]) %>%
+        mutate(dist1 = y$dist1, dist2=y$dist2, type="partial_mantel") 
+    }) %>%
+    bind_rows()
+  }
+  return(out)
 }
 
-gg.mantel <- bind_rows(mantlist_distances) %>%
-  mutate(Comparison = paste0("microbe~",distance)) %>%
-  ggplot(aes(y=stat,x=slice, colour=distance, group=factor(distance))) +
-  geom_path(linetype="dashed")+
-  geom_line(data=bind_rows(mantlist_distances) %>% mutate(stat = case_when (signif > 0.01 ~ as.double(NA), signif < 0.01 ~ stat)), linetype="solid") +
-  geom_hline(yintercept=0) +
-  facet_wrap(~metric) +
-     #theme_classic2()   +
-     theme(legend.position = "right",
-           panel.grid.major.y = element_line(colour="grey", size=0.5, linetype="dashed"),
-           strip.background = element_rect(fill = "grey92", 
-                                           colour = "black", size = 1)
-     )  + scale_color_brewer(palette="Paired")
+pmantel_results <- distlist %>%
+  map(function(x){
+    run_mantel(x, dists=c("phylo.dist","coi.dist","plant.dist", "spat.dist"),
+               samples=samples, type="partial")
+  }) %>%
+  bind_rows(.id="dist") 
+
+mantel_results <- distlist %>%
+  map(function(x){
+    run_mantel(x, dists=c("phylo.dist","coi.dist","plant.dist", "spat.dist"),
+               samples=samples, type="mantel")
+  }) %>%
+  bind_rows(.id="dist") 
+
+
+# Partial Mantel Test
+
+# Robinson foulds metric
+
 ```
 
-### Partial mantel tests
-```{r Partial Mantel}
+
+PCA plot
+Tests of association
+ddpcoa coloured by relevant covariate. Report results of mantel tests Robinson foulds etc. Then follow this up with the BDTT Analysis with just partial mantels 
+
+### BDTT Partial mantel
+
+```{r timeslice}
+## TRY WITHOUT ENTERO
+#ps2 <- ps2 %>%
+#  subset_taxa(Family  != "Enterobacteriaceae") %>%
+#  filter_taxa(function(x) mean(x) > 0, TRUE)#Drop missing taxa from table
+#
+ps2 <- prune_samples(sample_sums(ps2) >0 , ps2)
+#Look at depth categories in tree
+hist(get_all_node_depths(phy_tree(ps2)))
+
+#Set slices
+slices=seq(0,1.6,0.1)
+
+treelist <- vector("list", length=length(slices))
+for (i in 1:length(slices)){
+  newps <- speedyseq::tree_glom(ps2, resolution = slices[i])
+  treelist[[i]] <- phy_tree(newps)
+}
+class(treelist) <- "multiPhylo"
+names(treelist) <- paste0("Timeslice = ",slices)
+gg.tree <- ggtree(treelist) + facet_wrap(~.id, scale="free", nrow=1) + theme_tree2()
+
+Betas <- BDTT(ps2, slices, metrics=c("Bray", "Jaccard", "Aitchison", "Philr", "Unifrac", "WUnifrac"), zeroes="Impute", cores=1, quiet=FALSE)
+
+# Partial mantel 
 samples <- rownames(otu_table(ps2))
 dists <- expand_grid(dist1 = c("phylo.dist","coi.dist", "plant.dist", "spat.dist"), dist2=c("phylo.dist","plant.dist", "spat.dist")) %>%
   filter(!dist1==dist2)
@@ -910,72 +948,6 @@ gg.pmantel <- bind_rows(PMlist_distances) %>%
            strip.background = element_rect(fill = "grey92", 
                                            colour = "black", size = 1)
      )  + scale_color_brewer(palette="Paired")
-
-```
-
-### Tree topology comparison
-
-Heirarchial clustering 
-robinson foulds, matching cluster
-
-But also see how this paper has done it with PACO https://www.nature.com/articles/s41467-019-10191-3.pdf Using random subsampling? Then pull out the most associated also file:///C:/Users/ap0y/Dropbox/workprojects/Papers/10.1002_ecy.1955.pdf
-```{r topology comparison}
-samples <- rownames(otu_table(ps2))
-dists <- c("phylo.dist","plant.dist", "spat.dist")
-mantlist_distances <- vector("list", length=length(dists))
-
-for (d in 1:length(dists)){
-  test.dist <- get(dists[d])
-  
-  samples_to_use <- samples[samples %in% colnames(as.matrix(test.dist))]
-  
-  manlist <- vector("list", length=length(slices))
-  for (i in 1:length(slices)){
-    
-    nslice <- as.character(slices[i])
-    #Jac
-    hc <- (as.phylo(hclust(as.dist(Betas[nslice,"Jac",samples_to_use,samples_to_use]), method="ward.D2")))
-    
-    # random tree
-    rtree(length(hc$tip.label), rooted=FALSE)
-    
-    
-    dist.topo(as.phylo(hclust(as.dist(Betas[nslice,"Jac",samples_to_use,samples_to_use]), method="ward.D2"), directed=FALSE),
-              y = as.phylo(hclust(as.dist(test.dist[samples_to_use,samples_to_use]), method="ward.D2")), method = "PH85")
-    
-    dist.topo(as.phylo(hclust(as.dist(Betas[nslice,"Jac",samples_to_use,samples_to_use]), method="ward.D2")),
-              y = as.phylo(hclust(as.dist(test.dist[samples_to_use,samples_to_use]), method="ward.D2")), method = "PH85")
-
-    
-    proc <- protest(monoMDS(Betas[nslice,"Jac",samples_to_use,samples_to_use]), monoMDS(test.dist[samples_to_use,samples_to_use]))
-    proc_jac <- data.frame(metric="Jac", test=dists[d], stat=proc$t0, scale=proc$scale, signif=proc$signif)
-    #Bray
-    proc <- protest(monoMDS(Betas[nslice,"Bray",samples_to_use,samples_to_use]), monoMDS(test.dist[samples_to_use,samples_to_use]))
-    proc_bray <- data.frame(metric="Bray", test=dists[d], stat=proc$t0, scale=proc$scale, signif=proc$signif)
-    #Aitch_psedo
-    proc <- protest(monoMDS(Betas[nslice,"Aitch_pseudo",samples_to_use,samples_to_use]), monoMDS(test.dist[samples_to_use,samples_to_use]))
-    proc_aitch_pseudo <- data.frame(metric="Aitch_pseudo", test=dists[d], stat=proc$t0, scale=proc$scale, signif=proc$signif)
-    #Aitch_rep
-    proc <- protest(monoMDS(Betas[nslice,"Aitch_pseudo",samples_to_use,samples_to_use]), monoMDS(test.dist[samples_to_use,samples_to_use]))
-    proc_aitch_rep <- data.frame(metric="Aitch_rep", test=dists[d], stat=proc$t0, scale=proc$scale, signif=proc$signif)
-    manlist[[i]] <- bind_rows(proc_jac, proc_bray, proc_aitch_pseudo, proc_aitch_rep) %>%
-      mutate(slice=slices[i])
-  }
-  mantlist_distances[[d]] <- bind_rows(manlist)
-}
-
-matrix_stats <- bind_rows(mantlist_distances) %>%
-  mutate(signif_test = case_when(
-    signif < 0.01 ~ TRUE,
-    signif > 0.01 ~ FALSE
-  ))
-gg.mantel <- ggplot(matrix_stats, aes(y=stat,x=slice, colour=test, group=factor(test)))+
-  geom_point(aes(shape=signif_test)) +
-  geom_line()+ 
-  geom_hline(yintercept=0) +
-  facet_wrap(~metric) 
-
-
 ```
 
 # Cophylogeny
