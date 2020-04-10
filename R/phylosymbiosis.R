@@ -1,3 +1,6 @@
+
+# Run mantel --------------------------------------------------------------
+
 run_mantel <- function(matrix, dists, samples, type="mantel"){
   if(type=="mantel" && class(dists)=="character"){
     dists <- enframe(dists) %>% dplyr::rename(dist1 = value)
@@ -31,19 +34,19 @@ run_mantel <- function(matrix, dists, samples, type="mantel"){
   return(out)
 }
 
-# RFmeasures --------------------------------------------------------------
-tree_measures <- function(tree1, tree2, measure="all", runs=99){
-  if(!measure %in% c("all","RobinsonFoulds","PhylogeneticInfoDistance",
-                     "ClusteringInfoDist", "NyeTreeDist",
-                     "MatchingSplitInfoDistance")){
-    stop("Error, invalid distance")
+# compare_trees --------------------------------------------------------------
+compare_trees <- function(tree1, tree2, measure="all", runs=99){
+  availmeasures <- c("RobinsonFoulds","PhylogeneticInfoDistance",
+                    "ClusteringInfoDist", "NyeTreeDist",
+                    "MatchingSplitInfoDistance")
+  if (length (measure)== 1 && measure=="all"){
+    measure <- availmeasures
+  }
+  if(any(!measure %in% availmeasures)){
+    stop("Error, invalid TreeDist measure :, ", measure[!measure %in% availmeasures])
   }
     
-  if (measure=="all"){
-    measure <- c("RobinsonFoulds","PhylogeneticInfoDistance",
-                 "ClusteringInfoDist", "NyeTreeDist",
-                 "MatchingSplitInfoDistance")
-  }
+
   #transform trees
   tree1 <- as.phylo(tree1)
   tree2 <- as.phylo(tree2)
@@ -55,90 +58,93 @@ tree_measures <- function(tree1, tree2, measure="all", runs=99){
     cat("tree2 is rooted. Unrooting tree2.\n")
     tree2 <- unroot(tree2)
   }
-  
-  # Create null models
-  #Shuffle tips ("null model")
+  # Create null model from tree2 by shuffling tips ("taxa.labels")
   nulltree <- vector("list", length=1)
   nulltree[[1]] <- tree2
   nulltree <- lapply(rep(nulltree, runs), tipShuffle)
   class(nulltree) <- "multiPhylo"
-  
-  #new (random) trees ("random model")
-  tips <- as.phylo(tree2)$tip.label
-  randomtree <- rmtree(N=runs,n=length(tips),tip.label = tips)
 
   #Create lists to store objects
   tmp <- vector("list", length=length(measure))
   names(tmp) <- measure
-  #Process observed trees
+
+  #Calculate metrics
   if("RobinsonFoulds" %in% measure){
     obs  <- RobinsonFoulds(tree1, tree2, normalize=TRUE)
     null <- sapply(1:runs, FUN=function(x){RobinsonFoulds(tree1, nulltree[[x]], normalize=TRUE)})
-    rd <- sapply(1:runs, FUN=function(x){RobinsonFoulds(tree1, randomtree[[x]], normalize=TRUE)})
     null.mean <- mean(null)
     null.sd <- sd(null)
-    obs.rank.null <- apply(X = rbind(obs, null), MARGIN = 2, FUN = rank)[1, ]
-    obs.rank.null <- ifelse(is.na(null.mean), NA, obs.rank)
-    rd.mean <- mean(rd)
-    rd.sd <- sd(rd)
-    obs.rank.rd <- apply(X = rbind(obs,rd), MARGIN = 2, FUN = rank)[1, ]
-    obs.rank.rd <- ifelse(is.na(rd.mean), NA, obs.rank)
-    
-    tmp$RobinsonFoulds <- data.frame(obs=obs, obs.rank.null = obs.rank.null,
-                                     null.mean = null.mean, null.sd = null.sd ,
-                                     rd.mean = rd.mean, rd.sd = rd.sd,
-                                     obs.z = 
-                                     obs.p = obs.rank/(runs + ),
-                                     pvalRd = sum(obs > rd)/(runs + 1)) 
-    
-    
-  }
+    obs.rank <- apply(X = rbind(obs, null), MARGIN = 2, FUN = rank)[1, ]
+    obs.rank <- ifelse(is.na(null.mean), NA, obs.rank)
+    tmp$RobinsonFoulds <- data.frame(obs=obs, obs.rank = obs.rank,
+                                     null.mean = null.mean, null.sd = null.sd,
+                                     obs.z = (obs - null.mean)/null.sd,
+                                     obs.p = obs.rank/(runs + 1 )) 
+    }
   if("PhylogeneticInfoDistance" %in% measure){
     obs  <- PhylogeneticInfoDistance(tree1, tree2, normalize=TRUE)
     null <- sapply(1:runs, FUN=function(x){PhylogeneticInfoDistance(tree1, nulltree[[x]], normalize=TRUE)})
-    rd <- sapply(1:runs, FUN=function(x){PhylogeneticInfoDistance(tree1, randomtree[[x]], normalize=TRUE)})
-    tmp$PhylogeneticInfoDistance <- data.frame(stat=obs, pval=sum(obs > null)/(runs + 1), pvalRd = sum(obs > rd)/(runs + 1)) 
+    null.mean <- mean(null)
+    null.sd <- sd(null)
+    obs.rank <- apply(X = rbind(obs, null), MARGIN = 2, FUN = rank)[1, ]
+    obs.rank <- ifelse(is.na(null.mean), NA, obs.rank)
+    tmp$PhylogeneticInfoDistance <- data.frame(obs=obs, obs.rank = obs.rank,
+                                     null.mean = null.mean, null.sd = null.sd,
+                                     obs.z = (obs - null.mean)/null.sd,
+                                     obs.p = obs.rank/(runs + 1 )) 
   }
   if("ClusteringInfoDist" %in% measure){
     obs  <- ClusteringInfoDist(tree1, tree2, normalize=TRUE)
     null <- sapply(1:runs, FUN=function(x){ClusteringInfoDist(tree1, nulltree[[x]], normalize=TRUE)})
-    rd <- sapply(1:runs, FUN=function(x){ClusteringInfoDist(tree1, randomtree[[x]], normalize=TRUE)})
-    tmp$ClusteringInfoDist <- data.frame(stat=obs, pval=sum(obs > null)/(runs + 1), pvalRd = sum(obs > rd)/(runs + 1)) 
+    null.mean <- mean(null)
+    null.sd <- sd(null)
+    obs.rank <- apply(X = rbind(obs, null), MARGIN = 2, FUN = rank)[1, ]
+    obs.rank <- ifelse(is.na(null.mean), NA, obs.rank)
+    tmp$ClusteringInfoDist <- data.frame(obs=obs, obs.rank = obs.rank,
+                                               null.mean = null.mean, null.sd = null.sd,
+                                               obs.z = (obs - null.mean)/null.sd,
+                                               obs.p = obs.rank/(runs + 1 )) 
   }
   if("NyeTreeDist" %in% measure){
     obs  <- 1-NyeTreeSimilarity(tree1, tree2, normalize=TRUE)
     null <- 1-sapply(1:runs, FUN=function(x){NyeTreeSimilarity(tree1, nulltree[[x]], normalize=TRUE)})
-    rd <- 1-sapply(1:runs, FUN=function(x){NyeTreeSimilarity(tree1, randomtree[[x]], normalize=TRUE)})
-    tmp$NyeTreeDist <- data.frame(stat=obs, pval=sum(obs > null)/(runs + 1), pvalRd = sum(obs > rd)/(runs + 1)) 
+    null.mean <- mean(null)
+    null.sd <- sd(null)
+    obs.rank <- apply(X = rbind(obs, null), MARGIN = 2, FUN = rank)[1, ]
+    obs.rank <- ifelse(is.na(null.mean), NA, obs.rank)
+    tmp$NyeTreeDist <- data.frame(obs=obs, obs.rank = obs.rank,
+                                         null.mean = null.mean, null.sd = null.sd,
+                                         obs.z = (obs - null.mean)/null.sd,
+                                         obs.p = obs.rank/(runs + 1 )) 
   }
   if("MatchingSplitInfoDistance" %in% measure){
     obs  <- MatchingSplitInfoDistance(tree1, tree2, normalize=TRUE)
     null <- sapply(1:runs, FUN=function(x){MatchingSplitInfoDistance(tree1, nulltree[[x]], normalize=TRUE)})
-    rd <- sapply(1:runs, FUN=function(x){MatchingSplitInfoDistance(tree1, randomtree[[x]], normalize=TRUE)})
-    tmp$MatchingSplitInfoDistance <- data.frame(stat=obs, pval=sum(obs > null)/(runs + 1), pvalRd = sum(obs > rd)/(runs + 1)) 
+    null.mean <- mean(null)
+    null.sd <- sd(null)
+    obs.rank <- apply(X = rbind(obs, null), MARGIN = 2, FUN = rank)[1, ]
+    obs.rank <- ifelse(is.na(null.mean), NA, obs.rank)
+    tmp$MatchingSplitInfoDistance <- data.frame(obs=obs, obs.rank = obs.rank,
+                                  null.mean = null.mean, null.sd = null.sd,
+                                  obs.z = (obs - null.mean)/null.sd,
+                                  obs.p = obs.rank/(runs + 1 )) 
   }
   out <- bind_rows(tmp, .id="measure")
   return(out)
 }
 
-
-## Try treedist metrics
-tree1  <- hclust(as.dist(spat.dist[samples,samples]), method = "ward.D2") # Average = average
-tree2 <- hclust(as.dist(distlist$Aitchison[samples,samples]), method = "ward.D2")
-runs=100
-set.seed(999)
-
-tree1 <- as.phylo(tree1)
-tree2 <- as.phylo(tree2)
-VisualizeMatching(MatchingSplitInfoDistance,tree1, tree2)
-
-tree_measures(tree1, tree2, runs=99)
-
-# Test with a random tree
-
-nulltree <- shuffleTips(1, tree2)
-tree_measures(tree1, nulltree, runs=99)
-library('TreeDist')
-
-
+# Run tree comparison  --------------------------------------------------------------
+run_tree_comparison <- function(matrix, dists, samples, clust.method = "average", measure="all", runs = 100){
+    dists <- enframe(dists) %>% dplyr::rename(dist1 = value)
+    out <- dists %>% 
+      split(rownames(.)) %>%
+      purrr::map(function(y){
+        tree1  <- as.phylo(hclust(as.dist(get(y$dist1)[samples, samples]), method = clust.method))
+        tree2 <- as.phylo(hclust(as.dist(matrix[samples, samples]), method = clust.method))
+        compare_trees(tree1, tree2, measure=measure, runs=runs) %>%
+          dplyr::mutate(dist = y$dist1)
+      })%>%
+      bind_rows()
+  return(out)
+}
 
