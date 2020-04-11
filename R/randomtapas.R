@@ -60,6 +60,7 @@ trimHS.maxC <- function (N, HS, n, check.unique= FALSE) {
   return(trim.HS)
 }
 # foo 2 of 6.
+
 geo.D <- function (hs, treeH, treeS) {
   # For any trimmed matrix produced with trimHS.maxC, it prunes the host &
   # symbiont phylogenies to conform with the trimmed matrix and computes the
@@ -86,13 +87,6 @@ geo.D <- function (hs, treeH, treeS) {
   return(gd)
 }
 # foo 3 of 6
-
-PACO <- sapply(THS, paco.ss, treeH=TreeH, treeS= TreeS, ei.correct= "sqrt.D",
-               symmetric=TRUE)
-
-treeH=TreeH
-treeS= TreeS
-hs <- THS[[2]]
 
 paco.ss <- function (hs, treeH, treeS, symmetric= FALSE,
                      proc.warns= FALSE, ei.correct= "none") {

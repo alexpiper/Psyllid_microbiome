@@ -94,8 +94,11 @@ fitGTR <- readRDS("output/rds/phytree.rds")
 #Load sample information (Put all collection and geographic distances here?)
 ## ---- samdat ----
 samdf <- read_csv("sample_data/Sample_info.csv")  %>%
-  dplyr::filter(!duplicated(SampleID)) %>%
-  dplyr::rename_all(funs( stringr::str_replace_all(., '\\ ', '_')) )
+  dplyr::rename_all(funs( stringr::str_replace_all(., '\\ ', '_')) ) %>%
+  mutate(psyllid_spp = str_remove(psyllid_spp, "\\."))%>%
+  mutate(hostplant_spp = str_remove(hostplant_spp, "\\."))
+
+write_csv(samdf, "sample_data/Sample_info2.csv")
 
 # Flag replicated samples
 samdf <- samdf %>%
@@ -139,6 +142,43 @@ seqateurs::summarise_taxa(ps, "species", "SampleID") %>%
 seqateurs::summarise_taxa(ps, "genus", "SampleID") %>%
   spread(key="SampleID", value="totalRA") %>%
   write.csv(file = "output/otu_tables/unfiltered/gen_sum.csv")
+```
+
+
+## Read in psyllid phylogeny
+```{R psyllid phylogeny}
+psyllid_tree <- read.tree(text=readLines("sample_data/psyllid_beast_tree.nwk"))
+
+# Match names with alpha diversity
+psyllid_tree$tip.label <- psyllid_tree$tip.label %>%
+  str_squish() %>%
+  str_replace_all(pattern="\\.", replacement=" ") %>%
+  str_replace_all(pattern="Acizzia hakae", replacement="Acizzia hakeae") %>%
+  str_replace_all(pattern="POLLENISLAND", replacement="POLLEN ISLAND") %>%
+  str_replace_all(pattern="Ctenarytaina fuchsiae$", replacement="Ctenarytaina fuchsia A") %>%
+  str_replace_all(pattern="Ctenarytaina fuchsiaeB", replacement="Ctenarytaina fuchsia B") %>%
+  str_replace_all(pattern="Ctenarytaina fuchsiaeC", replacement="Ctenarytaina fuchsia C") %>%
+  str_replace_all(pattern="Ctenarytaina clavata", replacement="Ctenarytaina clavata sp ") %>%
+  str_replace_all(pattern="Ctenarytaina clavata sp $", replacement="Ctenarytaina clavata sp A") %>%
+  str_replace_all(pattern="Ctenarytaina sp$", replacement="Ctenarytaina sp ") %>%
+    str_replace_all(pattern="Ctenarytaina spB", replacement="Ctenarytaina sp B") %>%
+  str_replace_all(pattern="Ctenarytaina unknown", replacement="Ctenarytaina insularis") %>%  
+  str_replace_all(pattern="Psylla apicalis A", replacement="Psylla frodobagginsi") %>%
+  str_replace_all(pattern="Psylla apicalis B", replacement="Psylla apicalis") %>%
+  str_replace_all(pattern="carmichaeliae", replacement="carmichaeliae ") %>%
+  str_replace_all(pattern="Psylla apicalis", replacement="Psylla apicalis ") %>% # Should these be A,B or?
+  str_replace_all(pattern="Trioza sp", replacement="Trioza sp ") %>%
+  str_replace_all(pattern="Trioza acutaB", replacement="Trioza acuta B") %>%
+  str_replace_all(pattern="Trioza gourlay", replacement="Trioza gourlayi") %>%
+  str_replace_all(pattern="BRENDAMAY", replacement="BRENDA MAY") %>%
+  str_replace_all(pattern="PRICES", replacement="PRICES VALLEY") %>% 
+  str_replace_all(pattern="Cryptoneossa triangula", replacement="Cryptoneossa sp") %>% #check which is best
+  str_replace_all(pattern="Anoeconeossa communis", replacement="Anoeconeossa sp") %>%  #same
+  trimws(which="right")
+
+# Subset to only those in sample data
+psyllid_tree$tip.label[!psyllid_tree$tip.label %in% samdf$psyllid_spp]
+pruned.tree <- drop.tip(psyllid_tree, psyllid_tree$tip.label[!psyllid_tree$tip.label %in% samdf$psyllid_spp] )
 ```
 
 ### Summarise taxonomic assignment
@@ -257,6 +297,7 @@ gg.rare
 ps1 <- prune_samples(sample_sums(ps0)>=threshold, ps0) 
 ps1 <- filter_taxa(ps1, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
 message(nsamples(ps) - nsamples(ps1), " Samples and ", ntaxa(ps) - ntaxa(ps1), " taxa under read threshold Dropped")
+
 ```
 
 ## Average dissimilarities
@@ -399,7 +440,7 @@ Tests of community clusterign could be moved later - see: https://www.nature.com
 
 alpha diversity (observed, phylogenetic,  alpha-diversity metrics like Shannon/SImpson etc)
 
-In order to further test this notion and to assess how environmental filtering may differ among host clades, we utilized two ecophylogenetics analyses: mean phylogenetic distance (MPD) and mean nearest taxon distance (MNTD). These tests assess the degree of phylogenetic clustering within each sample (host) relative to a permuted null model. Assuming phylogenetic niche conservatism (i.e., closely related taxa overlap along niche axes), then host diet or gut physiology may select for phylogenetically clustered taxa with overlapping niches, while in the absence of such strong selection, competition via niche conservatism would lead to phylogenetic overdispersion40. Phylogenetic overdispersion may also result from facilitation (i.e., beneficial microbe–microbe interactions), such as when distantly related taxa form consortia to break down complex plant polymers40. MPD is more sensitive to overall patterns of phylogenetic clustering and evenness, while MNTD is more sensitive to patterns at the tree tips41.
+In order to further test this notion and to assess how environmental filtering may differ among host clades, we utilized two ecophylogenetics analyses: mean phylogenetic distance (MPD) and mean nearest taxon distance (MNTD). These tests assess the degree of phylogenetic clustering within each sample (host) relative to a permuted null model. Assuming phylogenetic niche conservatism (i.e., closely related taxa overlap along niche axes), then host diet or gut physiology may select for phylogenetically clustered taxa with overlapping niches, while in the absence of such strong selection, competition via niche conservatism would lead to phylogenetic overdispersion40. Phylogenetic overdispersion may also result from facilitation (i.e., beneficial microbe–microbe interactions), such as when distantly related taxa form consortia to break down complex plant polymers40. MPD is more sensitive to overall patterns of phylogenetic clustering and evenness, while MNTD is more sensitive to patterns at the tree tips31.
 
 ## Alpha diversity metrics
 
@@ -454,7 +495,6 @@ div_table <- sespd %>%
 # Summarise means
 div_table %>%
   summarise_if(is.numeric, mean)
-
 ```
 
 
@@ -465,54 +505,18 @@ Here we calculate the phylogenetic signal in the alpha diversity and community a
 see supplementary 15 - https://static-content.springer.com/esm/art%3A10.1038%2Fs41467-019-10191-3/MediaObjects/41467_2019_10191_MOESM1_ESM.pdf
 
 
-## Read in psyllid phylogeny
-```{R psyllid phylogeny}
-psyllid_tree <- read.tree(text=readLines("sample_data/psyllid_beast_tree.nwk"))
-
-# Match names with alpha diversity
-psyllid_tree$tip.label <- psyllid_tree$tip.label %>%
-  str_replace_all(pattern="\\.", replacement=" ") %>%
-  str_replace_all(pattern="sp$", replacement="sp. ") %>%
-  str_replace_all(pattern="Acizzia hakae", replacement="Acizzia hakeae") %>%
-  str_replace_all(pattern="POLLENISLAND", replacement="POLLEN ISLAND") %>%
-  str_replace_all(pattern="Ctenarytaina fuchsiae$", replacement="Ctenarytaina fuchsia A") %>%
-  str_replace_all(pattern="Ctenarytaina fuchsiaeB", replacement="Ctenarytaina fuchsia B") %>%
-  str_replace_all(pattern="Ctenarytaina fuchsiaeC", replacement="Ctenarytaina fuchsia C") %>%
-  str_replace_all(pattern="Ctenarytaina clavata", replacement="Ctenarytaina clavata sp. ") %>%
-  str_replace_all(pattern="Ctenarytaina clavata sp. $", replacement="Ctenarytaina clavata sp. A") %>%
-  str_replace_all(pattern="Ctenarytaina sp$", replacement="Ctenarytaina sp. ") %>%
-  str_replace_all(pattern="Ctenarytaina unknown", replacement="Ctenarytaina insularis") %>%  
-  str_replace_all(pattern="Psylla apicalis A", replacement="Psylla frodobagginsi") %>%
-  str_replace_all(pattern="Psylla apicalis B", replacement="Psylla apicalis") %>%
-  str_replace_all(pattern="carmichaeliae", replacement="carmichaeliae ") %>%
-  str_replace_all(pattern="Psylla apicalis", replacement="Psylla apicalis ") %>% # Should these be A,B or?
-  str_replace_all(pattern="Trioza sp", replacement="Trioza sp. ") %>%
-  str_replace_all(pattern="Trioza acutaB", replacement="Trioza Acuta B") %>%
-  str_replace_all(pattern="BRENDAMAY", replacement="BRENDA MAY") %>%
-  str_replace_all(pattern="PRICES", replacement="PRICE'S VALLEY") %>%
-  trimws(which="right")
-
-
-# Subset to only those in sample data
-psyllid_tree$tip.label[!psyllid_tree$tip.label %in% sample_data(ps2)$psyllid_spp]
-pruned.tree <- drop.tip(psyllid_tree, psyllid_tree$tip.label[!psyllid_tree$tip.label %in% sample_data(ps2)$psyllid_spp] )
-
-# CHeck which are missing
-psyllid_tree$tip.label[!psyllid_tree$tip.label %in%  pruned.tree$tip.label]
-```
-
 ## Calculate phylogenetic signal
 
 ```{r Phylosignal}
 dat <- div_table  %>%
-  filter(psyllid_spp %in% pruned.tree$tip.label) %>%
+  filter(psyllid_spp %in% pruned.tree$tip.label) %>% #Subset to common 
   group_by(psyllid_spp) %>%
-  select(-Sample_Name) %>%
+  dplyr::select(-Sample_Name) %>%
   summarise_all(mean) %>%
   arrange(match(psyllid_spp, pruned.tree$tip.label)) %>%
   as.data.frame() %>%
   magrittr::set_rownames(.$psyllid_spp) %>%
-  select(-psyllid_spp)
+  dplyr::select(-psyllid_spp)
 
 # Add positive and negative controls
 dat$random <- rnorm(length(dat$alpha), sd = 10) #Random association
@@ -544,97 +548,6 @@ phylosim <- phyloSim(tree = pruned.tree, method = "all", nsim = 100, reps = 99)
 plot.phylosim(phylosim, what = "pval", stacked.methods = TRUE)	
 ```	
 
-# Beta diversity
-
-### Barplot
-
-Merge species, arrange microbiome by phylogeny, try the mantel tests on the merged data as well (but the seperate is probs more statistically better)
-
-RESULTS: while there were significant differences between psyllid species there were no significant associations with phylogeny
-```{r Figure 1}
-# Merge species for beta diversity
-ps.sppmerged <- ps2 %>%
-    merge_samples(group = "psyllid_spp", fun=mean)
-
-#This loses the sample metadata - Need to add it agian
-sample_data(ps.sppmerged) <- sample_data(ps2) %>%
-  filter(!duplicated(psyllid_spp)) %>%
-  column_to_rownames("psyllid_spp")
-
-ps4 <- filter_taxa(ps.sppmerged, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
-
-#Rename taxa
-taxa_names(ps4) <- paste0("SV", seq(ntaxa(ps4)),"-",tax_table(ps4)[,6])
-
-ps4_bar <- #subset_taxa(ps3, !Family == "Enterobacteriaceae") %>%
-            ps4 %>%
-  speedyseq::tax_glom(taxrank = "Order") %>%           # agglomerate at Order level
-  transform_sample_counts(function(x) {x/sum(x)} ) %>% # Transform to rel. abundance
-  speedyseq::psmelt() %>%
-  mutate(plotlabel = Phylum) %>%
-  mutate(plotlabel = case_when(
-    Abundance >= 0.01 & Phylum=="Proteobacteria" ~ paste0(Phylum, " - ", Order), # Change this to whatever taxrank we want
-    Abundance >= 0.01 & !Phylum=="Proteobacteria"~ Phylum ,
-    Abundance < 0.01 ~ "NA"
-    )) %>%
-  dplyr::na_if("NA") %>%
-  select(Sample, plotlabel, Phylum, Order, Abundance)
-
-# Plot them together
-library(ggtree)
-library(treeio)
-p <- ggtree(pruned.tree) + geom_tiplab(align=TRUE) + geom_nodelab(geom='label') +
-    scale_x_continuous(expand=c(0, 0.1)) + theme_tree2()
-
-
-Fig1 <- facet_plot(p, panel='Relative Abundance', data = ps4_bar %>% mutate(id = Sample), geom=ggstance::geom_barh,
-                 mapping=aes(x = Abundance, fill = plotlabel), stat="identity")  + 
-  scale_fill_manual(values=colorRampPalette(brewer.pal(11, "Set1"))(length(unique(ps4_bar$plotlabel))-1), na.value="grey")
-
-
-Fig1 <- facet_plot(Fig1, panel='Species Richness', data = bt_randomdf %>% mutate(id = psyllid_spp),
-                          geom=ggstance::geom_pointrangeh,
-                           mapping=aes(x=Estimates, xmin=Estimates-SE, xmax=Estimates+SE),
-                           stat="identity", size=0.5, colour="#696969") +
-  theme_classic2()   +
-  theme(legend.position = "bottom",
-  panel.grid.major.x = element_line(colour="grey92", size=0.5, linetype="dashed"),
-  strip.background = element_rect(fill = "grey92", 
-                colour = "black", size = 1)
-  )
-
-## Collection_hist
-gg.spp <- as_tibble(sample_data(ps2)) %>%
-  dplyr::rename(label = psyllid_spp) %>%
-  group_by(label) %>%
-  summarise(n_species = n()) %>%
-  left_join(p$data %>%
-  filter(isTip) %>% select(c(label, y))) %>%
-  filter(!is.na(y)) %>%
-  ggplot(aes(x=factor(.$label, levels=.$label[order(.$y)]), y=1, fill=n_species)) +
-  geom_tile() +
-  coord_flip() + theme_void() +
-  scale_fill_distiller(palette = "Reds", direction=1)
-
-Fig1 + gg.spp 
-  
-# Change relative grid sizes
-library(grid)
-library(gtable)
-
-gt = ggplot_gtable(ggplot_build(Fig1))
-gt$layout$l[grep('panel-3', gt$layout$name)] # you want to find the column specific to panel-2
-
-gt$widths[9] = 0.3*gt$widths[9] # reduce width of column 9
-grid.draw(gt) # plot with grid draw
-
-```
-
-## PCA plot
-```{r}
-
-
-```
 
 ## Phylosymbiosis
 
@@ -753,11 +666,7 @@ write_csv(adonis_results, "output/phylosymbiosis/adonis_fulldata.csv")
 
 # Matrix correlations
 #only use samples present in all
-samples <- rownames(otu_table(ps2))
-samples <- samples[(samples %in% colnames(phylo.dist)) &
-                              (samples %in% colnames(coi.dist))  &
-                              (samples %in% colnames(plant.dist)) &
-                              (samples %in% colnames(spat.dist))]
+samples <- Reduce(intersect, list(rownames(otu_table(ps2)), colnames(phylo.dist), colnames(coi.dist), colnames(plant.dist), colnames(spat.dist)))
 
 # Mantel test
 mantel_results <- distlist %>%
@@ -848,11 +757,7 @@ write_csv(adonis_results, "output/phylosymbiosis/adonis_noent.csv")
 
 # Matrix correlations
 #only use samples present in all
-samples <- rownames(otu_table(ps2_noent))
-samples <- samples[(samples %in% colnames(phylo.dist)) &
-                              (samples %in% colnames(coi.dist))  &
-                              (samples %in% colnames(plant.dist)) &
-                              (samples %in% colnames(spat.dist))]
+samples <- Reduce(intersect, list(rownames(otu_table(ps2_noent)), colnames(phylo.dist), colnames(coi.dist), colnames(plant.dist), colnames(spat.dist)))
 
 # Mantel test
 mantel_results <- distlist %>%
@@ -992,19 +897,34 @@ ggtree tanglegrams: https://stackoverflow.com/questions/57161083/coloring-lines-
 
 ```{r PACO}
 library(paco)
+
+# Merge species for beta diversity
+ps.sppmerged <- ps2 %>%
+    merge_samples(group = "psyllid_spp", fun=mean)
+
+#This loses the sample metadata - Need to add it agian
+sample_data(ps.sppmerged) <- sample_data(ps2) %>%
+  filter(!duplicated(psyllid_spp)) %>%
+  magrittr::set_rownames(.$psyllid_spp)
+
+ps3 <- filter_taxa(ps.sppmerged, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
+
+#Rename taxa
+taxa_names(ps3) <- paste0("SV", seq(ntaxa(ps3)),"-",tax_table(ps3)[,8])
+
 #Prepare co-occurance matrix
-otu <- ps2 %>%
-    subset_samples(Sample_Name %in% samples) %>%
+otu <- ps3 %>%
+    subset_samples(sample_names(ps3) %in% pruned.tree$tip.label) %>%
     otu_table %>%
     as.matrix() %>% 
   apply(2, function(x) ifelse(x > 0, 1, 0))
 
 # Get cophenetic distance
-h_dist <- phylo.dist %>% as.matrix
-s_dist <- cophenetic(phy_tree(ps2))
+h_dist <- cophenetic(pruned.tree)
+s_dist <- cophenetic(phy_tree(ps3))
 
 # prepare paco data
-D <- prepare_paco_data(H=h_dist[samples, samples], P=s_dist, HP=otu)
+D <- prepare_paco_data(H=h_dist, P=s_dist, HP=otu)
 # Add pcord
 D <- add_pcoord(D, correction='cailliez')
 
@@ -1012,15 +932,6 @@ D$H_PCo %>% as.vector %>% summary %>% print
 D$P_PCo %>% as.vector %>% summary %>% print
 
 # plot Principal coordinates
-neg_to_pos_eig = function(PCo){
-    min_val = PCo %>% as.vector %>% min
-    print(min_val)
-    if(min_val < 0){
-        PCo = PCo + abs(min_val)
-    }
-    return(PCo)
-}
-
 D$H_PCo <-  neg_to_pos_eig(D$H_PCo)
 D$P_PCo <-  neg_to_pos_eig(D$P_PCo)
 
@@ -1028,13 +939,14 @@ tmp <- D$H_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame
 p_host <- ggplot(tmp, aes(Axis.1, Axis.2)) +
     geom_point() +
     theme_bw() +
-  title("Host PCA")
+  ggtitle("Host PCA")
+#One really to the left is Atmetocranium.myersi
 
 tmp <- D$P_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame
 p_micro <- ggplot(tmp, aes(Axis.1, Axis.2))  +
     geom_point() +
     theme_bw()+
-  title("Microbiome PCA")
+  ggtitle("Microbiome PCA")
     
 plot(p_host + p_micro)
 
@@ -1044,179 +956,37 @@ paco_run <- PACo(D, nperm=9, seed=909, method='quasiswap', symmetric=TRUE) #Syme
 #print overall significance
 print(paco_run$gof)
 
+# Get interaction-specific cophylogenetic contributions using leave-one-out jacknifing
+# whereby one link is removed and the fit reassessed.
+#The contribution of that link is therefore the change in fit whensaid link is removed.
+paco_run <- paco_links(paco_run)
+
 #Get observed residuals of Procrustean superimposition 
 #small residual indicates a link more congruent with a cophylogenetic hypothesis
 paco_residuals <- residuals_paco(paco_run$proc, type = "interaction")
 
-# Get interaction-specific cophylogenetic contributions using jacknifing
-# whereby one link is removed and the fit reassessed.
-#The contribution of that link is therefore the change in fit whensaid link is removed.
-paco_l <- paco_links(paco_run)
-
 # Visualise residuals
-res <- data.frame(res=paco_residuals) %>%
-  rownames_to_column("OTU") %>%
-  separate(OTU, into=c("SampleID", "OTU")) %>%
-  left_join(as.data.frame(tax_table(ps2)) %>%
-              rownames_to_column("OTU"), by="OTU")
-ggplot(res, aes(x=res))+
+res <- data.frame(OTU=names(paco_residuals), values=unname(paco_residuals)) %>%
+  separate(OTU, into=c("Sample_Name", "OTU"), sep="-", extra="merge") %>%
+  left_join(as.data.frame(tax_table(ps3)) %>%
+              rownames_to_column("OTU"), by="OTU") 
+
+ggplot(res, aes(x=values))+
   geom_density(fill='grey70')+
-  #facet_wrap(~Phylum) +
+  facet_wrap(~phylum) +
   theme_bw()+
   xlab('Procrustes residuals')+
   ylab('Frequency')
 
-# Cophyloplot requires 2 phylo objects, and a matrix with 2 columns specifying the associations between the tips
-assoc <- data.frame(pol=rownames(otu)[which(int==otu, arr.ind=TRUE)[,'row']], pla=colnames(int)[which(int==1, arr.ind=TRUE)[,'col']])
-# to weight the interactions we use the cophylogenetic contribution transformed to best show
-# the differences graphically
-weight <- (res^-2)/50
 
-cophyloplot(poll_phy, pla_phy, otu, show.tip.label=FALSE, use.edge.length=FALSE,
-	lwd=weight, col='steelblue', length.line=0, gap=-20, space=60)
-
-
-# Welch's t-test to test the difference between cophylogenetic signal of interactions
-ttest <- t.test(cophy, noncophy)
-
-# visualise the difference with a box and whisker plot
-dat <- rbind(data.frame(cophy=cophy, level='high'), data.frame(cophy=noncophy, level='rest'))
-ggplot(dat, aes(x=level, y=cophy, fill=level))+
-geom_boxplot(alpha=0.85)+
-scale_fill_brewer(palette='Paired')+
-scale_x_discrete(labels=c('L-M/O','Rest'))+
-ylab('Procrustes residual')+
-theme_bw()+
-theme(
-	axis.title.x=element_blank(),
-	panel.grid=element_blank(),
-	legend.position='none',
-	axis.text.x=element_text(size=14),
-	axis.title.y=element_text(size=14)
-	)
-
-# test the influence of degree on cophylogenetic signal
-special <- data.frame(cophy.sig=res, pla_deg=NA, row.names=names(res))
-f <- function(x) length(grep(strsplit(x, '-')[[1]][2], names(res)))
-special$pla_deg <- sapply(rownames(special), f)
-
-plant_degree <- summary(lm(cophy.sig ~ pla_deg, data=special))
-```
-
-## Carsonella only
-
-
-## Psyllid hostplant cophylogeny
-
-Tanglegram of all plants and  
-```{r}
-
+#Model bith the residuals and links by something, phylum?
+simple_model <- lm(values ~ phylum, data=res)
+summary(simple_model)
 
 ```
 
-## Whole dataset cophylogeny
+Could you then use a regression to look at the influence on results by bacterial taxonomy? ie Family?
 
-```{r randomtapas}
-library(paco)
-library(phytools)
-library(distory)
-library(GiniWegNeg)
-library(parallel)
-## Prepare interaction table
-# Merge species for beta diversity
-ps.sppmerged <- ps2 %>%
-    merge_samples(group = "psyllid_spp", fun=mean)
-
-#This loses the sample metadata - Need to add it agian
-sample_data(ps.sppmerged) <- sample_data(ps2) %>%
-  filter(!duplicated(psyllid_spp)) %>%
-  column_to_rownames("psyllid_spp")
-
-ps4 <- filter_taxa(ps.sppmerged, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
-
-#Rename taxa
-taxa_names(ps4) <- paste0("SV", seq(ntaxa(ps4)),"-",tax_table(ps4)[,8])
-
-#rename problem samples
-
-sample_names(ps4) <- sample_names(ps4) %>% str_replace_all("'","")
-
-otu <- ps4 %>%
-    otu_table %>%
-    as.matrix() %>% 
-  apply(2, function(x) ifelse(x > 0, 1, 0))
-
-#get samples
-samples <- rownames(otu)[rownames(otu) %in% pruned.tree$tip.label]
-                  
-HS <- otu[samples,]
-mode(HS) <- "integer"
-TreeH <- drop.tip(psyllid_tree, psyllid_tree$tip.label[!psyllid_tree$tip.label %in% rownames(HS)] )
-TreeS <-  drop.tip(phy_tree(ps4), phy_tree(ps4)$tip.label[!phy_tree(ps4)$tip.label %in% colnames(HS)] )
-
-# Optional: Draw a tanglegram - filter this beforehand
-
-HS.lut <- which(HS ==1, arr.ind=TRUE)
-linkhs <- cbind(rownames(HS)[HS.lut[,1]], colnames(HS)[HS.lut[,2]])
-linkhs[,1] <- str_replace_all(linkhs[,1], " ", "_")
-obj <- cophylo(tr1=TreeH, tr2=TreeS, assoc=linkhs, rotate=TRUE) 
-plot.cophylo(obj, link.lwd=1, link.lty=2, fsize=0.5, pts=FALSE, link.type="curved") #Need to change tip labels
-dev.off() #reset graphics device
-
-# 1. Find minimum value with which all runs can be completed - Establish N
-#Recommended= N= 1e+4
-N = 100
-One2one.f(HS,N) 
-
-# N should be close	to	20%,	or	at	least	10%,	of	the	total	number	of	associations
-# For our dataset number of associations = (length(TreeS$tip.label)) = 3042 * 0.2 = 608.4 
-# We can evaluate a range if we want
-X <- seq(10,50,5)
-Y <- rep(NA, length(X))
-for(i in 1:length(X)) {
-  THS <- trimHS.maxC(N, HS, n=X[i], check.unique=TRUE)
-  Y[i] <- length(THS)
-}
-plot(X,Y, type="b", xlab="Number of unique H-S associations",
-     ylab="Number of runs accomplished")
-# 3. We choose 8
-n=40
-THS <- trimHS.maxC(N, HS, n=n, check.unique=TRUE)
-THS[sapply(THS, is.null)] <- NULL
-
-####### Apply 2 global-fit methods: GD and PACo ##########
-# NOTE PACo symmetric= TRUE in this example!!!!
-GD <- sapply(THS, geo.D, treeH=TreeH, treeS= TreeS)
-PACO <- sapply(THS, paco.ss, treeH=TreeH, treeS= TreeS, ei.correct= "sqrt.D",
-               symmetric=TRUE)
-#
-######### extract h-s association frequencies
-LFGD01 <- link.freq(THS, GD, HS, percentile=0.01)
-LFPACO01 <- link.freq(THS, PACO, HS, percentile=0.01)
-
-# Plot Gini values
-GiniGD <- unlist(Gini_RSV(LFGD01[,5]))
-GiniPA <- unlist(Gini_RSV(LFPACO01[,5]))
-
-boxplot(GiniGD, GiniPA, names = c("GD", "PACo"),
-        ylab="Normalized Gini coefficient", col="lightblue", las=3)
-text(1,GiniGD,"*",cex=2, col="darkblue")
-text(2,GiniPA,"*",cex=2, col="darkblue")
-dev.off()
-
-# Tanglegram - trees are 1st rendered ultramteric to separate nodes
-# (facilitates visualization)
-trh <- compute.brtime(TreeH, TreeH$Nnode:1)
-trs <- compute.brtime(TreeS, TreeS$Nnode:1)
-# Set color scale - this one is supposed to be color-blind friendly
-col.scale <- c("darkred","gray90", "darkblue")
-
-# map GD results:
-tangle.gram(trh, trs, HS, colscale= "diverging", colgrad=col.scale, 
-            nbreaks=50, LFPACO01, res.fq=TRUE, link.lwd=1, link.lty=1, fsize=0.5,
-            pts=FALSE, link.type="curved", node.tag=TRUE,
-            cexpt=1.2)
-```
 
 ## Carsonella copylogeny
 
@@ -1224,15 +994,130 @@ Maybe this should be done just for carsonella tree
 
 These samples were sequenced using combinatorial indexes. Therefore this data will contain index switching. We therefore need to select an optimal filtering threshold to remove switched taxa, but not real taxa. We will optimise our filtering threshold by relying on assumption that all psyllid species should contain only one (or few very closely related ASVs) of Carsonella.
 
-```{r thresholds}
+```{r carsonella}
+ps3.carson <- ps3 %>% 
+  subset_taxa(genus == "Candidatus Carsonella") %>%
+  filter_taxa(function(x) mean(x) > 0, TRUE) #Drop missing taxa from table 
+taxa_names(ps3.carson) <- paste0("SV", seq(ntaxa(ps3.carson)),"-",tax_table(ps3.carson)[,8])
 
-ps2.carson <- ps2 %>% subset_taxa(genus == "Candidatus Carsonella")
+# Need to merge species first
+
+# MAybe flag top carsonella, then subset the phyloseq object to just these
+# See without these first, to verify how LULU has done for removing carsonella?
+
+# Get cophenetic distance
+h_dist <- cophenetic(pruned.tree)
+s_dist <- cophenetic(phy_tree(ps3.carson))
+
+#Prepare co-occurance matrix
+samples <- intersect(sample_names(ps3.carson), rownames(h_dist))
+
+otu <- ps3.carson %>%
+    subset_samples(sample_names(ps3) %in% samples) %>%
+    otu_table %>%
+    as.matrix() %>% 
+  apply(2, function(x) ifelse(x > 0, 1, 0)) 
+
+# prepare paco data
+#[samples, samples]
+D <- prepare_paco_data(H=h_dist, P=s_dist, HP=otu)
+# Add pcord
+D <- add_pcoord(D, correction='cailliez')
+
+D$H_PCo %>% as.vector %>% summary %>% print
+D$P_PCo %>% as.vector %>% summary %>% print
+
+D$H_PCo <-  neg_to_pos_eig(D$H_PCo)
+D$P_PCo <-  neg_to_pos_eig(D$P_PCo)
+
+tmp <- D$H_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame
+p_host <- ggplot(tmp, aes(Axis.1, Axis.2)) +
+    geom_point() +
+    theme_bw() +
+  ggtitle("Host PCA")
+
+tmp <- D$P_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame
+p_micro <- ggplot(tmp, aes(Axis.1, Axis.2))  +
+    geom_point() +
+    theme_bw()+
+  ggtitle("Microbiome PCA")
+    
+plot(p_host + p_micro)
+
+# run paco
+paco_run <- PACo(D, nperm=9, seed=909, method='quasiswap', symmetric=TRUE) #Symetric - is one meant to track the evolution of another?
+
+#print overall significance
+print(paco_run$gof)
+
+# Get interaction-specific cophylogenetic contributions using jacknifing
+# whereby one link is removed and the fit reassessed.
+#The contribution of that link is therefore the change in fit whensaid link is removed.
+paco_run <- paco_links(paco_run)
+
+#Get observed residuals of Procrustean superimposition 
+#small residual indicates a link more congruent with a cophylogenetic hypothesis
+paco_residuals <- residuals_paco(paco_run$proc, type = "interaction")
+
+# Visualise residuals
+res <- data.frame(OTU=names(paco_residuals), values=unname(paco_residuals)) %>%
+  separate(OTU, into=c("Sample_Name", "OTU"), sep="-", extra="merge") %>%
+  left_join(as.data.frame(tax_table(ps3.carson)) %>%
+              rownames_to_column("OTU"), by="OTU")
+ggplot(res, aes(x=values))+
+  geom_density(fill='grey70')+
+  theme_bw()+
+  xlab('Procrustes residuals')+
+  ylab('Frequency')
+
+
+assoc <- otu %>%
+as.data.frame() %>%
+rownames_to_column("Sample_Name") %>%
+left_join(as_data_frame(sample_data(ps3.carson)) %>% dplyr::select(Sample_Name, psyllid_spp)) %>%
+pivot_longer(cols=starts_with("SV"),names_to="OTU", values_to = "val") %>%
+filter(val > 0) %>%
+mutate(psyllid_spp = str_replace_all(psyllid_spp,"'","")) %>%
+dplyr::select(psyllid_spp, OTU) %>%
+as.matrix()
+
+otu.lut <- which(otu ==1, arr.ind=TRUE)
+assoc <- cbind(rownames(otu)[otu.lut[,1]], colnames(otu)[otu.lut[,2]])
+
+# Should weights be from link strength instead?
+weight <- as.data.frame(assoc) %>% 
+  magrittr::set_colnames(c("Sample_Name", "OTU")) %>%
+  left_join(res %>% dplyr::select(Sample_Name, OTU, values)) %>%
+ # mutate(values = (values^-2)/50) %>%
+  pull(values)
+
+# Cant have - or space characters
+assoc[,1] <- str_replace_all(assoc[,1], " ", "_")
+assoc[,2] <- str_replace_all(assoc[,2], "-", "_")
+assoc[,2] <- str_replace_all(assoc[,2], " ", "_")
+
+newtree <- pruned.tree
+newtree$tip.label <- str_replace_all(newtree$tip.label, " ", "_")
+
+new_stree <- phy_tree(ps3.carson)
+new_stree$tip.label <- new_stree$tip.label %>%
+   str_replace_all( "-", "_") %>%
+   str_replace_all( " ", "_")
+
+obj <- cophylo(tr1=newtree, tr2=new_stree, assoc=assoc, rotate=TRUE) 
+plot.cophylo(obj, link.lwd=weight*5, link.lty=2, fsize=0.5, pts=FALSE, link.type="curved")
+dev.off() #reset graphics device
+```
+
+## Top carsonella
+
+```{r subsetting}
 
 #Rename taxa
-taxa_names(ps2.carson) <- paste0("SV", seq(ntaxa(ps2.carson)),"-",tax_table(ps2.carson)[,6])
+#taxa_names(ps2.carson) <- paste0("SV", seq(ntaxa(ps2.carson)),"-",tax_table(ps2.carson)[,6])
 
 #Flag top abundance carsonella
-top_carson <-  ps2.carson %>%
+top_carson <-   ps3.carson %>%
   transform_sample_counts(function (x) x/sum(x)) %>%
   speedyseq::psmelt() %>%
   filter(genus=="Candidatus Carsonella") %>%
@@ -1242,7 +1127,7 @@ top_carson <-  ps2.carson %>%
   filter(Abundance > 0)
   
 #Flag lower abundance carsonella
-carson <-  ps2.carson %>%
+carson <-  ps3.carson %>%
   transform_sample_counts(function (x) x/sum(x)) %>%
   speedyseq::psmelt() %>%
   filter(genus=="Candidatus Carsonella") %>%
@@ -1271,7 +1156,7 @@ otu <- carson %>%
   left_join(test) %>%
   dplyr::select(-n) %>%
   filter(genus=="Candidatus Carsonella", top==TRUE) %>%
-  select(OTU, psyllid_spp, SampleID, Abundance) %>%
+  dplyr::select(OTU, psyllid_spp, SampleID, Abundance) %>%
   dplyr::group_by(OTU, psyllid_spp) %>%
     summarise(Abundance = sum(Abundance)) %>%
   pivot_wider(id_cols = psyllid_spp,
@@ -1282,134 +1167,130 @@ otu <- carson %>%
     as.matrix() %>% 
   apply(2, function(x) ifelse(x > 0, 1, 0))
 
+otu.lut <- which(otu ==1, arr.ind=TRUE)
+assoc <- cbind(rownames(otu)[otu.lut[,1]], colnames(otu)[otu.lut[,2]])
 
-HS <- otu[pruned.tree$tip.label,]
-HS <- HS[,colSums(HS) > 0]
-TreeH <- drop.tip(psyllid_tree, psyllid_tree$tip.label[!psyllid_tree$tip.label %in% rownames(HS)] )
-TreeS <-  drop.tip(phy_tree(ps2.carson), phy_tree(ps2.carson)$tip.label[!phy_tree(ps2.carson)$tip.label %in% colnames(HS)] )
+# Cant have - or space characters
+assoc[,1] <- str_replace_all(assoc[,1], " ", "_")
+assoc[,2] <- str_replace_all(assoc[,2], "-", "_")
+assoc[,2] <- str_replace_all(assoc[,2], " ", "_")
 
-# Optional: Draw a tanglegram - filter this beforehand
+newtree <- pruned.tree
+newtree$tip.label <- str_replace_all(newtree$tip.label, " ", "_")
 
-HS.lut <- which(HS ==1, arr.ind=TRUE)
-linkhs <- cbind(rownames(HS)[HS.lut[,1]], colnames(HS)[HS.lut[,2]])
-linkhs[,1] <- str_replace_all(linkhs[,1], " ", "_")
-obj <- cophylo(tr1=TreeH, tr2=TreeS, assoc=linkhs, rotate=TRUE) 
+new_stree <- phy_tree(ps3.carson)
+new_stree$tip.label <- new_stree$tip.label %>%
+   str_replace_all( "-", "_") %>%
+   str_replace_all( " ", "_")
+
+obj <- cophylo(tr1=newtree, tr2=new_stree, assoc=assoc, rotate=TRUE) 
 plot.cophylo(obj, link.lwd=1, link.lty=2, fsize=0.5, pts=FALSE, link.type="curved")
 dev.off() #reset graphics device
-
-
-# Find the maximum n for which one-to-one unique associations can be picked in trimHS.maxC over  a number of runs.
-N=100
-One2one.f(HS,N) 
-# 2. Let's evaluate 62-75
-X <- 62:75
-Y <- rep(NA, length(X))
-
-for(i in 1:length(X)) {
-  THS <- trimHS.maxC(N, HS, n=X[i], check.unique=TRUE)
-  Y[i] <- length(THS)
-}
-plot(X,Y, type="b", xlab="Number of unique H-S associations",
-     ylab="Number of runs accomplished")
-# 3. We choose 8
-n=62
-THS <- trimHS.maxC(N, HS, n=n, check.unique=TRUE)
-THS[sapply(THS, is.null)] <- NULL
-#
-
-####### Apply 2 global-fit methods: GD and PACo ##########
-# NOTE PACo symmetric= TRUE in this example!!!!
-GD <- sapply(THS, geo.D, treeH=TreeH, treeS= TreeS)
-PACO <- sapply(THS, paco.ss, treeH=TreeH, treeS= TreeS, ei.correct= "sqrt.D",
-               symmetric=TRUE)
-#
-######### extract h-s association frequencies
-LFGD01 <- link.freq(THS, GD, HS, percentile=0.01)
-LFPACO01 <- link.freq(THS, PACO, HS, percentile=0.01)
-
-# Plot Gini values
-GiniGD <- unlist(Gini_RSV(LFGD01[,5]))
-GiniPA <- unlist(Gini_RSV(LFPACO01[,5]))
-
-boxplot(GiniGD, GiniPA, names = c("GD", "PACo"),
-        ylab="Normalized Gini coefficient", col="lightblue", las=3)
-text(1,GiniGD,"*",cex=2, col="darkblue")
-text(2,GiniPA,"*",cex=2, col="darkblue")
-dev.off()
-
-
-# Tanglegram - trees are 1st rendered ultramteric to separate nodes
-# (facilitates visualization)
-trh <- compute.brtime(TreeH, TreeH$Nnode:1)
-trs <- compute.brtime(TreeS, TreeS$Nnode:1)
-# Set color scale - this one is supposed to be color-blind friendly
-col.scale <- c("darkred","gray90", "darkblue")
-
-# map GD results:
-tangle.gram(trh, trs, HS, colscale= "diverging", colgrad=col.scale, 
-            nbreaks=50, LFPACO01, res.fq=TRUE, link.lwd=1, link.lty=1, fsize=0.5,
-            pts=FALSE, link.type="curved", node.tag=TRUE,
-            cexpt=1.2)
 ```
 
-```{r subsetting}
-library(plotly)
+## Psyllid hostplant cophylogeny
 
-#filter threshold to ge
-#ps2.carson <- transform_sample_counts(ps2, fun = proportions, thresh=0.0045)
-
-#ps2.carson <- subset_taxa(ps2.carson, Genus == "Candidatus_Carsonella")
-#ps2.carson <- filter_taxa(ps2.carson, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
-#ps2.carson <- prune_samples(sample_sums(ps2.carson)>0, ps2.carson) # Drop empty samples
-
-library(RColorBrewer)
-col <- colorRampPalette(brewer.pal(11, "Spectral"))(74)
+Tanglegram of all plants and  
+```{r}
 
 
-ps2.carson <- subset_taxa(ps2, Species == "Candidatus Carsonella")
-gg.carson <- plot_tree(ps2.carson, ladderize="left",  color="psyllid_spp") +   theme(legend.position = "none") + #
-    scale_colour_manual(values=col) + scale_fill_manual(values=col)
-  ggtitle("Carsonella 16S gene tree")
-#gg.ncarson
+```
+
+# Figures
+
+## Barplot
+
+Use the means and standard errors? of the beta diversities by sample
+
+Merge species, arrange microbiome by phylogeny, try the mantel tests on the merged data as well (but the seperate is probs more statistically better)
+
+RESULTS: while there were significant differences between psyllid species there were no significant associations with phylogeny
+```{r Figure 1}
+# Merge species for beta diversity
+ps.sppmerged <- ps2 %>%
+    merge_samples(group = "psyllid_spp", fun=mean)
+
+#This loses the sample metadata - Need to add it agian
+sample_data(ps.sppmerged) <- sample_data(ps2) %>%
+  filter(!duplicated(psyllid_spp)) %>%
+  column_to_rownames("psyllid_spp")
+
+ps3 <- filter_taxa(ps.sppmerged, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
+
+#Rename taxa
+taxa_names(ps3) <- paste0("SV", seq(ntaxa(ps3)),"-",tax_table(ps3)[,6])
+
+ps3_bar <- #subset_taxa(ps3, !Family == "Enterobacteriaceae") %>%
+            ps3 %>%
+  speedyseq::tax_glom(taxrank = "Order") %>%           # agglomerate at Order level
+  transform_sample_counts(function(x) {x/sum(x)} ) %>% # Transform to rel. abundance
+  speedyseq::psmelt() %>%
+  mutate(plotlabel = Phylum) %>%
+  mutate(plotlabel = case_when(
+    Abundance >= 0.01 & Phylum=="Proteobacteria" ~ paste0(Phylum, " - ", Order), # Change this to whatever taxrank we want
+    Abundance >= 0.01 & !Phylum=="Proteobacteria"~ Phylum ,
+    Abundance < 0.01 ~ "NA"
+    )) %>%
+  dplyr::na_if("NA") %>%
+  select(Sample, plotlabel, Phylum, Order, Abundance)
+
+# Plot them together
+library(ggtree)
+library(treeio)
+p <- ggtree(pruned.tree) + geom_tiplab(align=TRUE) + geom_nodelab(geom='label') +
+    scale_x_continuous(expand=c(0, 0.1)) + theme_tree2()
+
+
+Fig1 <- facet_plot(p, panel='Relative Abundance', data = ps3_bar %>% mutate(id = Sample), geom=ggstance::geom_barh,
+                 mapping=aes(x = Abundance, fill = plotlabel), stat="identity")  + 
+  scale_fill_manual(values=colorRampPalette(brewer.pal(11, "Set1"))(length(unique(ps3_bar$plotlabel))-1), na.value="grey")
+
+
+Fig1 <- facet_plot(Fig1, panel='Species Richness', data = bt_randomdf %>% mutate(id = psyllid_spp),
+                          geom=ggstance::geom_pointrangeh,
+                           mapping=aes(x=Estimates, xmin=Estimates-SE, xmax=Estimates+SE),
+                           stat="identity", size=0.5, colour="#696969") +
+  theme_classic2()   +
+  theme(legend.position = "bottom",
+  panel.grid.major.x = element_line(colour="grey92", size=0.5, linetype="dashed"),
+  strip.background = element_rect(fill = "grey92", 
+                colour = "black", size = 1)
+  )
+
+## Collection_hist
+gg.spp <- as_tibble(sample_data(ps2)) %>%
+  dplyr::rename(label = psyllid_spp) %>%
+  group_by(label) %>%
+  summarise(n_species = n()) %>%
+  left_join(p$data %>%
+  filter(isTip) %>% select(c(label, y))) %>%
+  filter(!is.na(y)) %>%
+  ggplot(aes(x=factor(.$label, levels=.$label[order(.$y)]), y=1, fill=n_species)) +
+  geom_tile() +
+  coord_flip() + theme_void() +
+  scale_fill_distiller(palette = "Reds", direction=1)
+
+Fig1 + gg.spp 
   
-## Aquabacterium
-gg.tree <- plot_tree(subset_taxa(ps2, Species == "Sulfuritalea"), ladderize="left",  color="psyllid_spp") +   theme(legend.position = "none") + #
-    scale_colour_manual(values=col) + scale_fill_manual(values=col)
-  ggtitle("Carsonella 16S gene tree")
-#gg.ncarson
+# Change relative grid sizes
+library(grid)
+library(gtable)
 
-#Write out fasta
+gt = ggplot_gtable(ggplot_build(Fig1))
+gt$layout$l[grep('panel-3', gt$layout$name)] # you want to find the column specific to panel-2
 
-carson_out <- speedyseq::psmelt(ps3.carson) %>%
-  filter(Abundance > 0) %>%
-  select(OTU, Sample_Name, psyllid_spp, Species) %>%
-  group_by(OTU, Species) %>%
-  summarize(samples = paste(Sample_Name, collapse=";"),
-            psyllid_spp = paste(unique(psyllid_spp), collapse=";")
-            ) %>%
-  rownames_to_column() %>%
-  unite(seqname, c("Species","rowname","psyllid_spp","samples"), sep="|")
+gt$widths[9] = 0.3*gt$widths[9] # reduce width of column 9
+grid.draw(gt) # plot with grid draw
+```
 
-carson_fasta <- DNAStringSet(carson_out$OTU)
-names(carson_fasta) <- carson_out$seqname
+# Beta diversity
 
-writeXStringSet(carson_fasta, "carsonella_seqs.fa")
+## PCA plot
+```{r}
 
-
-## S-Symbionts
-ps3.carson <- subset_taxa(ps3, Family == "Enterobacteriaceae")
-taxa_names(ps3.carson) <- paste0("SV", seq(ntaxa(ps3.carson)),"-",tax_table(ps3.carson)[,7])
-
-gg.entero <- plot_tree(ps3.carson, ladderize="left",  color="psyllid_spp", label.tips="taxa_names") +   theme(legend.position = "none") +     #scale_colour_manual(values=col) +
-  ggtitle("Enterobacidae 16S gene tree")
-
-#, label.tips="psyllid_spp
 
 ```
 
-Use paco https://besjournals.onlinelibrary.wiley.com/doi/full/10.1111/2041-210X.12736
-
-and Parafit https://www.rdocumentation.org/packages/ape/versions/5.3/topics/parafit
 
 
 ## Map of colleciton locations
