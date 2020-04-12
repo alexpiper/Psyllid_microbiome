@@ -42,7 +42,9 @@ opts_chunk$set(dev = 'png')
                     "MCMCglmm", 
                     "phylosignal", 
                     "adephylo",
-                    "TreeDist")
+                    "TreeDist",
+                    "paco",
+                    "phytools")
 .bioc_packages <- c("dada2",
                     "phyloseq", 
                     "DECIPHER",
@@ -97,7 +99,8 @@ fitGTR <- readRDS("output/rds/phytree.rds")
 samdf <- read_csv("sample_data/Sample_info.csv")  %>%
   dplyr::rename_all(funs( stringr::str_replace_all(., '\\ ', '_')) ) %>%
   mutate(psyllid_spp = psyllid_spp %>% str_remove("\\.") %>%
-           str_replace_all(" ", "_")) %>%
+           str_replace_all(" ", "_") %>%
+           str_replace_all("Casuarinicola sp", "Triozid sp")) %>%
   mutate(hostplant_spp = hostplant_spp %>% str_remove("\\.") %>%
            str_replace_all(" ", "_"))
 
@@ -167,17 +170,15 @@ psyllid_tree$tip.label <- psyllid_tree$tip.label %>%
   str_replace_all(pattern="Ctenarytaina spA", replacement="Ctenarytaina sp A") %>%
     str_replace_all(pattern="Ctenarytaina spB", replacement="Ctenarytaina sp B") %>%
   str_replace_all(pattern="Ctenarytaina unknown", replacement="Ctenarytaina insularis") %>%  
-  str_replace_all(pattern="Psylla apicalis A", replacement="Psylla frodobagginsi") %>%
-  str_replace_all(pattern="Psylla apicalis B", replacement="Psylla apicalis") %>%
+  str_replace_all(pattern="Psylla apicalisA", replacement="Psylla frodobagginsi") %>%
+  str_replace_all(pattern="Psylla apicalisB", replacement="Psylla apicalis") %>%
   str_replace_all(pattern="carmichaeliae", replacement="carmichaeliae ") %>%
-  str_replace_all(pattern="Psylla apicalis", replacement="Psylla apicalis ") %>% # Should these be A,B or?
   str_replace_all(pattern="Trioza sp", replacement="Trioza sp ") %>%
   str_replace_all(pattern="Trioza acutaB", replacement="Trioza acuta B") %>%
   str_replace_all(pattern="Trioza gourlay", replacement="Trioza gourlayi") %>%
   str_replace_all(pattern="BRENDAMAY", replacement="BRENDA MAY") %>%
-  str_replace_all(pattern="PRICES", replacement="PRICES VALLEY") %>% 
-  str_replace_all(pattern="Cryptoneossa triangula", replacement="Cryptoneossa sp") %>% #check which is best
-  str_replace_all(pattern="Anoeconeossa communis", replacement="Anoeconeossa sp") %>%  #same
+  str_replace_all(pattern="PRICES", replacement="PRICES VALLEY") %>%  
+  str_replace_all(pattern="Acizzia sp", replacement="Acizzia errabunda") %>% 
   str_replace_all(pattern=" ", replacement="_") %>%
   trimws(which="right")
 
@@ -955,7 +956,7 @@ print(paco_run$gof)
 # Get interaction-specific cophylogenetic contributions using leave-one-out jacknifing
 # whereby one link is removed and the fit reassessed.
 #The contribution of that link is therefore the change in fit whensaid link is removed.
-paco_run <- paco_links(paco_run)
+paco_run <- paco_links(paco_run, .parallel = TRUE)
 
 #Get observed residuals of Procrustean superimposition 
 #small residual indicates a link more congruent with a cophylogenetic hypothesis
