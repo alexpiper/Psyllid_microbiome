@@ -79,6 +79,7 @@ library(reltools)
 #Source internal functions
 source('R/BDTT.R')
 source('R/phylosymbiosis.R')
+source('R/helper_functions.R')
 options(stringsAsFactors = FALSE)
 ```
 
@@ -95,8 +96,10 @@ fitGTR <- readRDS("output/rds/phytree.rds")
 ## ---- samdat ----
 samdf <- read_csv("sample_data/Sample_info.csv")  %>%
   dplyr::rename_all(funs( stringr::str_replace_all(., '\\ ', '_')) ) %>%
-  mutate(psyllid_spp = str_remove(psyllid_spp, "\\."))%>%
-  mutate(hostplant_spp = str_remove(hostplant_spp, "\\."))
+  mutate(psyllid_spp = psyllid_spp %>% str_remove("\\.") %>%
+           str_replace_all(" ", "_")) %>%
+  mutate(hostplant_spp = hostplant_spp %>% str_remove("\\.") %>%
+           str_replace_all(" ", "_"))
 
 write_csv(samdf, "sample_data/Sample_info2.csv")
 
@@ -161,6 +164,7 @@ psyllid_tree$tip.label <- psyllid_tree$tip.label %>%
   str_replace_all(pattern="Ctenarytaina clavata", replacement="Ctenarytaina clavata sp ") %>%
   str_replace_all(pattern="Ctenarytaina clavata sp $", replacement="Ctenarytaina clavata sp A") %>%
   str_replace_all(pattern="Ctenarytaina sp$", replacement="Ctenarytaina sp ") %>%
+  str_replace_all(pattern="Ctenarytaina spA", replacement="Ctenarytaina sp A") %>%
     str_replace_all(pattern="Ctenarytaina spB", replacement="Ctenarytaina sp B") %>%
   str_replace_all(pattern="Ctenarytaina unknown", replacement="Ctenarytaina insularis") %>%  
   str_replace_all(pattern="Psylla apicalis A", replacement="Psylla frodobagginsi") %>%
@@ -174,6 +178,7 @@ psyllid_tree$tip.label <- psyllid_tree$tip.label %>%
   str_replace_all(pattern="PRICES", replacement="PRICES VALLEY") %>% 
   str_replace_all(pattern="Cryptoneossa triangula", replacement="Cryptoneossa sp") %>% #check which is best
   str_replace_all(pattern="Anoeconeossa communis", replacement="Anoeconeossa sp") %>%  #same
+  str_replace_all(pattern=" ", replacement="_") %>%
   trimws(which="right")
 
 # Subset to only those in sample data
@@ -245,6 +250,10 @@ ps_curated <- ps_curated %>% #Remove mocks
 message(ntaxa(ps) - ntaxa(ps_curated), " removed by LULU curation")
 
 ps <- ps_curated
+
+
+#Rename taxa
+taxa_names(ps) <- paste0("SV", seq(ntaxa(ps)),"-",tax_table(ps)[,8])
 ```
 
 ## Remove outlier Samples
@@ -297,7 +306,6 @@ gg.rare
 ps1 <- prune_samples(sample_sums(ps0)>=threshold, ps0) 
 ps1 <- filter_taxa(ps1, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
 message(nsamples(ps) - nsamples(ps1), " Samples and ", ntaxa(ps) - ntaxa(ps1), " taxa under read threshold Dropped")
-
 ```
 
 ## Average dissimilarities
@@ -529,12 +537,6 @@ signal <- phylosignal::phyloSignal(p4d = p4d, method = "all")
 # Plots
 barplot.phylo4d(p4d, tree.type = "phylo", tree.ladderize = TRUE)
 
-correl <- vector("list", length=length(dat))
-for (i in 1:length(dat)) {
-  correl[[i]] <- phyloCorrelogram(p4d, trait = names(dat[i]))
-  plot(correl[[i]], main= names(dat[i]))
-}
-
 # Locate signal
 lipa <- lipaMoran(p4d)
 lipa.p4d <- lipaMoran(p4d, as.p4d = TRUE)
@@ -542,10 +544,6 @@ lipa.p4d <- lipaMoran(p4d, as.p4d = TRUE)
 barplot.phylo4d(p4d, bar.col=(lipa$p.value < 0.05) + 1, center = FALSE , scale = FALSE)
 
 barplot.phylo4d(lipa.p4d, bar.col = (lipa$p.value < 0.05) + 1, center = FALSE, scale = FALSE)
-
-# Asses modelbehavior	
-phylosim <- phyloSim(tree = pruned.tree, method = "all", nsim = 100, reps = 99)	
-plot.phylosim(phylosim, what = "pval", stacked.methods = TRUE)	
 ```	
 
 
@@ -701,26 +699,27 @@ topo_results <- distlist %>%
 write_csv(topo_results, "output/phylosymbiosis/topo_fulldata.csv")
 
 ## Visualise what these look like
-tree1  <- as.phylo(hclust(as.dist(phylo.dist[samples,samples]), method = "ward.D2"))
-tree2 <- as.phylo(hclust(as.dist(distlist$Aitchison[samples,samples]), method = "ward.D2"))
-VisualizeMatching(RobinsonFoulds,tree1, tree2)
+#tree1  <- as.phylo(hclust(as.dist(phylo.dist[samples,samples]), method = "ward.D2"))
+#tree2 <- as.phylo(hclust(as.dist(distlist$Aitchison[samples,samples]), method = "ward.D2"))
+#VisualizeMatching(RobinsonFoulds,tree1, tree2)
 
 ```
 
-### Without Entero
+### Without Gammaproteobacteria
 ```{r phylosymbiosis no entero}
-## TRY WITHOUT ENTERO
-ps2_noent <- ps2 %>%
- subset_taxa(family  != "Enterobacteriaceae") %>%
+## TRY WITHOUT Gammaproteobacteria
+ps2_subset <- ps2 %>%
+ subset_taxa(class != "Gammaproteobacteria") %>% #is this working?
  filter_taxa(function(x) mean(x) > 0, TRUE)#Drop missing taxa from table
-ps2_noent <- prune_samples(sample_sums(ps2_noent) >0 , ps2_noent)
+ps2_subset <- prune_samples(sample_sums(ps2_subset) >0 , ps2_subset)
+message(nsamples(ps2_subset) - nsamples(ps2_subset), " Samples and ", ntaxa(ps2) - ntaxa(ps2_subset), " taxa under read threshold Dropped")
 
 # Get OTU tables
-otutab <- otu_table(ps2_noent)
+otutab <- otu_table(ps2_subset)
 #Impute zeroes for compositional distances
 otutab_n0 <- as.matrix(zCompositions::cmultRepl(otutab, method="CZM", output="prop", suppress.print=quiet))
 #Root phylogenetic tree
-phy_tree(ps2_noent) <- multi2di(phy_tree(ps2_noent))
+phy_tree(ps2_subset) <- multi2di(phy_tree(ps2_subset))
 
 #Calculate different distance metrics
 metrics <- c("Bray", "Jaccard", "Aitchison", "Unifrac", "WUnifrac") # "Philr"
@@ -742,7 +741,7 @@ distlist$Unifrac <- as.matrix(phyloseq::UniFrac(ps2, weighted=FALSE, parallel = 
 distlist$WUnifrac <- as.matrix(phyloseq::UniFrac(ps2, weighted=TRUE, parallel = TRUE))
 
 # Adonis test
-metadata <- sample_data(ps2_noent) %>%
+metadata <- sample_data(ps2_subset) %>%
   as_data_frame()
 adonis_results <- distlist %>%
   purrr::map(function(x) {
@@ -753,11 +752,11 @@ adonis_results <- distlist %>%
 })  %>%
   bind_rows(.id="dist")
 
-write_csv(adonis_results, "output/phylosymbiosis/adonis_noent.csv")
+write_csv(adonis_results, "output/phylosymbiosis/adonis_subset.csv")
 
 # Matrix correlations
 #only use samples present in all
-samples <- Reduce(intersect, list(rownames(otu_table(ps2_noent)), colnames(phylo.dist), colnames(coi.dist), colnames(plant.dist), colnames(spat.dist)))
+samples <- Reduce(intersect, list(rownames(otu_table(ps2_subset)), colnames(phylo.dist), colnames(coi.dist), colnames(plant.dist), colnames(spat.dist)))
 
 # Mantel test
 mantel_results <- distlist %>%
@@ -766,7 +765,7 @@ mantel_results <- distlist %>%
                samples=samples, type="mantel")
   }) %>%
   bind_rows(.id="dist") 
-write_csv(mantel_results, "output/phylosymbiosis/mantel_noent.csv")
+write_csv(mantel_results, "output/phylosymbiosis/mantel_subset.csv")
 
 # Partial Mantel Test
 pmantel_results <- distlist %>%
@@ -775,7 +774,7 @@ pmantel_results <- distlist %>%
                samples=samples, type="partial")
   }) %>%
   bind_rows(.id="dist") 
-write_csv(pmantel_results, "output/phylosymbiosis/pmantel_noent.csv")
+write_csv(pmantel_results, "output/phylosymbiosis/pmantel_subset.csv")
 
 # Topological comparison metrics
 topo_results <- distlist %>%
@@ -787,7 +786,7 @@ topo_results <- distlist %>%
                runs=100)
   }) %>%
   bind_rows(.id="metric") 
-write_csv(topo_results, "output/phylosymbiosis/topo_noent.csv")
+write_csv(topo_results, "output/phylosymbiosis/topo_subset.csv")
 
 ```
 
@@ -909,9 +908,6 @@ sample_data(ps.sppmerged) <- sample_data(ps2) %>%
 
 ps3 <- filter_taxa(ps.sppmerged, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
 
-#Rename taxa
-taxa_names(ps3) <- paste0("SV", seq(ntaxa(ps3)),"-",tax_table(ps3)[,8])
-
 #Prepare co-occurance matrix
 otu <- ps3 %>%
     subset_samples(sample_names(ps3) %in% pruned.tree$tip.label) %>%
@@ -987,40 +983,64 @@ summary(simple_model)
 
 Could you then use a regression to look at the influence on results by bacterial taxonomy? ie Family?
 
+## Carsonella cophylogeny
 
-## Carsonella copylogeny
+Definitely need to do the top carsonella, but need some flexibility in keeping the related ones, so top - 20% abundance? 
 
-Maybe this should be done just for carsonella tree
+```{r subsetting}
+#Flag top abundance carsonella epr sample
+top_carson <- ps2 %>%
+  transform_sample_counts(function (x) x/sum(x)) %>%
+  speedyseq::psmelt() %>%
+  filter(genus=="Candidatus Carsonella") %>%
+  group_by(Sample) %>%  
+  filter(Abundance > 0) %>%
+  top_n(1, wt=Abundance) %>%
+  mutate(top = TRUE) 
 
-These samples were sequenced using combinatorial indexes. Therefore this data will contain index switching. We therefore need to select an optimal filtering threshold to remove switched taxa, but not real taxa. We will optimise our filtering threshold by relying on assumption that all psyllid species should contain only one (or few very closely related ASVs) of Carsonella.
+## Flag switched only if that OTU is present somewhere else on the seqrun and isnt top 
+switched_carson <- carson %>%
+    filter(Abundance > 0) %>%
+    dplyr::select(OTU, top, seqrun, Abundance) %>%
+    unique() %>%
+    group_by(OTU, seqrun) %>%
+    add_tally() %>%
+    mutate(switched = case_when(
+      n>1 & top== FALSE  ~ TRUE,
+      n>1 & top== TRUE ~ FALSE,
+      n==1 ~ FALSE,
+    ))
 
-```{r carsonella}
-ps3.carson <- ps3 %>% 
-  subset_taxa(genus == "Candidatus Carsonella") %>%
-  filter_taxa(function(x) mean(x) > 0, TRUE) #Drop missing taxa from table 
-taxa_names(ps3.carson) <- paste0("SV", seq(ntaxa(ps3.carson)),"-",tax_table(ps3.carson)[,8])
-
-# Need to merge species first
-
-# MAybe flag top carsonella, then subset the phyloseq object to just these
-# See without these first, to verify how LULU has done for removing carsonella?
+otu <- ps2 %>%
+  transform_sample_counts(function (x) x/sum(x)) %>%
+  speedyseq::psmelt() %>%
+  #filter(genus=="Candidatus Carsonella") %>%
+  left_join(top_carson) %>%
+  filter(genus=="Candidatus Carsonella", top==TRUE) %>%
+  dplyr::select(OTU, psyllid_spp, SampleID, Abundance) %>%
+  dplyr::group_by(OTU, psyllid_spp) %>%
+    summarise(Abundance = sum(Abundance)) %>%
+  pivot_wider(id_cols = psyllid_spp,
+              names_from = OTU,
+              values_from=Abundance,
+              values_fill = list(Abundance = 0))  %>%
+  column_to_rownames("psyllid_spp") %>%
+    as.matrix() %>% 
+  apply(2, function(x) ifelse(x > 0, 1, 0))
 
 # Get cophenetic distance
 h_dist <- cophenetic(pruned.tree)
-s_dist <- cophenetic(phy_tree(ps3.carson))
+s_dist <- ps3 %>%
+    subset_taxa(rownames(tax_table(ps3)) %in% colnames(otu)) %>%
+    phy_tree() %>%
+  cophenetic
 
 #Prepare co-occurance matrix
-samples <- intersect(sample_names(ps3.carson), rownames(h_dist))
+samples <- intersect(rownames(otu), rownames(h_dist))
 
-otu <- ps3.carson %>%
-    subset_samples(sample_names(ps3) %in% samples) %>%
-    otu_table %>%
-    as.matrix() %>% 
-  apply(2, function(x) ifelse(x > 0, 1, 0)) 
-
+otu <- subset(otu, rownames(otu) %in% samples)
 # prepare paco data
-#[samples, samples]
-D <- prepare_paco_data(H=h_dist, P=s_dist, HP=otu)
+D <- prepare_paco_data(H=h_dist[samples, samples], P=s_dist, HP=otu)
 # Add pcord
 D <- add_pcoord(D, correction='cailliez')
 
@@ -1070,103 +1090,6 @@ ggplot(res, aes(x=values))+
   xlab('Procrustes residuals')+
   ylab('Frequency')
 
-
-assoc <- otu %>%
-as.data.frame() %>%
-rownames_to_column("Sample_Name") %>%
-left_join(as_data_frame(sample_data(ps3.carson)) %>% dplyr::select(Sample_Name, psyllid_spp)) %>%
-pivot_longer(cols=starts_with("SV"),names_to="OTU", values_to = "val") %>%
-filter(val > 0) %>%
-mutate(psyllid_spp = str_replace_all(psyllid_spp,"'","")) %>%
-dplyr::select(psyllid_spp, OTU) %>%
-as.matrix()
-
-otu.lut <- which(otu ==1, arr.ind=TRUE)
-assoc <- cbind(rownames(otu)[otu.lut[,1]], colnames(otu)[otu.lut[,2]])
-
-# Should weights be from link strength instead?
-weight <- as.data.frame(assoc) %>% 
-  magrittr::set_colnames(c("Sample_Name", "OTU")) %>%
-  left_join(res %>% dplyr::select(Sample_Name, OTU, values)) %>%
- # mutate(values = (values^-2)/50) %>%
-  pull(values)
-
-# Cant have - or space characters
-assoc[,1] <- str_replace_all(assoc[,1], " ", "_")
-assoc[,2] <- str_replace_all(assoc[,2], "-", "_")
-assoc[,2] <- str_replace_all(assoc[,2], " ", "_")
-
-newtree <- pruned.tree
-newtree$tip.label <- str_replace_all(newtree$tip.label, " ", "_")
-
-new_stree <- phy_tree(ps3.carson)
-new_stree$tip.label <- new_stree$tip.label %>%
-   str_replace_all( "-", "_") %>%
-   str_replace_all( " ", "_")
-
-obj <- cophylo(tr1=newtree, tr2=new_stree, assoc=assoc, rotate=TRUE) 
-plot.cophylo(obj, link.lwd=weight*5, link.lty=2, fsize=0.5, pts=FALSE, link.type="curved")
-dev.off() #reset graphics device
-```
-
-## Top carsonella
-
-```{r subsetting}
-
-#Rename taxa
-#taxa_names(ps2.carson) <- paste0("SV", seq(ntaxa(ps2.carson)),"-",tax_table(ps2.carson)[,6])
-
-#Flag top abundance carsonella
-top_carson <-   ps3.carson %>%
-  transform_sample_counts(function (x) x/sum(x)) %>%
-  speedyseq::psmelt() %>%
-  filter(genus=="Candidatus Carsonella") %>%
-  group_by(Sample) %>%
-  top_n(1, wt=Abundance) %>%
-  mutate(top = TRUE)  %>%
-  filter(Abundance > 0)
-  
-#Flag lower abundance carsonella
-carson <-  ps3.carson %>%
-  transform_sample_counts(function (x) x/sum(x)) %>%
-  speedyseq::psmelt() %>%
-  filter(genus=="Candidatus Carsonella") %>%
-  left_join(top_carson) %>%
-  mutate(top = case_when(
-    is.na(top) ~ FALSE,
-    !is.na(top) ~ top
-  ))
-
-## THis needs to be changed - things should be flagged as switched when less than 100* the top!, or combine both - ie 
-
-test <- carson %>%
-    filter(Abundance > 0) %>%
-    dplyr::select(OTU, top, seqrun, Abundance) %>%
-    unique() %>%
-    group_by(OTU, seqrun) %>%
-    add_tally() %>%
-    mutate(switched = case_when(
-      n>1 & top== FALSE  ~ TRUE,
-      n>1 & top== TRUE ~ FALSE,
-      n==1 ~ FALSE,
-    ))
-
-
-otu <- carson %>%
-  left_join(test) %>%
-  dplyr::select(-n) %>%
-  filter(genus=="Candidatus Carsonella", top==TRUE) %>%
-  dplyr::select(OTU, psyllid_spp, SampleID, Abundance) %>%
-  dplyr::group_by(OTU, psyllid_spp) %>%
-    summarise(Abundance = sum(Abundance)) %>%
-  pivot_wider(id_cols = psyllid_spp,
-              names_from = OTU,
-              values_from=Abundance,
-              values_fill = list(Abundance = 0))  %>%
-  column_to_rownames("psyllid_spp") %>%
-    as.matrix() %>% 
-  apply(2, function(x) ifelse(x > 0, 1, 0))
-
 otu.lut <- which(otu ==1, arr.ind=TRUE)
 assoc <- cbind(rownames(otu)[otu.lut[,1]], colnames(otu)[otu.lut[,2]])
 
@@ -1183,16 +1106,21 @@ new_stree$tip.label <- new_stree$tip.label %>%
    str_replace_all( "-", "_") %>%
    str_replace_all( " ", "_")
 
+library(phytools)
 obj <- cophylo(tr1=newtree, tr2=new_stree, assoc=assoc, rotate=TRUE) 
 plot.cophylo(obj, link.lwd=1, link.lty=2, fsize=0.5, pts=FALSE, link.type="curved")
 dev.off() #reset graphics device
+
+# The reason some of these are off are due to mismatches between the tree and the sample data
 ```
 
 ## Psyllid hostplant cophylogeny
 
 Tanglegram of all plants and  
 ```{r}
-
+library(rotl)
+plants <- unique(plant_distance$`Host plants`)
+resolved_names <- tnrs_match_names(plants[1])
 
 ```
 

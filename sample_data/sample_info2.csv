@@ -1,284 +1,284 @@
-SampleID,Sample Name,seqrun,f_primer,r_primer,Cycles,Annealing temperature,Taq,Project Description/ Owner,psyllid_family,psyllid_genus,psyllid_spp,hostplant_spp,Collection Date
-30_S30,30,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia acaciae,Acacia melanoxylon,14/09/2014
-95_S81,95,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia acaciae,Acacia melanoxylon,26/02/2015
-123_S103,123,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia acaciae,Acacia melanoxylon,22/03/2015
-145_S118,145,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia acaciae,Acacia melanoxylon,28/03/2015
-NSW1A_S64,NSW1A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia acaciaebaileyanae,Acacia baileyana,4/11/2014
-NSW1B_S65,NSW1B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia acaciaebaileyanae,Acacia baileyana,4/11/2014
-NSW1b_S172,NSW1B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia acaciaebaileyanae,Acacia baileyana,4/11/2014
-NSW1C_S66,NSW1C,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia acaciaebaileyanae,Acacia baileyana,4/11/2014
-58_S55,58,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia albizziae,Acacia sp.,23/01/2015
-74_S66,74,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia albizziae,Acacia sp.,17/02/2015
-179_S143,179,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia albizziae,Acacia sp.,17/04/2015
-11A_S89,11A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia albizziae,Acacia sp.,19/09/2014
-11B_S90,11B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia jucunda,Acacia sp.,19/09/2014
-19B_S62,19B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia albizziae,Acacia sp.,24/09/2014
-19VOUCHB_S18,19B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia albizziae,Acacia sp.,24/09/2014
-10_S10,10,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia dodonaeae,Dodonaea viscosa,19/09/2014
-13_S12,13,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia dodonaeae,Dodonaea viscosa,21/09/2014
-17_S15,17,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia dodonaeae,Dodonaea viscosa,22/09/2014
-12A_S85,12A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia dodonaeae,Dodonaea viscosa,19/09/2014
-12B_S86,12B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia dodonaeae,Dodonaea viscosa,19/09/2014
-18A_S87,18A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia dodonaeae,Dodonaea viscosa,23/09/2014
-18B_S88,18B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia dodonaeae,Dodonaea viscosa,23/09/2014
-SI1_S178,SI1,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia dodonaeae,Dodonaea viscosa,14/10/2014
-180_S144,180,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia errabunda,Acacia baileyana,17/07/2015
-3_S2,3,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia hakeae,Hakea acicularis,1/09/2014
-16_S14,16,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia hakeae,Hakea acicularis,22/09/2014
-80_S70,80,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia hakeae,Grevillea sp.,23/02/2015
-11a_S11,11A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia jucunda,Acacia sp.,19/09/2014
-19A_S61,19A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia jucunda,Acacia sp.,24/09/2014
-19a_S16,19A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia jucunda,Acacia sp.,24/09/2014
-19VOUCHA_S17,19A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia jucunda,Acacia sp.,24/09/2014
-19C_S63,19C,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia jucunda,Acacia sp.,24/09/2014
-116a_S95,116A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia solanicola,Solanum tuberosum,6/03/2015
-116b_S96,116B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia solanicola,Solanum tuberosum,6/03/2015
-65_S61,65,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia uncatoides,Acacia sp.,30/01/2015
-178_S142,178,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia uncatoides,Acacia sp.,16/04/2015
-181a_S145,181A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia uncatoides,Acacia sp.,17/07/2015
-75a_S67,75A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia uncatoides,Acacia sp.,20/02/2015
-VIC8A_S189,VIC8A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia uncatoides,Acacia sp.,12/11/2014
-VIC8B_S190,VIC8B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia uncatoides,Acacia sp.,12/11/2014
-SA1B_S173,SA1B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Anoeconeossa,Anoeconeossa sp.,Eucalyptus sp.,4/11/2014
-440a_S155,440a,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Anomalopsylla,Anomalopsylla insignita,Plagianthus sp.,23/10/2016
-440A_S156,440A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Anomalopsylla,Anomalopsylla insignita,Plagianthus sp.,23/10/2016
-451A_S164,451A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Anomalopsylla,Anomalopsylla insignita,Olearia paniculata,30/10/2016
-455B_S169,455B,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Anomalopsylla,Anomalopsylla insignita,Olearia paniculata,28/10/2016
-455b_S170,455b,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Anomalopsylla,Anomalopsylla insignita,Olearia paniculata,28/10/2016
-35A_S82,35A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Anomalopsylla,Anomalopsylla POLLEN ISLAND,Olearia odorata,14/09/2014
-35a_S36,35A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Anomalopsylla,Anomalopsylla POLLEN ISLAND,Olearia odorata,14/09/2014
-35B_S83,35B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Anomalopsylla,Anomalopsylla POLLEN ISLAND,Olearia odorata,14/09/2014
-35C_S84,35C,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Anomalopsylla,Anomalopsylla POLLEN ISLAND,Olearia odorata,14/09/2014
-195_S148,195,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Arytainilla,Arytainilla spartiophila,Cytisus scoparius,2/11/2015
-207_S154,207,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Arytainilla,Arytainilla spartiophila,Cytisus scoparius,9/11/2015
-248A_S126,248A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Calophyidae,Atmetocranium,Atmetocranium myersi,kamahi,4/01/2016
-248B_S127,248B,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Calophyidae,Atmetocranium,Atmetocranium myersi,kamahi,4/01/2016
-70a_S64,70A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Bactericera,Bactericera cockerelli,Solanum tuberosum,3/02/2015
-87_S74,87,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Baeopelma,Baeopelma foersteri,Alnus glutinosa,25/02/2015
-110_S91,110,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Baeopelma,Baeopelma foersteri,Alnus glutinosa,3/03/2015
-91_S167,blank,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,,,blank,,
-137_S115,137,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Blastopsylla,Blastopsylla occidentalis,Eucalyptus sp.,26/03/2015
-142_S116,142,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Blastopsylla,Blastopsylla occidentalis,Eucalyptus sp.,28/03/2015
-117a_S97,117A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Calophyidae,Calophya,Calophya schini,Schinus molle,11/03/2015
-117b_S98,117B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Calophyidae,Calophya,Calophya schini,Schinus molle,11/03/2015
-150b_S121,150B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Casuarinicola,Casuarinicola australis,Casuarina sp.,31/03/2015
-SA3A_S174,SA3A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Casuarinicola,Casuarinicola australis,Casuarina sp.,6/11/2014
-125_S105,125,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Casuarinicola,Casuarinicola sp.,Casuarina sp.,23/03/2015
-147_S119,147,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Casuarinicola,Casuarinicola sp.,Casuarina sp.,29/03/2015
-SA8A_S177,SA8A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Casuarinicola,Casuarinicola sp.,Casuarina sp.,6/11/2014
-SA6A_S176,SA6A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Cryptoneossa,Cryptoneossa sp.,Eucalyptus sp.,6/11/2014
-44_S42,44,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina clavata sp. B,Kunzea ericoides,23/10/2014
-152_S123,152,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina clavata sp. A,Kunzea ericoides,4/04/2015
-34a_S35,34A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina clavata sp. A,Kunzea ericoides,14/09/2014
-2_S1,2,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina eucalypti,Eucalyptus globulus,1/09/2014
-43_S41,43,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina eucalypti,Eucalyptus globulus,23/10/2014
-78_S68,78,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina eucalypti,Eucalyptus globulus,23/02/2015
-82_S72,82,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina eucalypti,Eucalyptus globulus,24/02/2015
-89_S76,89,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina eucalypti,Eucalyptus globulus,26/02/2015
-99_S82,99,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina eucalypti,Eucalyptus globulus,27/02/2015
-105_S86,105,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina eucalypti,Eucalyptus globulus,2/03/2015
-115_S94,115,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina eucalypti,Eucalyptus globulus,2/03/2015
-165_S132,165,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina eucalypti,Eucalyptus globulus,27/02/2015
-39A_S49,39A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina eucalypti,Eucalyptus globulus,23/10/2014
-39B_S50,39B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina eucalypti,Eucalyptus globulus,23/10/2014
-39C_S51,39C,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina eucalypti,Eucalyptus globulus,23/10/2014
-42A_S52,42A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina eucalypti,Eucalyptus globulus,23/10/2014
-42B_S53,42B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina eucalypti,Eucalyptus globulus,23/10/2014
-42C_S54,42C,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina eucalypti,Eucalyptus globulus,23/10/2014
-SA2A_S55,SA2A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina eucalypti,Eucalyptus globulus,4/11/2014
-SA2B_S56,SA2B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina eucalypti,Eucalyptus globulus,4/11/2014
-SA2C_S57,SA2C,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina eucalypti,Eucalyptus globulus,4/11/2014
-SI10_S179,SI10,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina eucalypti,Eucalyptus globulus,14/10/2014
-SI15_S181,SI15,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina eucalypti,Eucalyptus globulus,14/10/2014
-VIC1A_S58,VIC1A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina eucalypti,Eucalyptus globulus,12/11/2014
-VIC1B_S59,VIC1B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina eucalypti,Eucalyptus globulus,12/11/2014
-VIC1C_S60,VIC1C,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina eucalypti,Eucalyptus globulus,12/11/2014
-VIC1C_S188,VIC1C,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina eucalypti,Eucalyptus globulus,12/11/2014
-56_S53,56,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina fuchsia A,Fuchsia excorticata,30/11/2014
-194_S147,194,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina fuchsia A,Fuchsia excorticata,25/10/2015
-220_S159,220,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina fuchsia A,Fuchsia excorticata,10/11/2015
-221_S160,221,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina fuchsia A,Fuchsia excorticata,10/11/2015
-224_S163,224,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina fuchsia A,Fuchsia excorticata,11/11/2015
-229_S164,229,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina fuchsia A,Fuchsia excorticata,11/11/2015
-237_S165,237,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina fuchsia A,Fuchsia excorticata,12/11/2015
-geraldineA_S168,geraldineA,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina fuchsia A,Fuchsia excorticata,1/09/2015
-geraldineB_S169,geraldineB,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina fuchsia A,Fuchsia excorticata,1/09/2015
-SI13B_S192,SI13B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina fuchsia A,Fuchsia excorticata,14/10/2014
-SI16_S182,SI16,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina fuchsia A,Fuchsia excorticata,14/10/2014
-SI22_S184,SI22,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina fuchsia A,Fuchsia excorticata,6/11/2014
-SI7_S185,SI7,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina fuchsia A,Fuchsia excorticata,6/11/2014
-SignOfBellbird_S26,Sign of Bellbird,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina fuchsia A,Fuchsia excorticata,1/09/2015
-TeOkaA_S170,TeOkaA,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina fuchsia A,Fuchsia excorticata,1/09/2015
-TeOkaB_S171,TeOkaB,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina fuchsia A,Fuchsia excorticata,1/09/2015
-SI13A_S70,SI13A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina fuchsia A,Fuchsia excorticata,14/10/2014
-SI13B_S71,SI13B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina fuchsia A,Fuchsia excorticata,14/10/2014
-9A_S67,9A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina fuchsia B,Fuchsia excorticata,19/09/2014
-9B_S68,9B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina fuchsia B,Fuchsia excorticata,19/09/2014
-9C_S69,9C,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina fuchsia B,Fuchsia excorticata,19/09/2014
-9d_S6,9D,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina fuchsia B,Fuchsia excorticata,19/09/2014
-9e_S7,9E,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina fuchsia B,Fuchsia excorticata,19/09/2014
-9f_S8,9F,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina fuchsia B,Fuchsia excorticata,19/09/2014
-9g_S9,9G,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina fuchsia B,Fuchsia excorticata,19/09/2014
-127a_S106,127A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina insularis,Eucalyptus sp.,23/03/2015
-124_S104,124,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina longicauda,Lophostemon confertus,22/03/2015
-131a_S107,131A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina longicauda,Lophostemon confertus,25/03/2015
-131b_S108,131B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina longicauda,Lophostemon confertus,25/03/2015
-175VOUCHA_S141,175 voucher A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina pollicaris,Leptospermum scoparius,16/04/2015
-24A_S72,24A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina pollicaris,Leptospermum scoparius,14/09/2014
-24a_S22,24A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina pollicaris,Leptospermum scoparius,14/09/2014
-24B_S73,24B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina pollicaris,Leptospermum scoparius,14/09/2014
-24b_S23,24B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina pollicaris,Leptospermum scoparius,14/09/2014
-24C_S74,24C,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina pollicaris,Leptospermum scoparius,14/09/2014
-24c_S24,24C,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina pollicaris,Leptospermum scoparius,14/09/2014
-31A_S75,31A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina pollicaris,Leptospermum scoparius,14/09/2014
-31a_S31,31A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina pollicaris,Leptospermum scoparius,14/09/2014
-31B_S76,31B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina pollicaris,Leptospermum scoparius,14/09/2014
-31b_S32,31B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina pollicaris,Leptospermum scoparius,14/09/2014
-41_S40,41,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina SHORT,Kunzea ericoides,23/10/2014
-164_S131,164,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina SHORT,Kunzea ericoides,29/03/2015
-172_S137,172,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina SHORT,Kunzea ericoides,16/04/2015
-175_S140,175,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina SHORT,Kunzea ericoides,16/04/2015
-23A_S77,23A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina SHORT,Kunzea ericoides,14/09/2014
-23a_S19,23A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina SHORT,Kunzea ericoides,14/09/2014
-23B_S78,23B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina SHORT,Kunzea ericoides,14/09/2014
-23b_S20,23B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina SHORT,Kunzea ericoides,14/09/2014
-23C_S79,23C,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina SHORT,Kunzea ericoides,14/09/2014
-23c_S21,23C,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina SHORT,Kunzea ericoides,14/09/2014
-33A_S80,33A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina SHORT,Kunzea ericoides,14/09/2014
-33a_S33,33A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina SHORT,Kunzea ericoides,14/09/2014
-33B_S81,33B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina SHORT,Kunzea ericoides,14/09/2014
-33b_S34,33B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina SHORT,Kunzea ericoides,14/09/2014
-SI17_S183,SI17,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina sp. B,Fuchsia excorticata,5/11/2015
-SI9_S187,SI9,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina sp. B,Leptospermum scoparius,6/11/2014
-14_S13,14,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina sp. A,Olearia paniculata,21/09/2014
-28_S27,28,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina spatulata,Eucalyptus sp.,14/09/2014
-52_S49,52,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina spatulata,Eucalyptus sp.,27/11/2014
-79_S69,79,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina spatulata,Eucalyptus sp.,23/02/2015
-101_S83,101,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina spatulata,Eucalyptus sp.,28/02/2015
-108_S89,108,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina spatulata,Eucalyptus sp.,2/03/2015
-109_S90,109,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina spatulata,Eucalyptus sp.,2/03/2015
-136_S114,136,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina spatulata,Eucalyptus sp.,26/03/2015
-143_S117,143,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina spatulata,Eucalyptus sp.,28/03/2015
-8b_S5,8B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina spatulata,Eucalyptus sp.,18/09/2014
-SI8_S186,SI8,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina spatulata,Eucalyptus sp.,6/11/2014
-81_S71,81,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina thysanura,Eucalyptus sp.,23/02/2015
-SA5A_S175,SA5A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Eucalyptolyma,Eucalyptolyma maideni,Eucalyptus sp.,4/11/2014
-135a_S113,135A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Glycaspis,Glycaspis granulata,Eucalyptus sp.,26/03/2015
-mockA_S51,mockA,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,,MOCK,MOCK,,
-122_S102,122,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Calophyidae,Mycopsylla,Mycopsylla fici,Ficus macrophylla,22/03/2015
-134a_S111,134A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Calophyidae,Mycopsylla,Mycopsylla fici,Ficus macrophylla,26/03/2015
-134b_S112,134B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Calophyidae,Mycopsylla,Mycopsylla fici,Ficus macrophylla,26/03/2015
-MockEven_S193,MockEven,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,,ND,ND,,
-MockStaggered_S194,MockStaggered,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,,ND,ND,,
-187_S146,187,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla apicalis,Sophora microphylla,1/09/2015
-200big_S149,200,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla apicalis,Sophora microphylla,2/11/2015
-201big_S151,201,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla apicalis,Sophora microphylla,8/11/2015
-206_S153,206,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla apicalis,Sophora microphylla,9/11/2015
-26_S25,26,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla carmichaeliae A,Carmichaelia sp.,14/09/2014
-22A_S91,22A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla carmichaeliae A,Carmichaelia sp.,14/09/2014
-22B_S92,22B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla carmichaeliae A,Carmichaelia sp.,14/09/2014
-222_S161,222,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla carmichaeliae C,Carmichaelia sp.,10/11/2015
-223_S162,223,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla carmichaeliae C,Carmichaelia sp.,10/11/2015
-212_S156,212,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla carmichaeliae E,Carmichaelia petri,9/11/2015
-213_S157,213,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla carmichaeliae E,Carmichaelia petri,9/11/2015
-217_S158,217,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla carmichaeliae E,Carmichaelia petri,10/11/2015
-55_S52,55,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla frodobagginsi,Sophora microphylla,30/11/2014
-200small_S150,200,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla frodobagginsi,Sophora microphylla,2/11/2015
-201small_S152,201,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla frodobagginsi,Sophora microphylla,8/11/2015
-209_S155,209,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla frodobagginsi,Sophora microphylla,9/11/2015
-238_S166,238,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla frodobagginsi,Sophora microphylla (Kowhai),12/11/2015
-94_S80,94,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Liviidae,Psyllopsis,Psyllopsis fraxini,Fraxinus excelsior,26/02/2015
-107_S88,107,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Liviidae,Psyllopsis,Psyllopsis fraxini,Fraxinus excelsior,2/03/2015
-113_S93,113,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Liviidae,Psyllopsis,Psyllopsis fraxini,Fraxinus excelsior,4/03/2015
-49_S47,49,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Liviidae,Psyllopsis,Psyllopsis fraxinicola,Fraxinus excelsior,27/11/2014
-93_S79,93,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Liviidae,Psyllopsis,Psyllopsis fraxinicola,Fraxinus excelsior,26/02/2015
-106_S87,106,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Liviidae,Psyllopsis,Psyllopsis fraxinicola,Fraxinus excelsior,2/03/2015
-112_S92,112,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Liviidae,Psyllopsis,Psyllopsis fraxinicola,Fraxinus excelsior,4/03/2015
-45_S43,45,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza acuta,Unknown,23/10/2014
-5b_S4,5B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza acuta,Ozothamnus sp.,1/09/2014
-118a_S99,118A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza adventicia,Syzygium smithii,11/03/2015
-174_S139,174,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza bifida,Olearia fragmentissima,16/04/2015
-29A_S95,29A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza bifida,Pseudowintera colorata,14/09/2014
-29a_S28,29A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza bifida,Pseudowintera colorata,14/09/2014
-29B_S96,29B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza bifida,Pseudowintera colorata,14/09/2014
-29b_S29,29B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza bifida,Pseudowintera colorata,14/09/2014
-SI12_S180,SI12,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza bifida,Fuchsia excorticata,14/10/2014
-SI3B_S191,SI3B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza bifida,Dracophyllum sp.,14/10/2014
-91_S78,91,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza BRENDA MAY,Olearia ilicifolia,26/02/2015
-276_S138,276,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza BRENDA MAY,Olearia sp.,6/02/2016
-414_S143,414,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza colorata,Halocarpus sp.,29/03/2016
-46A_S93,46A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza colorata,Halocarpus sp.,27/10/2014
-46a_S44,46A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza colorata,Halocarpus sp.,27/10/2014
-46B_S94,46B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza colorata,Halocarpus sp.,27/10/2014
-50a_S48,50A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza colorata,Halocarpus sp.,23/11/2014
-260_S130,260,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza compressa,Olearia rani var colorata,24/01/2016
-473A_S184,473A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza compressa,Olearia rani,20/01/2017
-473a_S189,473a,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza compressa,Olearia rani,20/01/2017
-476A_S185,476A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza curta,Metrosideros robusta,23/01/2017
-476a_S190,476a,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza curta,Metrosideros robusta,23/01/2017
-415A_S144,415A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza dacrydii,Halocarpus sp.,29/03/2016
-415B_S145,415B,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza dacrydii,Halocarpus sp.,29/03/2016
-61_S57,61,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza decurvata,Dracophyllum sp.,27/01/2015
-69_S63,69,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza decurvata,Dracophyllum sp.,8/01/2015
-40_S39,40,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza discariae,Discaria toumatou,23/10/2014
-38a_S37,38A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza discariae,Discaria toumatou,14/09/2014
-38b_S38,38B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza discariae,Discaria toumatou,14/09/2014
-161_S129,161,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza doryphora,Olearia ilicifolia,12/04/2015
-162_S130,162,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza doryphora,Olearia ilicifolia,12/04/2015
-170_S136,170,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza doryphora,Olearia ilicifolia,16/04/2015
-173_S138,173,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza doryphora,Olearia ilicifolia,16/04/2015
-48_S46,48,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza emarginata,Coprosma sp.,27/10/2014
-151_S122,151,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza falcata,Aristotelia fruticosa,4/04/2015
-154_S124,154,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza falcata,Aristotelia fruticosa,4/04/2015
-157_S125,157,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza falcata,Aristotelia fruticosa,4/04/2015
-158_S126,158,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza falcata,Aristotelia fruticosa,5/04/2015
-64_S60,64,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza fasciata,Muehlenbeckia complexa,29/01/2015
-132_S109,132,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza fasciata,Muehlenbeckia auxiliaris,25/03/2015
-471A_S182,471A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza FORTROSE,Elaeocarpus,15/01/2017
-471a_S187,471a,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza FORTROSE,Elaeocarpus,15/01/2017
-457A_S172,457A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza gourlayi,Olearia virgata,1/12/2016
-457B_S173,457B,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza gourlayi,Olearia virgata,1/12/2016
-63a_S59,63A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza hebicola,Hebe sp.,27/01/2015
-4_S3,4,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza irregularis,Pseudopanax arboreus,1/09/2014
-166_S133,166,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza irregularis,Pseudopanax arboreus,16/04/2015
-168_S134,168,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza irregularis,Pseudopanax arboreus,16/04/2015
-252_S128,252,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza irregularis,Fuchsia excorticata,7/01/2016
-119a_S100,119A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza MASSEY,Olearia sp.,11/03/2015
-479a_S88,479a,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza MASSEY,Oleaeria odorata,24/01/2017
-479A_S186,479A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza MASSEY,Olearia odorata,24/01/2017
-68_S62,68,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza obscura,Hebe sp.,8/01/2015
-478A_S85,478A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza obscura,Hebe sp.,24/01/2017
-478B_S86,478B,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza obscura,Hebe sp.,24/01/2017
-62_S58,62,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza OMAHUTA,Metrosideros umbellata,27/01/2015
-456_S171,456,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza OMAHUTA,Brachyglottis repanda,1/12/2016
-472A_S183,472A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza OMAHUTA,Brachyglottis repanda,17/01/2017
-472a_S188,472a,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza OMAHUTA,Brachyglottis repanda,17/01/2017
-72_S65,72,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza panacis,Pseudopanax crassifolius,16/02/2015
-57b_S54,57B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza PRICE'S VALLEY,Plagianthus sp.,9/11/2014
-410_S141,410,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza sp. A,Pittosporum divaricartum,27/03/2016
-468A_S180,468A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza sp. A,Pittosporum divaricartum,14/01/2017
-468B_S181,468B,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza sp. A,Pittosporum divaricartum,14/01/2017
-160_S128,160,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza acuta B,Ozothamnus sp.,5/04/2015
-412_S142,412,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza sp. B,Olearia arborescens,28/03/2016
-47_S45,47,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza sp. C,Pseudopanax edgerlii,27/10/2014
-442A_S157,442A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza sp. D,Olearia virgata,24/10/2016
-442B_S158,442B,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza sp. D,Olearia virgata,24/10/2016
-442b_S159,442b,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza sp. D,Olearia virgata,24/10/2016
-120a_S101,120A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza subacuta,Olearia avicenniifolia,10/03/2015
-159a_S127,159A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza subacuta,Olearia avicenniifolia,5/04/2015
-257_S129,257,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza subvexa,Olearia,17/01/2016
-458_S174,458,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza subvexa,Olearia avicenniifolia,1/12/2016
-477A_S87,477A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza subvexa,Olearia avicenniifolia,24/01/2017
-477B_S84,477B,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza subvexa,Olearia avicenniifolia,24/01/2017
-53_S50,53,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza vitreoradiata,Pittosporum crassifolius,30/11/2014
-59_S56,59,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza vitreoradiata,Pittosporum crassifolius,23/01/2015
-84_S73,84,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza vitreoradiata,Pittosporum crassifolius,25/02/2015
-88_S75,88,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza vitreoradiata,Pittosporum crassifolius,25/02/2015
-90_S77,90,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza vitreoradiata,Pittosporum crassifolius,26/02/2015
-102_S84,102,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza vitreoradiata,Pittosporum crassifolius,28/02/2015
-104_S85,104,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza vitreoradiata,Pittosporum crassifolius,2/03/2015
-133_S110,133,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza vitreoradiata,Pittosporum crassifolius,25/03/2015
-148_S120,148,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza vitreoradiata,Pittosporum crassifolius,29/03/2015
-169_S135,169,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza vitreoradiata,Pittosporum crassifolius,16/04/2015
-Mock_S192,Mock,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,,,,,
-PCRctrl_S191,PCR_negative,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,,,,,
+SampleID,Sample_Name,seqrun,f_primer,r_primer,Cycles,Annealing_temperature,Taq,Project_Description/_Owner,psyllid_family,psyllid_genus,psyllid_spp,hostplant_spp,Collection,Collection_Date
+30_S30,30,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_acaciae,Acacia_melanoxylon,"43°42'51.72""S 172°47'00.86""E",14/9/14
+95_S81,95,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_acaciae,Acacia_melanoxylon,"46°24'08.13""S 168°21'39.78""E",26/2/15
+123_S103,123,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_acaciae,Acacia_melanoxylon,"36°51'01.51""S 174°46'04.29""E",22/3/15
+145_S118,145,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_acaciae,Acacia_melanoxylon,"37°46'14.54""S 175°15'02.77""E",28/3/15
+NSW1A_S64,NSW1A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_acaciaebaileyanae,Acacia_baileyana,"33°49'59.30""S 150°32'55.60""E",4/11/14
+NSW1B_S65,NSW1B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_acaciaebaileyanae,Acacia_baileyana,"33°49'59.30""S 150°32'55.60""E",4/11/14
+NSW1b_S172,NSW1B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_acaciaebaileyanae,Acacia_baileyana,"33°49'59.30""S 150°32'55.60""E",4/11/14
+NSW1C_S66,NSW1C,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_acaciaebaileyanae,Acacia_baileyana,"33°49'59.30""S 150°32'55.60""E",4/11/14
+58_S55,58,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_albizziae,Acacia_sp,"40°43'36.60""S 172°41'19.40""E",23/1/15
+74_S66,74,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_albizziae,Acacia_sp,"43°34'15.50""S 172°37'26.70""E",17/2/15
+179_S143,179,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_albizziae,Acacia_sp,"43°38'05.70""S 172°29'24.20""E",17/4/15
+11A_S89,11A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_albizziae,Acacia_sp,"41°25'05.84""S 173°57'53.38""E",19/9/14
+11B_S90,11B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_jucunda,Acacia_sp,"41°25'05.84""S 173°57'53.38""E",19/9/14
+19B_S62,19B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_albizziae,Acacia_sp,"41°15'27.81""S 172°49'21.79""E",24/9/14
+19VOUCHB_S18,19B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_albizziae,Acacia_sp,"41°15'27.81""S 172°49'21.79""E",24/9/14
+10_S10,10,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_dodonaeae,Dodonaea_viscosa,"42°09'20.09""S 173°55'26.43""E",19/9/14
+13_S12,13,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_dodonaeae,Dodonaea_viscosa,"41°18'20.94''S 173°17'03.14""E",21/9/14
+17_S15,17,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_dodonaeae,Dodonaea_viscosa,"40°56'53.20""S 173°02'31.40""E",22/9/14
+12A_S85,12A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_dodonaeae,Dodonaea_viscosa,"41°17'28.02""S 173°14'04.21""E",19/9/14
+12B_S86,12B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_dodonaeae,Dodonaea_viscosa,"41°17'28.02""S 173°14'04.21""E",19/9/14
+18A_S87,18A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_dodonaeae,Dodonaea_viscosa,"40°47'06.88""S 172°43'35.24""E",23/9/14
+18B_S88,18B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_dodonaeae,Dodonaea_viscosa,"40°47'06.88""S 172°43'35.24""E",23/9/14
+SI1_S178,SI1,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_dodonaeae,Dodonaea_viscosa,"46°54'01.20""S 168°07'15.90""E",14/10/14
+180_S144,180,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_errabunda,Acacia_baileyana,"43°38'03.50""S 172°29'12.80""E",17/7/15
+3_S2,3,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_hakeae,Hakea_acicularis,"43°27'29.28''S 172°12'23,28""E",1/9/14
+16_S14,16,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_hakeae,Hakea_acicularis,"40°56'53.20""S 173°02'31.40""E",22/9/14
+80_S70,80,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_hakeae,Grevillea_sp,"44°24'32.20""S 171°15'11.20""E",23/2/15
+11a_S11,11A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_jucunda,Acacia_sp,"41°25'05.84""S 173°57'53.38""E",19/9/14
+19A_S61,19A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_jucunda,Acacia_sp,"41°15'27.81""S 172°49'21.79""E",24/9/14
+19a_S16,19A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_jucunda,Acacia_sp,"41°15'27.81""S 172°49'21.79""E",24/9/14
+19VOUCHA_S17,19A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_jucunda,Acacia_sp,"41°15'27.81""S 172°49'21.79""E",24/9/14
+19C_S63,19C,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_jucunda,Acacia_sp,"41°15'27.81""S 172°49'21.79""E",24/9/14
+116a_S95,116A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_solanicola,Solanum_tuberosum,"36°53'58.80""S 174°46'55.90""E",6/3/15
+116b_S96,116B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_solanicola,Solanum_tuberosum,"36°53'58.80""S 174°46'55.90""E",6/3/15
+65_S61,65,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_uncatoides,Acacia_sp,"40°42'53.20""S 172°40'49.90""E",30/1/15
+178_S142,178,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_uncatoides,Acacia_sp,"43°48'04.20""S 172°58'33.10""E",16/4/15
+181a_S145,181A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_uncatoides,Acacia_sp,"43°38'37.80""S 172°28'07.80""E",17/7/15
+75a_S67,75A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_uncatoides,Acacia_sp,"43°38'25.90""S 172°28'31.20""E",20/2/15
+VIC8A_S189,VIC8A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_uncatoides,Acacia_sp,"37°49'43.60""S 144°58'33.10""E",12/11/14
+VIC8B_S190,VIC8B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia_uncatoides,Acacia_sp,"37°49'43.60""S 144°58'33.10""E",12/11/14
+SA1B_S173,SA1B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Anoeconeossa,Anoeconeossa_sp,Eucalyptus_sp,"34°57'33.20""S 138°40'45.30""E",4/11/14
+440a_S155,440a,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Anomalopsylla,Anomalopsylla_insignita,Plagianthus_sp,"43°42'11.2""S 172°41'30.5""E",23/10/16
+440A_S156,440A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Anomalopsylla,Anomalopsylla_insignita,Plagianthus_sp,"43°42'11.2""S 172°41'30.5""E",23/10/16
+451A_S164,451A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Anomalopsylla,Anomalopsylla_insignita,Olearia_paniculata,"43°42'11.2""S 172°41'30.5""E",30/10/16
+455B_S169,455B,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Anomalopsylla,Anomalopsylla_insignita,Olearia_paniculata,"43°42'11.2""S 172°41'30.5""E",28/10/16
+455b_S170,455b,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Anomalopsylla,Anomalopsylla_insignita,Olearia_paniculata,"43°42'11.2""S 172°41'30.5""E",28/10/16
+35A_S82,35A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Anomalopsylla,Anomalopsylla_POLLEN_ISLAND,Olearia_odorata,"43°37'51.90""S 171°18'02.48""E",14/9/14
+35a_S36,35A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Anomalopsylla,Anomalopsylla_POLLEN_ISLAND,Olearia_odorata,"43°37'51.90""S 171°18'02.48""E",14/9/14
+35B_S83,35B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Anomalopsylla,Anomalopsylla_POLLEN_ISLAND,Olearia_odorata,"43°37'51.90""S 171°18'02.48""E",14/9/14
+35C_S84,35C,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Anomalopsylla,Anomalopsylla_POLLEN_ISLAND,Olearia_odorata,"43°37'51.90""S 171°18'02.48""E",14/9/14
+195_S148,195,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Arytainilla,Arytainilla_spartiophila,Cytisus_scoparius,"43°35'48.53""S 172°21'49.17""E",2/11/15
+207_S154,207,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Arytainilla,Arytainilla_spartiophila,Cytisus_scoparius,"45°02'12.80""S 168°39'38.30""E",9/11/15
+248A_S126,248A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Calophyidae,Atmetocranium,Atmetocranium_myersi,kamahi,"42°56'58.2""S 171°34'53.4""E",4/1/16
+248B_S127,248B,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Calophyidae,Atmetocranium,Atmetocranium_myersi,kamahi,"42°56'58.2""S 171°34'53.4""E",4/1/16
+70a_S64,70A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Bactericera,Bactericera_cockerelli,Solanum_tuberosum,"43°38'25.90""S 172°28'31.20""E",3/2/15
+87_S74,87,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Baeopelma,Baeopelma_foersteri,Alnus_glutinosa,"46°25'28.87""S 168°21'38.03""E",25/2/15
+110_S91,110,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Baeopelma,Baeopelma_foersteri,Alnus_glutinosa,"44°15'24.97""S 170°05'57.58""E",3/3/15
+91_S167,blank,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,NA,NA,blank,NA,NA,NA
+137_S115,137,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Blastopsylla,Blastopsylla_occidentalis,Eucalyptus_sp,"36°46'54.53""S 175°00'33.32""E",26/3/15
+142_S116,142,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Blastopsylla,Blastopsylla_occidentalis,Eucalyptus_sp,"37°47'58.62""S 175°16'19.41""E",28/3/15
+117a_S97,117A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Calophyidae,Calophya,Calophya_schini,Schinus_molle,"43°31'52.23""S 172°37'32.10""E",11/3/15
+117b_S98,117B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Calophyidae,Calophya,Calophya_schini,Schinus_molle,"43°31'52.23""S 172°37'32.10""E",11/3/15
+150b_S121,150B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Casuarinicola,Casuarinicola_australis,Casuarina_sp,"35°45'23.84""S 174°22'38.88""E",31/3/15
+SA3A_S174,SA3A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Casuarinicola,Casuarinicola_australis,Casuarina_sp,"34°57'33.20""S 138°40'45.30""E",6/11/14
+125_S105,125,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Casuarinicola,Casuarinicola_sp,Casuarina_sp,"36°54'10.60""S 174°46'47.00""E",23/3/15
+147_S119,147,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Casuarinicola,Casuarinicola_sp,Casuarina_sp,"37°13'20.84""S 175°37'44.54""E",29/3/15
+SA8A_S177,SA8A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Casuarinicola,Casuarinicola_sp,Casuarina_sp,"34°57'33.20""S 138°40'45.30""E",6/11/14
+SA6A_S176,SA6A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Cryptoneossa,Cryptoneossa_sp,Eucalyptus_sp,"34°57'33.20""S 138°40'45.30""E",6/11/14
+44_S42,44,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_clavata_sp_B,Kunzea_ericoides,"42°31'06.10""S 172°49'17.10""E",23/10/14
+152_S123,152,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_clavata_sp_A,Kunzea_ericoides,"43°13'13.20""S 171°43'08.80""E",4/4/15
+34a_S35,34A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_clavata_sp_A,Kunzea_ericoides,"43°37'51.90""S 171°18'02.48""E",14/9/14
+2_S1,2,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_eucalypti,Eucalyptus_globulus,"43°27'29.28''S 172°12'23.28""E",1/9/14
+43_S41,43,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_eucalypti,Eucalyptus_globulus,"43°08'58.00""S 172°43'46.40""E",23/10/14
+78_S68,78,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_eucalypti,Eucalyptus_globulus,"44°07'40.19""S 171°18'30.33""E",23/2/15
+82_S72,82,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_eucalypti,Eucalyptus_globulus,"45°52'41.60""S 170°29'21.30""E",24/2/15
+89_S76,89,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_eucalypti,Eucalyptus_globulus,"46°26'14.28""S 168°22'35.47""E",26/2/15
+99_S82,99,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_eucalypti,Eucalyptus_globulus,"46°09'26.21""S 167°41'08.11""E",27/2/15
+105_S86,105,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_eucalypti,Eucalyptus_globulus,"45°25'29.05""S 167°43'08.34""E",2/3/15
+115_S94,115,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_eucalypti,Eucalyptus_globulus,"45°38'13.11""S 168°10'30.77""E",2/3/15
+165_S132,165,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_eucalypti,Eucalyptus_globulus,"43°38'25.10""S 172°28'31.50""E",27/2/15
+39A_S49,39A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_eucalypti,Eucalyptus_globulus,"43°09'36.90""S 172°43'51.70""E",23/10/14
+39B_S50,39B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_eucalypti,Eucalyptus_globulus,"43°09'36.90""S 172°43'51.70""E",23/10/14
+39C_S51,39C,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_eucalypti,Eucalyptus_globulus,"43°09'36.90""S 172°43'51.70""E",23/10/14
+42A_S52,42A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_eucalypti,Eucalyptus_globulus,"42°46'24.70""S 172°50'54.00""E",23/10/14
+42B_S53,42B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_eucalypti,Eucalyptus_globulus,"42°46'24.70""S 172°50'54.00""E",23/10/14
+42C_S54,42C,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_eucalypti,Eucalyptus_globulus,"42°46'24.70""S 172°50'54.00""E",23/10/14
+SA2A_S55,SA2A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_eucalypti,Eucalyptus_globulus,"34°57'33.20""S 138°40'45.30""E",4/11/14
+SA2B_S56,SA2B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_eucalypti,Eucalyptus_globulus,"34°57'33.20""S 138°40'45.30""E",4/11/14
+SA2C_S57,SA2C,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_eucalypti,Eucalyptus_globulus,"34°57'33.20""S 138°40'45.30""E",4/11/14
+SI10_S179,SI10,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_eucalypti,Eucalyptus_globulus,"46°54'01.20""S 168°07'15.90""E",14/10/14
+SI15_S181,SI15,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_eucalypti,Eucalyptus_globulus,"46°54'01.20""S 168°07'15.90""E",14/10/14
+VIC1A_S58,VIC1A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_eucalypti,Eucalyptus_globulus,"37°49'43.60""S 144°58'33.10""E",12/11/14
+VIC1B_S59,VIC1B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_eucalypti,Eucalyptus_globulus,"37°49'43.60""S 144°58'33.10""E",12/11/14
+VIC1C_S60,VIC1C,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_eucalypti,Eucalyptus_globulus,"37°49'43.60""S 144°58'33.10""E",12/11/14
+VIC1C_S188,VIC1C,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_eucalypti,Eucalyptus_globulus,"37°49'43.60""S 144°58'33.10""E",12/11/14
+56_S53,56,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_fuchsia_A,Fuchsia_excorticata,"43°38'23.40""S 172°28'31.30""E",30/11/14
+194_S147,194,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_fuchsia_A,Fuchsia_excorticata,"44°40'19.30""S 167°53'32.50""E",25/10/15
+220_S159,220,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_fuchsia_A,Fuchsia_excorticata,"44°07'38.90""S 169°20'19.60""E",10/11/15
+221_S160,221,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_fuchsia_A,Fuchsia_excorticata,"43°58'15.40""S 169°25'00.10""E",10/11/15
+224_S163,224,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_fuchsia_A,Fuchsia_excorticata,"43°26'10.50""S 170°04'42.50""E",11/11/15
+229_S164,229,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_fuchsia_A,Fuchsia_excorticata,"42°43'28.70""S 170°59'07.80""E",11/11/15
+237_S165,237,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_fuchsia_A,Fuchsia_excorticata,"41°30'14.40""S 171°57'05.50""E",12/11/15
+geraldineA_S168,geraldineA,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_fuchsia_A,Fuchsia_excorticata,"44°05'44.00""S 171°14'42.20""E",1/9/15
+geraldineB_S169,geraldineB,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_fuchsia_A,Fuchsia_excorticata,"44°05'44.00""S 171°14'42.20""E",1/9/15
+SI13B_S192,SI13B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_fuchsia_A,Fuchsia_excorticata,"46°54'01.20""S 168°07'15.90""E",14/10/14
+SI16_S182,SI16,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_fuchsia_A,Fuchsia_excorticata,"46°54'01.20""S 168°07'15.90""E",14/10/14
+SI22_S184,SI22,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_fuchsia_A,Fuchsia_excorticata,"46°54'01.20""S 168°07'15.90""E",6/11/14
+SI7_S185,SI7,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_fuchsia_A,Fuchsia_excorticata,"46°54'01.20""S 168°07'15.90""E",6/11/14
+SignOfBellbird_S26,Sign of Bellbird,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_fuchsia_A,Fuchsia_excorticata,"43°37'58.40""S 172°37'36.00""E",1/9/15
+TeOkaA_S170,TeOkaA,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_fuchsia_A,Fuchsia_excorticata,"43°49'37.10""S 172°43'06.00""E",1/9/15
+TeOkaB_S171,TeOkaB,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_fuchsia_A,Fuchsia_excorticata,"43°49'37.10""S 172°43'06.00""E",1/9/15
+SI13A_S70,SI13A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_fuchsia_A,Fuchsia_excorticata,"46°54'01.20""S 168°07'15.90""E",14/10/14
+SI13B_S71,SI13B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_fuchsia_A,Fuchsia_excorticata,"46°54'01.20""S 168°07'15.90""E",14/10/14
+9A_S67,9A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_fuchsia_B,Fuchsia_excorticata,"42°17'05.99""S 173°45'39.53""E",19/9/14
+9B_S68,9B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_fuchsia_B,Fuchsia_excorticata,"42°17'05.99""S 173°45'39.53""E",19/9/14
+9C_S69,9C,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_fuchsia_B,Fuchsia_excorticata,"42°17'05.99""S 173°45'39.53""E",19/9/14
+9d_S6,9D,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_fuchsia_B,Fuchsia_excorticata,"42°17'05.99""S 173°45'39.53""E",19/9/14
+9e_S7,9E,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_fuchsia_B,Fuchsia_excorticata,"42°17'05.99""S 173°45'39.53""E",19/9/14
+9f_S8,9F,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_fuchsia_B,Fuchsia_excorticata,"42°17'05.99""S 173°45'39.53""E",19/9/14
+9g_S9,9G,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_fuchsia_B,Fuchsia_excorticata,"42°17'05.99""S 173°45'39.53""E",19/9/14
+127a_S106,127A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_insularis,Eucalyptus_sp,"36°52'26.30""S 174°43'45.50""E",23/3/15
+124_S104,124,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_longicauda,Lophostemon_confertus,"36°51'41.38""S 174°46'32.21""E",22/3/15
+131a_S107,131A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_longicauda,Lophostemon_confertus,"37°00'28.60""S 174°54'22.20""E",25/3/15
+131b_S108,131B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_longicauda,Lophostemon_confertus,"37°00'28.60""S 174°54'22.20""E",25/3/15
+175VOUCHA_S141,175 voucher A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_pollicaris,Leptospermum_scoparius,"43°48'35.70""S 173°01'27.50""E",16/4/15
+24A_S72,24A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_pollicaris,Leptospermum_scoparius,"43°39'14.80""S 172°48'44.20""E",14/9/14
+24a_S22,24A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_pollicaris,Leptospermum_scoparius,"43°39'14.80""S 172°48'44.20""E",14/9/14
+24B_S73,24B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_pollicaris,Leptospermum_scoparius,"43°39'14.80""S 172°48'44.20""E",14/9/14
+24b_S23,24B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_pollicaris,Leptospermum_scoparius,"43°39'14.80""S 172°48'44.20""E",14/9/14
+24C_S74,24C,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_pollicaris,Leptospermum_scoparius,"43°39'14.80""S 172°48'44.20""E",14/9/14
+24c_S24,24C,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_pollicaris,Leptospermum_scoparius,"43°39'14.80""S 172°48'44.20""E",14/9/14
+31A_S75,31A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_pollicaris,Leptospermum_scoparius,"43°49'08.40""S 172°46'43.10""E",14/9/14
+31a_S31,31A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_pollicaris,Leptospermum_scoparius,"43°49'08.40""S 172°46'43.10""E",14/9/14
+31B_S76,31B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_pollicaris,Leptospermum_scoparius,"43°49'08.40""S 172°46'43.10""E",14/9/14
+31b_S32,31B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_pollicaris,Leptospermum_scoparius,"43°49'08.40""S 172°46'43.10""E",14/9/14
+41_S40,41,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_SHORT,Kunzea_ericoides,"42°46'24.70""S 172°50'54.00""E",23/10/14
+164_S131,164,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_SHORT,Kunzea_ericoides,"43°46'30.60""S 172°46'40.40""E",29/3/15
+172_S137,172,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_SHORT,Kunzea_ericoides,"43°48'35.70""S 173°01'27.50""E",16/4/15
+175_S140,175,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_SHORT,Kunzea_ericoides,"43°48'35.70""S 173°01'27.50""E",16/4/15
+23A_S77,23A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_SHORT,Kunzea_ericoides,"43°39'14.80""S 172°48'44.20""E",14/9/14
+23a_S19,23A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_SHORT,Kunzea_ericoides,"43°39'14.80""S 172°48'44.20""E",14/9/14
+23B_S78,23B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_SHORT,Kunzea_ericoides,"43°39'14.80""S 172°48'44.20""E",14/9/14
+23b_S20,23B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_SHORT,Kunzea_ericoides,"43°39'14.80""S 172°48'44.20""E",14/9/14
+23C_S79,23C,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_SHORT,Kunzea_ericoides,"43°39'14.80""S 172°48'44.20""E",14/9/14
+23c_S21,23C,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_SHORT,Kunzea_ericoides,"43°39'14.80""S 172°48'44.20""E",14/9/14
+33A_S80,33A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_SHORT,Kunzea_ericoides,"43°37'51.90""S 171°18'02.48""E",14/9/14
+33a_S33,33A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_SHORT,Kunzea_ericoides,"43°37'51.90""S 171°18'02.48""E",14/9/14
+33B_S81,33B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_SHORT,Kunzea_ericoides,"43°37'51.90""S 171°18'02.48""E",14/9/14
+33b_S34,33B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_SHORT,Kunzea_ericoides,"43°37'51.90""S 171°18'02.48""E",14/9/14
+SI17_S183,SI17,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_sp_B,Fuchsia_excorticata,"46°54'01.20""S 168°07'15.90""E",5/11/15
+SI9_S187,SI9,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_sp_B,Leptospermum_scoparius,"46°54'01.20""S 168°07'15.90""E",6/11/14
+14_S13,14,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_sp_A,Olearia_paniculata,"41°18'20.94''S 173°17'03.14""E",21/9/14
+28_S27,28,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_spatulata,Eucalyptus_sp,"43°39'14.80""S 172°48'44.20""E",14/9/14
+52_S49,52,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_spatulata,Eucalyptus_sp,"43°38'23.40""S 172°28'31.30""E",27/11/14
+79_S69,79,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_spatulata,Eucalyptus_sp,"44°24'32.20""S 171°15'11.20""E",23/2/15
+101_S83,101,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_spatulata,Eucalyptus_sp,"45°47'54.90""S 167°32'48.30""E",28/2/15
+108_S89,108,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_spatulata,Eucalyptus_sp,"45°24'57.69""S 167°42'38.62""E",2/3/15
+109_S90,109,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_spatulata,Eucalyptus_sp,"45°38'13.11""S 168°10'30.77""E",2/3/15
+136_S114,136,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_spatulata,Eucalyptus_sp,"36°46'54.53""S 175°00'33.32""E",26/3/15
+143_S117,143,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_spatulata,Eucalyptus_sp,"37°47'58.62""S 175°16'19.41""E",28/3/15
+8b_S5,8B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_spatulata,Eucalyptus_sp,"42°57'52.31""S 172°58'04.14""E",18/9/14
+SI8_S186,SI8,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_spatulata,Eucalyptus_sp,"46°54'01.20""S 168°07'15.90""E",6/11/14
+81_S71,81,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Ctenarytaina,Ctenarytaina_thysanura,Eucalyptus_sp,"44°24'32.20""S 171°15'11.20""E",23/2/15
+SA5A_S175,SA5A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Aphalaridae,Eucalyptolyma,Eucalyptolyma_maideni,Eucalyptus_sp,"34°57'33.20""S 138°40'45.30""E",4/11/14
+135a_S113,135A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Glycaspis,Glycaspis_granulata,Eucalyptus_sp,"36°46'54.53""S 175°00'33.32""E",26/3/15
+mockA_S51,mockA,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,NA,MOCK,MOCK,NA,NA,NA
+122_S102,122,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Calophyidae,Mycopsylla,Mycopsylla_fici,Ficus_macrophylla,"36°51'01.51""S 174°46'04.29""E",22/3/15
+134a_S111,134A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Calophyidae,Mycopsylla,Mycopsylla_fici,Ficus_macrophylla,"36°51'20.20""S 174°45'43.70""E",26/3/15
+134b_S112,134B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Calophyidae,Mycopsylla,Mycopsylla_fici,Ficus_macrophylla,"36°51'20.20""S 174°45'43.70""E",26/3/15
+MockEven_S193,MockEven,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,NA,ND,ND,NA,NA,NA
+MockStaggered_S194,MockStaggered,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,NA,ND,ND,NA,NA,NA
+187_S146,187,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla_apicalis,Sophora_microphylla,"43°31'22.44""S 172°35'07.44""E",1/9/15
+200big_S149,200,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla_apicalis,Sophora_microphylla,"45°05'13.47""S 170°58'31.85""E",2/11/15
+201big_S151,201,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla_apicalis,Sophora_microphylla,"46°24'57.20""S 168°21'45.70""E",8/11/15
+206_S153,206,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla_apicalis,Sophora_microphylla,"45°02'12.80""S 168°39'38.30""E",9/11/15
+26_S25,26,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla_carmichaeliae_A,Carmichaelia_sp,"43°39'14.80""S 172°48'44.20""E",14/9/14
+22A_S91,22A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla_carmichaeliae_A,Carmichaelia_sp,"43°46'42.50""S 172°47'10.90""E",14/9/14
+22B_S92,22B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla_carmichaeliae_A,Carmichaelia_sp,"43°46'42.50""S 172°47'10.90""E",14/9/14
+222_S161,222,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla_carmichaeliae_C,Carmichaelia_sp,"43°45'03.70""S 169°23'13.60""E",10/11/15
+223_S162,223,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla_carmichaeliae_C,Carmichaelia_sp,"43°33'54.80""S 169°46'13.30""E",10/11/15
+212_S156,212,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla_carmichaeliae_E,Carmichaelia_petri,"44°57'19.90""S 169°15'51.90""E",9/11/15
+213_S157,213,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla_carmichaeliae_E,Carmichaelia_petri,"45°02'03.10""S 169°11'59.10""E",9/11/15
+217_S158,217,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla_carmichaeliae_E,Carmichaelia_petri,"44°58'29.00""S 168°56'54.80""E",10/11/15
+55_S52,55,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla_frodobagginsi,Sophora_microphylla,"43°38'23.40""S 172°28'31.30""E",30/11/14
+200small_S150,200,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla_frodobagginsi,Sophora_microphylla,"45°05'13.47""S 170°58'31.85""E",2/11/15
+201small_S152,201,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla_frodobagginsi,Sophora_microphylla,"46°24'57.20""S 168°21'45.70""E",8/11/15
+209_S155,209,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla_frodobagginsi,Sophora_microphylla,"45°02'09.70""S 169°11'33.80""E",9/11/15
+238_S166,238,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla_frodobagginsi,Sophora_microphylla_(Kowhai),"41°15'29.40""S 172°07'00.80""E",12/11/15
+94_S80,94,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Liviidae,Psyllopsis,Psyllopsis_fraxini,Fraxinus_excelsior,"46°24'07.73""S 168°21'23.71""E",26/2/15
+107_S88,107,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Liviidae,Psyllopsis,Psyllopsis_fraxini,Fraxinus_excelsior,"45°24'57.69""S 167°42'38.62""E",2/3/15
+113_S93,113,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Liviidae,Psyllopsis,Psyllopsis_fraxini,Fraxinus_excelsior,"44°18'35.41""S 170°57'10.41""E",4/3/15
+49_S47,49,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Liviidae,Psyllopsis,Psyllopsis_fraxinicola,Fraxinus_excelsior,"43°38'23.40""S 172°28'31.30""E",27/11/14
+93_S79,93,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Liviidae,Psyllopsis,Psyllopsis_fraxinicola,Fraxinus_excelsior,"46°24'07.73""S 168°21'23.71""E",26/2/15
+106_S87,106,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Liviidae,Psyllopsis,Psyllopsis_fraxinicola,Fraxinus_excelsior,"45°24'57.69""S 167°42'38.62""E",2/3/15
+112_S92,112,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Liviidae,Psyllopsis,Psyllopsis_fraxinicola,Fraxinus_excelsior,"44°18'35.41""S 170°57'10.41""E",4/3/15
+45_S43,45,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_acuta,Unknown,"42°31'02.20""S 172°48'58.70""E",23/10/14
+5b_S4,5B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_acuta,Ozothamnus_sp,"43°17'48.63""S 171°44'13.02""E",1/9/14
+118a_S99,118A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_adventicia,Syzygium_smithii,"43°31'51.34""S 172°37'30.53""E",11/3/15
+174_S139,174,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_bifida,Olearia_fragmentissima,"43°48'35.70""S 173°01'27.50""E",16/4/15
+29A_S95,29A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_bifida,Pseudowintera_colorata,"43°42'51.72""S 172°47'00.86""E",14/9/14
+29a_S28,29A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_bifida,Pseudowintera_colorata,"43°42'51.72""S 172°47'00.86""E",14/9/14
+29B_S96,29B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_bifida,Pseudowintera_colorata,"43°42'51.72""S 172°47'00.86""E",14/9/14
+29b_S29,29B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_bifida,Pseudowintera_colorata,"43°42'51.72""S 172°47'00.86""E",14/9/14
+SI12_S180,SI12,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_bifida,Fuchsia_excorticata,"46°54'01.20""S 168°07'15.90""E",14/10/14
+SI3B_S191,SI3B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_bifida,Dracophyllum_sp,"46°54'01.20""S 168°07'15.90""E",14/10/14
+91_S78,91,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_BRENDA_MAY,Olearia_ilicifolia,"46°34'20.08""S 169°20'48.30""E",26/2/15
+276_S138,276,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_BRENDA_MAY,Olearia_sp,"44°10'57.0""S 169°00'31.7""E",6/2/16
+414_S143,414,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_colorata,Halocarpus_sp,"41°48'24.1""S 172°51'23.0""E",29/3/16
+46A_S93,46A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_colorata,Halocarpus_sp,"43°01'45.90""S 171°37'46.70""E",27/10/14
+46a_S44,46A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_colorata,Halocarpus_sp,"43°01'45.90""S 171°37'46.70""E",27/10/14
+46B_S94,46B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_colorata,Halocarpus_sp,"43°01'45.90""S 171°37'46.70""E",27/10/14
+50a_S48,50A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_colorata,Halocarpus_sp,"43°38'23.40""S 172°28'31.30""E",23/11/14
+260_S130,260,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_compressa,Olearia_rani_var_colorata,"41°05'35.9""S 172°43'17.4""E",24/1/16
+473A_S184,473A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_compressa,Olearia_rani,"40°44'39.1""S 172°40'51.2""E",20/1/17
+473a_S189,473a,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_compressa,Olearia_rani,"40°44'39.1""S 172°40'51.2""E",20/1/17
+476A_S185,476A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_curta,Metrosideros_robusta,"40°38'12.1""S 172°34'05.2""E",23/1/17
+476a_S190,476a,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_curta,Metrosideros_robusta,"40°38'12.1""S 172°34'05.2""E",23/1/17
+415A_S144,415A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_dacrydii,Halocarpus_sp,"41°48'24.1""S 172°51'23.0""E",29/3/16
+415B_S145,415B,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_dacrydii,Halocarpus_sp,"41°48'24.1""S 172°51'23.0""E",29/3/16
+61_S57,61,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_decurvata,Dracophyllum_sp,"43°17'48.63""S 171°44'13.02""E",27/1/15
+69_S63,69,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_decurvata,Dracophyllum_sp,"42°33'56.10""S 173°11'19.70""E",8/1/15
+40_S39,40,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_discariae,Discaria_toumatou,"43°09'36.90""S 172°43'51.70""E",23/10/14
+38a_S37,38A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_discariae,Discaria_toumatou,"43°38'07.60""S 171°13'34.10""E",14/9/14
+38b_S38,38B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_discariae,Discaria_toumatou,"43°38'07.60""S 171°13'34.10""E",14/9/14
+161_S129,161,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_doryphora,Olearia_ilicifolia,"43°48'35.70""S 173°01'27.50""E",12/4/15
+162_S130,162,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_doryphora,Olearia_ilicifolia,"43°48'35.70""S 173°01'27.50""E",12/4/15
+170_S136,170,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_doryphora,Olearia_ilicifolia,"43°45'07.68""S 173°00'56.54""E",16/4/15
+173_S138,173,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_doryphora,Olearia_ilicifolia,"43°48'35.70""S 173°01'27.50""E",16/4/15
+48_S46,48,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_emarginata,Coprosma_sp,"43°12'23.00""S 171°43'21.10""E",27/10/14
+151_S122,151,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_falcata,Aristotelia_fruticosa,"42°59'48.30""S 171°44'23.60""E",4/4/15
+154_S124,154,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_falcata,Aristotelia_fruticosa,"42°59'48.30""S 171°44'23.60""E",4/4/15
+157_S125,157,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_falcata,Aristotelia_fruticosa,"43°13'13.20""S 171°43'08.80""E",4/4/15
+158_S126,158,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_falcata,Aristotelia_fruticosa,"43°07'56.20""S 171°46'01.10""E",5/4/15
+64_S60,64,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_fasciata,Muehlenbeckia_complexa,"40°30'51.60""S 172°45'17.20""E",29/1/15
+132_S109,132,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_fasciata,Muehlenbeckia_auxiliaris,"37°00'28.60""S 174°54'22.20""E",25/3/15
+471A_S182,471A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_FORTROSE,Elaeocarpus,"41°17'28.0""S 173°14'04.2""E",15/1/17
+471a_S187,471a,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_FORTROSE,Elaeocarpus,"41°17'28.0""S 173°14'04.2""E",15/1/17
+457A_S172,457A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_gourlayi,Olearia_virgata,"41°17'28.0""S 173°14'04.2""E",1/12/16
+457B_S173,457B,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_gourlayi,Olearia_virgata,"41°17'28.0""S 173°14'04.2""E",1/12/16
+63a_S59,63A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_hebicola,Hebe_sp,"43°17'48.63""S 171°44'13.02""E",27/1/15
+4_S3,4,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_irregularis,Pseudopanax_arboreus,"43°17'27.61""S 171°55'30.99""E",1/9/14
+166_S133,166,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_irregularis,Pseudopanax_arboreus,"43°43'16.56""S 172°56'14.46""E",16/4/15
+168_S134,168,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_irregularis,Pseudopanax_arboreus,"43°43'16.56""S 172°56'14.46""E",16/4/15
+252_S128,252,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_irregularis,Fuchsia_excorticata,"41°08'49.6""S 173°30'48.2""E",7/1/16
+119a_S100,119A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_MASSEY,Olearia_sp,"43°31'49.10""S 172°37'15.20""E",11/3/15
+479a_S88,479a,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_MASSEY,Oleaeria_odorata,"41°02'13.2""S 172°48'27.0""E",24/1/17
+479A_S186,479A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_MASSEY,Olearia_odorata,"41°02'13.2""S 172°48'27.0""E",24/1/17
+68_S62,68,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_obscura,Hebe_sp,"42°33'56.10""S 173°11'19.70""E",8/1/15
+478A_S85,478A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_obscura,Hebe_sp,"41°02'13.2""S 172°48'27.0""E",24/1/17
+478B_S86,478B,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_obscura,Hebe_sp,"41°02'13.2""S 172°48'27.0""E",24/1/17
+62_S58,62,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_OMAHUTA,Metrosideros_umbellata,"43°17'48.63""S 171°44'13.02""E",27/1/15
+456_S171,456,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_OMAHUTA,Brachyglottis_repanda,"41°17'28.0""S 173°14'04.2""E",1/12/16
+472A_S183,472A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_OMAHUTA,Brachyglottis_repanda,"40°44'39.1""S 172°40'51.2""E",17/1/17
+472a_S188,472a,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_OMAHUTA,Brachyglottis_repanda,"40°44'39.1""S 172°40'51.2""E",17/1/17
+72_S65,72,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_panacis,Pseudopanax_crassifolius,"43°38'25.90""S 172°28'31.20""E",16/2/15
+57b_S54,57B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_PRICES_VALLEY,Plagianthus_sp,"37°45'54.80""S 176°24'01.10""E",9/11/14
+410_S141,410,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_sp_A,Pittosporum_divaricartum,"41°48'24.1""S 172°51'23.0""E",27/3/16
+468A_S180,468A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_sp_A,Pittosporum_divaricartum,"41°17'28.0""S 173°14'04.2""E",14/1/17
+468B_S181,468B,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_sp_A,Pittosporum_divaricartum,"41°17'28.0""S 173°14'04.2""E",14/1/17
+160_S128,160,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_acuta_B,Ozothamnus_sp,"43°07'56.20""S 171°46'01.10""E",5/4/15
+412_S142,412,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_sp_B,Olearia_arborescens,"41°48'24.1""S 172°51'23.0""E",28/3/16
+47_S45,47,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_sp_C,Pseudopanax_edgerlii,"43°01'45.90""S 171°37'46.70""E",27/10/14
+442A_S157,442A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_sp_D,Olearia_virgata,"43°13'27.5""S 172°16'57.0""E",24/10/16
+442B_S158,442B,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_sp_D,Olearia_virgata,"43°13'27.5""S 172°16'57.0""E",24/10/16
+442b_S159,442b,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_sp_D,Olearia_virgata,"43°13'27.5""S 172°16'57.0""E",24/10/16
+120a_S101,120A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_subacuta,Olearia_avicenniifolia,"43°37'57.40""S 172°37'29.60""E",10/3/15
+159a_S127,159A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_subacuta,Olearia_avicenniifolia,"43°07'56.20""S 171°46'01.10""E",5/4/15
+257_S129,257,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_subvexa,Olearia,"40°45'48.6""S 172°40'58.8""E",17/1/16
+458_S174,458,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_subvexa,Olearia_avicenniifolia,"41°17'28.0""S 173°14'04.2""E",1/12/16
+477A_S87,477A,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_subvexa,Olearia_avicenniifolia,"41°02'13.2""S 172°48'27.0""E",24/1/17
+477B_S84,477B,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_subvexa,Olearia_avicenniifolia,"41°02'13.2""S 172°48'27.0""E",24/1/17
+53_S50,53,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_vitreoradiata,Pittosporum_crassifolius,"43°38'23.40""S 172°28'31.30""E",30/11/14
+59_S56,59,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_vitreoradiata,Pittosporum_crassifolius,"40°43'36.60""S 172°41'19.40""E",23/1/15
+84_S73,84,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_vitreoradiata,Pittosporum_crassifolius,"46°28'05.04""S 168°39'30.15""E",25/2/15
+88_S75,88,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_vitreoradiata,Pittosporum_crassifolius,"46°25'28.87""S 168°21'38.03""E",25/2/15
+90_S77,90,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_vitreoradiata,Pittosporum_crassifolius,"46°33'51.23""S 168°56'41.04""E",26/2/15
+102_S84,102,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_vitreoradiata,Pittosporum_crassifolius,"45°46'42.34""S 167°36'55.42""E",28/2/15
+104_S85,104,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_vitreoradiata,Pittosporum_crassifolius,"45°33'53.50""S 167°36'38.66""E",2/3/15
+133_S110,133,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_vitreoradiata,Pittosporum_crassifolius,"36°50'48.80""S 174°45'17.50""E",25/3/15
+148_S120,148,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_vitreoradiata,Pittosporum_crassifolius,"37°00'49.13""S 175°30'37.32""E",29/3/15
+169_S135,169,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Triozidae,Trioza,Trioza_vitreoradiata,Pittosporum_crassifolius,"43°45'07.68""S 173°00'56.54""E",16/4/15
+Mock_S192,Mock,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,NA,NA,NA,NA,NA,NA
+PCRctrl_S191,PCR_negative,3,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,NA,NA,NA,NA,NA,NA
