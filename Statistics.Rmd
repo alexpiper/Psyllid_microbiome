@@ -591,7 +591,7 @@ phylo.dist <- cophenetic(pruned.tree) %>%
   as.matrix()
 
 # New plant  distance matrix
-library(brranching)
+#library(brranching)
 # Do this replacement at start
 #plants <- samdf  %>%
 #  dplyr::select(hostplant_spp)%>%
@@ -600,9 +600,14 @@ library(brranching)
 #                                                format = "isubmit", 
 #                                                db = "ncbi"))
 #
+## Get tree
 #plant.tree <- brranching::phylomatic(plants$branching, taxnames = TRUE)
+#
+## add branch lengths using the wikstrom ages file
+#plant.tree <- brranching::rbladj(plant.tree, "wikstrom.ages")
 #plant.tree$tip.label <- str_to_sentence(plant.tree$tip.label)
 #write.tree(plant.tree, file="sample_data/plant_tree.nwk")
+
 plant.tree <- read.tree("sample_data/plant_tree.nwk")
 
 plant.dist <- cophenetic(plant.tree) %>%
@@ -950,85 +955,45 @@ res <- data.frame(OTU=names(paco_residuals), values=unname(paco_residuals)) %>%
 
 ggplot(res, aes(x=values))+
   geom_density(fill='grey70')+
-  #geom_vline(data=res %>% 
-  #             filter(genus=="Candidatus Carsonella"), aes(xintercept=values)) +
-  #facet_wrap(~order) +
   facet_wrap(~psyllid_genus) +
   theme_bw()+
   xlab('Procrustes residuals')+
   ylab('Frequency')
 
-# Different distriutions are being driven by psyllid spp, with trioza having the best fit
-
 # Cophyloplot
-
 otu.lut <- which(otu ==1, arr.ind=TRUE)
 assoc <- cbind(rownames(otu)[otu.lut[,1]], colnames(otu)[otu.lut[,2]])
 
-# Cant have - or space characters
-assoc[,1] <- str_replace_all(assoc[,1], " ", "_")
-assoc[,2] <- str_replace_all(assoc[,2], "-", "_")
-assoc[,2] <- str_replace_all(assoc[,2], " ", "_")
-
-newtree <- pruned.tree2
-newtree$tip.label <- str_replace_all(newtree$tip.label, " ", "_")
-
-new_stree <- phy_tree(ps3)
-new_stree$tip.label <- new_stree$tip.label %>%
-   str_replace_all( "-", "_") %>%
-   str_replace_all( " ", "_")
-
-weights <- assoc %>%
-  as.data.frame %>%
-  magrittr::set_colnames(c("Sample_Name", "OTU")) %>%
-  left_join(res %>% dplyr::select(Sample_Name, OTU, values) %>%
-              mutate(OTU = OTU %>%
-                       str_replace_all("-","_")%>%
-                       str_replace_all(" ","_"))) %>% 
-  pull(values)
-
-library(phytools)
-obj <- cophylo(tr1=newtree, tr2=new_stree, assoc=assoc, rotate=FALSE) 
-plot.cophylo(obj, link.lwd=weights*6, link.lty="solid", fsize=0.1, pts=FALSE, link.type="straight", link.col="steelblue")
-dev.off() #reset graphics device
-
-## psyllid tree
-p1 <- ggtree(newtree, ladderize=FALSE) + geom_tiplab()
+# psyllid tree
+p1 <- ggtree(pruned.tree2, ladderize=FALSE) + geom_tiplab()
 
 weights_p1 <- p1$data %>%
   left_join(res %>%
   group_by(Sample_Name) %>%
   summarise(values = mean(values)) %>%
-    dplyr::rename(label = Sample_Name) %>%
-    mutate(label = label  %>% 
-             str_replace_all("-", "_")%>%
-             str_replace_all(" ", "_"))
+    dplyr::rename(label = Sample_Name)
     )
 p1 <- p1 %<+% weights_p1  + geom_tippoint(aes(colour=values)) +  scale_color_gradient(low="steelblue", high="darkorange1")
 
-#OTU tree
-p2 <- ggtree(new_stree, ladderize=FALSE) + geom_tiplab(size = 1, align = TRUE, linesize=0.05, linetype="dotted")
+# OTU tree
+p2 <- ggtree(phy_tree(ps3), ladderize=FALSE) + geom_tiplab(size = 1, align = TRUE, linesize=0.05, linetype="dotted")
 
 weights_p2 <- p2$data %>%
   left_join(res %>% 
     group_by(OTU) %>%
     summarise(values = mean(values)) %>%
-    dplyr::rename(label = OTU) %>%
-    mutate(label = label  %>% 
-             str_replace_all("-", "_")%>%
-             str_replace_all(" ", "_"))
+    dplyr::rename(label = OTU)
     )
 
 p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=values)) +  scale_color_gradient(low="steelblue", high="darkorange1")
 
+# Tanglegram
 dd <- assoc %>%
   as_data_frame() %>%
   magrittr::set_colnames(c("label.x", "label.y")) %>%
   left_join(res %>% 
               dplyr::select(Sample_Name, OTU, values) %>% 
-              dplyr::rename(label.x = Sample_Name, label.y = OTU) %>%
-              mutate(label.y = str_replace_all(label.y, "-", "_"))%>%
-              mutate(label.y = str_replace_all(label.y, " ", "_"))) %>%
+              dplyr::rename(label.x = Sample_Name, label.y = OTU)) %>%
   left_join(p1$data %>% dplyr::select(label, y) %>% dplyr::rename(label.x = label), by="label.x") %>%
   left_join(p2$data %>% dplyr::select(label, y) %>% dplyr::rename(label.y = label), by="label.y") %>%
   rownames_to_column("assoc") %>%
@@ -1197,35 +1162,155 @@ dev.off() #reset graphics device
 
 ## Psyllid hostplant cophylogeny
 
-Tanglegram of all plants and  
+Tanglegram of all plants and  psyllids!
 ```{r}
+plant.tree <- read.tree("sample_data/plant_tree.nwk")
+plant.tree  <- drop.tip(plant.tree , "Sophora_microphylla_-kowhai" )
 
-## Look at differences between 2
+#Prepare co-occurance matrix
+coocur <- samdf %>%
+  as_tibble() %>%
+  dplyr::select(psyllid_spp, hostplant_spp) %>%
+  filter(!is.na(psyllid_spp)) %>%
+  unique() %>%
+  mutate(presence = 1) %>%
+  pivot_wider(names_from = "hostplant_spp",
+              values_from="presence",
+              values_fill = list(presence = 0)) %>%
+  column_to_rownames("psyllid_spp")
 
-plants <- read_csv("sample_data/plant_distance.csv") %>% 
-  dplyr::select(SampleID, `Host plants`) %>%
-  full_join(samdf %>% dplyr::select(SampleID, hostplant_spp, psyllid_spp)) %>%
-  dplyr::rename(hostplant_spp_dist = `Host plants`,
-                hostplant_spp_sampledata = hostplant_spp) %>%
-  dplyr::mutate(hostplant_spp_dist = hostplant_spp_dist %>% str_remove(".$"))
+# Get cophenetic distance
+plant_samples <- intersect(plant.tree$tip.label, samdf$hostplant_spp)
+h_dist <- cophenetic(plant.tree)[plant_samples, plant_samples]
 
-write_csv(plants, "hostplant_species.csv")
+# psyllid dist
+psyllid_samples <- intersect(pruned.tree$tip.label, samdf$psyllid_spp)
+s_dist <- cophenetic(pruned.tree)[psyllid_samples, psyllid_samples ]
 
-# use phylocom to get a tree
-plants <- read_csv("sample_data/plant_distance.csv")  %>%
-  mutate(host_plants = `Host plants` %>% str_remove(".$")) %>%
-  pull(host_plants) %>%
-  unique
+coocur <- coocur[psyllid_samples, plant_samples]
+# prepare paco data
+D <- prepare_paco_data(H=h_dist, P=s_dist, HP=coocur)
+# Add pcord
+D <- add_pcoord(D, correction='cailliez') 
+
+D$H_PCo %>% as.vector %>% summary %>% print
+D$P_PCo %>% as.vector %>% summary %>% print
+
+# plot Principal coordinates
+D$H_PCo <-  neg_to_pos_eig(D$H_PCo)
+D$P_PCo <-  neg_to_pos_eig(D$P_PCo)
+
+tmp <- D$H_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame
+p_host <- ggplot(tmp, aes(Axis.1, Axis.2)) +
+    geom_point() +
+    theme_bw() +
+  ggtitle("Host PCA")
+#One really to the left is Atmetocranium.myersi
+
+tmp <- D$P_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame
+p_micro <- ggplot(tmp, aes(Axis.1, Axis.2))  +
+    geom_point() +
+    theme_bw()+
+  ggtitle("Microbiome PCA")
+    
+plot(p_host + p_micro)
+
+# run paco
+paco_run <- PACo(D, nperm=9, seed=909, method='quasiswap', symmetric=TRUE) #Symetric - is one meant to track the evolution of another?
+
+#print overall significance
+print(paco_run$gof)
+
+# Get interaction-specific cophylogenetic contributions using leave-one-out jacknifing
+# whereby one link is removed and the fit reassessed.
+#The contribution of that link is therefore the change in fit whensaid link is removed.
+#paco_run <- paco_links(paco_run, .parallel = TRUE)
 
 
-library(brranching)
-tree <- brranching::phylomatic(plants, get="POST")
+#Get observed residuals of Procrustean superimposition 
+#small residual indicates a link more congruent with a cophylogenetic hypothesis
+paco_residuals <- residuals_paco(paco_run$proc, type = "interaction")
 
-sp_list_phylocom = brranching::phylomatic_names(plants, 
-                                                format = "isubmit", 
-                                                db = "ncbi")
-tree = brranching::phylomatic(sp_list_phylocom)
+# Visualise residuals
+res <- data.frame(OTU=names(paco_residuals), values=unname(paco_residuals)) %>%
+  separate(OTU, into=c("hostplant_spp", "psyllid_spp"), sep="-", extra="merge")
+
+ggplot(res, aes(x=values))+
+  geom_density(fill='grey70')+
+  #facet_wrap(~psyllid_genus) +
+  theme_bw()+
+  xlab('Procrustes residuals')+
+  ylab('Frequency')
+
+# Cophyloplot
+coocur.lut <- which(coocur ==1, arr.ind=TRUE)
+assoc <- cbind(rownames(coocur)[coocur.lut[,1]], colnames(coocur)[coocur.lut[,2]])
+
+# Get rotations using cophylo then extract tree?
+obj <- cophylo(tr1=plant.tree, tr2=pruned.tree, assoc=assoc, rotate=TRUE)
+
+# plant tree
+p1 <- ggtree(plant.tree, ladderize=FALSE) + geom_tiplab()
+weights_p1 <- p1$data %>%
+  left_join(res %>%
+  group_by(hostplant_spp) %>%
+  summarise(values = mean(values)) %>%
+    dplyr::rename(label = hostplant_spp)
+    )
+p1 <- p1 %<+% weights_p1  + geom_tippoint(aes(colour=values)) +  scale_color_gradient(low="steelblue", high="darkorange1")
+
+# psyllid_tree
+p2 <- ggtree(pruned.tree, ladderize=FALSE) + geom_tiplab()
+weights_p2 <- p2$data %>%
+  left_join(res %>% 
+    group_by(psyllid_spp) %>%
+    summarise(values = mean(values)) %>%
+    dplyr::rename(label = psyllid_spp)
+    )
+
+p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=values)) +  scale_color_gradient(low="steelblue", high="darkorange1")
+
+# Tanglegram
+dd <- assoc %>%
+  as_data_frame() %>%
+  magrittr::set_colnames(c("label.y", "label.x")) %>%
+  left_join(res %>% 
+              dplyr::select(hostplant_spp, psyllid_spp, values) %>% 
+              dplyr::rename(label.x = hostplant_spp, label.y = psyllid_spp)) %>%
+  left_join(p1$data %>% dplyr::select(label, y) %>% dplyr::rename(label.x = label), by="label.x") %>%
+  left_join(p2$data %>% dplyr::select(label, y) %>% dplyr::rename(label.y = label), by="label.y") %>%
+  rownames_to_column("assoc")
+
+d1_new <- dd %>% 
+  dplyr::select(assoc, label.x, y.x, values) %>%
+  dplyr::rename(label = label.x, y = y.x)%>%
+  mutate(tree = "host") 
+  
+d2_new <- dd %>% 
+  dplyr::select(assoc, label.y, y.y, values) %>%
+  dplyr::rename(label = label.y, y = y.y) %>%
+  mutate(tree = "microbe")
+
+gg.tangle <- bind_rows(d1_new, d2_new) %>%
+  filter(!is.na(label))%>% 
+  group_by(tree) %>%
+  mutate(y = y / max(y)) %>%
+  ungroup %>%
+  #mutate(values = as.numeric((1-values)/100)) %>%
+  ggplot(aes(x=tree, y=y, group=assoc, colour=values)) +
+    geom_line(alpha=1) +  
+    scale_color_gradient(low="steelblue", high="darkorange1") +
+    scale_x_discrete(expand = c(0,0)) + 
+    theme_void() +
+    theme(legend.position = "bottom")
+
+plant_tanglegram <- p1 + gg.tangle + (p2 + scale_x_reverse())
+plant_tanglegram 
+
 ```
+
+
+## TRioza hostplants and trioza psyllids
 
 
 ## Community assembly
