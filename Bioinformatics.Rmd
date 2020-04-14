@@ -44,7 +44,8 @@ opts_chunk$set(dev = 'png')
                     "phyloseq", 
                     "DECIPHER",
                     "Biostrings",
-                    "ShortRead")
+                    "ShortRead",
+                    "Biostrings")
 
 .inst <- .cran_packages %in% installed.packages()
 if(any(!.inst)) {
@@ -60,9 +61,12 @@ if(any(!.inst)) {
 #Load all packages
 sapply(c(.cran_packages,.bioc_packages), require, character.only = TRUE)
 
-#Load helper functions 
+#Install and load github packages
 devtools::install_github("alexpiper/seqateurs")
 library(seqateurs)
+devtools::install_github("tobiasgf/lulu")
+library(lulu)
+
 options(stringsAsFactors = FALSE)
 ```
 
@@ -403,6 +407,42 @@ tax_exact <- tax %>%
 # Write taxonomy table to disk
 saveRDS(tax_exact, "output/rds/tax_IdTaxaExact.rds") 
 ```
+
+
+## Curate with LULU
+
+LULU further identifies errors and redundant sequences by combining sequence similarity and co-occurrence patterns
+
+```{r LULU}
+seqtab_final <- readRDS("output/rds/seqtab_final.rds")
+tax_exact <- readRDS("output/rds/tax_IdTaxaExact.rds") 
+
+# Make blast database from the ASV's
+seqs <- insect::char2dna(colnames(seqtab_final))
+names(seqs) <- colnames(seqtab_final)
+insect::writeFASTA(seqs, "output/pre_lulu.fasta")
+taxreturn::blast_install(dest.dir = "bin")
+
+# Blast against themseleves
+matchlist <- taxreturn::blast(query=seqs, db="output/pre_lulu.fasta", output_format = "tabular") %>%
+  select(qseqid, sseqid, pident) %>%
+  as.data.frame()
+
+# Run lulu
+otutab <- as.data.frame(t(seqtab_final))
+curated_result <- lulu(otutab, matchlist)
+saveRDS(curated_result, "lulu_curated.rds")
+
+# get mapping
+curated_result <- readRDS("lulu_curated.rds")
+mapping <- curated_result[["otu_map"]] %>% 
+  rownames_to_column("otu") %>%
+  left_join(tax_exact %>% as.data.frame %>% rownames_to_column("otu"), by="otu")
+
+# Write out curated seqtab
+saveRDS(curated_result[["curated_table"]], "output/rds/seqtab_curated.rds")
+```
+
 
 ## Create phylogenetic tree
 would be better to use the SINA algorithm for this, as its recommended in the BDTT papers
