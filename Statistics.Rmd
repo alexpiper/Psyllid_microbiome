@@ -191,6 +191,7 @@ psyllid_tree$tip.label[!psyllid_tree$tip.label %in% samdf$psyllid_spp]
 pruned.tree <- drop.tip(psyllid_tree, psyllid_tree$tip.label[!psyllid_tree$tip.label %in% samdf$psyllid_spp] )
 ```
 
+# Filtering
 ## Remove outlier Samples
 
 Detecting and potentially removing samples outliers (those samples with underlying data that do not conform to experimental or biological expectations) can be useful for minimizing technical variance. This can be caused by a number of reasons, including low-reads assigned to that sample. In this case we remove all samples below 1000 reads, as these include all samples contributing to lower than usual ASV counts.
@@ -393,7 +394,7 @@ sum_otu <- tax_table(ps) %>%
   as_tibble(rownames="OTU") %>%
   gather("Rank","Name",rank_names(ps)) %>%
   group_by(Rank) %>%
-  mutate(Name = replace(Name, str_detect(Name, "__"),NA)) %>% # This line turns the "__" we added to lower ranks back to NA's
+  mutate(Name = replace(Name, str_detect(Name, "__"), NA)) %>% # This line turns the "__" we added to lower ranks back to NA's
   dplyr::summarise(OTUs_classified = sum(!is.na(Name))) %>%
   mutate(Frac_OTUs = OTUs_classified / ntaxa(ps)) %>%
   mutate(Rank = factor(Rank, rank_names(ps))) %>%
@@ -644,7 +645,7 @@ spat.dist <- spDists(as.matrix(envData), longlat=TRUE) %>%
   as.matrix()
 ```
 
-## Whole dataset
+### Whole dataset
 
 But also see how this paper has done it with PACO https://www.nature.com/articles/s41467-019-10191-3.pdf Using random subsampling? Then pull out the most associated also file:///C:/Users/ap0y/Dropbox/workprojects/Papers/10.1002_ecy.1955.pdf
 
@@ -778,7 +779,7 @@ write_csv(adonis_results, "output/phylosymbiosis/adonis_subset.csv")
 
 # Matrix correlations
 #only use samples present in all
-samples <- Reduce(intersect, list(rownames(otu_table(ps2_subset)), colnames(phylo.dist), colnames(coi.dist), colnames(plant.dist), colnames(spat.dist)))
+samples <- Reduce(intersect, list(rownames(otu_table(ps2)), colnames(phylo.dist), colnames(plant.dist), colnames(spat.dist)))
 
 # Mantel test
 mantel_results <- distlist %>%
@@ -809,10 +810,9 @@ topo_results <- distlist %>%
   }) %>%
   bind_rows(.id="metric") 
 write_csv(topo_results, "output/phylosymbiosis/topo_subset.csv")
-
 ```
 
-### BDTT
+## BDTT
 
 ```{r timeslice}
 library(TreeDist)
@@ -836,32 +836,6 @@ Betas <- BDTT(ps2, slices, metrics=c("Bray", "Aitchison", "Philr"), zeroes="Impu
 # Matrix correlations
 #only use samples present in all
 samples <- Reduce(intersect, list(rownames(otu_table(ps2)), colnames(phylo.dist), colnames(coi.dist), colnames(plant.dist),colnames(newplant.dist), colnames(spat.dist)))
-
-# MANTEL
-BTDD_mantel <- Betas %>%
-  purrr::map_depth(.depth=2, function(x){
-    run_mantel(x, dists=c("phylo.dist", "plant.dist", "spat.dist"),
-               samples=samples, type="mantel")
-  }) %>%
-  purrr::map(bind_rows,.id="metric") %>%
-  bind_rows(.id="slice")
-
-
-gg.mantel <- BTDD_mantel %>%
-  mutate(Comparison = paste0("microbe~", dist1)) %>%
-  ggplot(aes(y=statistic, x=slice, colour=Comparison, group=factor(Comparison)))+ 
-  geom_line(linetype="dashed") +
-  geom_line(data=BTDD_mantel %>% mutate(Comparison = paste0("microbe~",dist1)) %>% mutate(statistic = case_when (signif > 0.01 ~ as.double(NA), signif < 0.01 ~ statistic)), linetype="solid") +
-  geom_hline(yintercept=0) +
-  facet_wrap(~metric) +
-     #theme_classic2()   +
-     theme(legend.position = "right",
-           panel.grid.major.y = element_line(colour="grey", size=0.5, linetype="dashed"),
-           strip.background = element_rect(fill = "grey92", 
-                                           colour = "black", size = 1)
-     )  + scale_color_brewer(palette="Paired")
-
-gg.mantel 
 
 # Partial Mantel
 BTDD_pm <- Betas %>%
@@ -887,26 +861,9 @@ gg.pmantel <- BTDD_pm %>%
      )  + scale_color_brewer(palette="Paired")
 
 gg.pmantel
-
-# Topological comparison
-BTDD_topo <- Betas %>%
-  purrr::map_depth(.depth=2, function(x){
-    run_tree_comparison(x, dists=c("phylo.dist","coi.dist","plant.dist",
-                          "newplant.dist", "spat.dist"), #Change these to matrices
-               samples=samples,
-               clust.method="average",
-               measure="all",
-               runs=100)
-  }) %>%
-  purrr::map(bind_rows,.id="dist") %>%
-  bind_rows(.id="metric")
-
-write_csv(BTDD_topo, "output/phylosymbiosis/BTDD_topo.csv")
-
-# Plot topo
 ```
 
-# Cophylogeny
+## Cophylogeny
 Due to the association with close branches we looked for patterns of cophylogeny
 
 ggtree tanglegrams: https://stackoverflow.com/questions/57161083/coloring-lines-in-tanglegram-based-on-position-of-nodes
@@ -978,7 +935,7 @@ print(paco_run$gof)
 # Get interaction-specific cophylogenetic contributions using leave-one-out jacknifing
 # whereby one link is removed and the fit reassessed.
 #The contribution of that link is therefore the change in fit whensaid link is removed.
-paco_run <- paco_links(paco_run, .parallel = TRUE)
+#paco_run <- paco_links(paco_run, .parallel = TRUE)
 
 #Get observed residuals of Procrustean superimposition 
 #small residual indicates a link more congruent with a cophylogenetic hypothesis
@@ -993,12 +950,15 @@ res <- data.frame(OTU=names(paco_residuals), values=unname(paco_residuals)) %>%
 
 ggplot(res, aes(x=values))+
   geom_density(fill='grey70')+
-  geom_vline(data=res %>% 
-               filter(genus=="Candidatus Carsonella"), aes(xintercept=values)) +
+  #geom_vline(data=res %>% 
+  #             filter(genus=="Candidatus Carsonella"), aes(xintercept=values)) +
   #facet_wrap(~order) +
+  facet_wrap(~psyllid_genus) +
   theme_bw()+
   xlab('Procrustes residuals')+
   ylab('Frequency')
+
+# Different distriutions are being driven by psyllid spp, with trioza having the best fit
 
 # Cophyloplot
 
@@ -1032,35 +992,77 @@ obj <- cophylo(tr1=newtree, tr2=new_stree, assoc=assoc, rotate=FALSE)
 plot.cophylo(obj, link.lwd=weights*6, link.lty="solid", fsize=0.1, pts=FALSE, link.type="straight", link.col="steelblue")
 dev.off() #reset graphics device
 
+## psyllid tree
+p1 <- ggtree(newtree, ladderize=FALSE) + geom_tiplab()
 
-#Model bith the residuals and links by something, phylum?
-simple_model <- glmer(values ~ order + (1|psyllid_genus), data=res)
-summary(simple_model)
+weights_p1 <- p1$data %>%
+  left_join(res %>%
+  group_by(Sample_Name) %>%
+  summarise(values = mean(values)) %>%
+    dplyr::rename(label = Sample_Name) %>%
+    mutate(label = label  %>% 
+             str_replace_all("-", "_")%>%
+             str_replace_all(" ", "_"))
+    )
+p1 <- p1 %<+% weights_p1  + geom_tippoint(aes(colour=values)) +  scale_color_gradient(low="steelblue", high="darkorange1")
 
-# Is there a way to set the intercept specifically as carsonella? THat would be a good test to show that 
+#OTU tree
+p2 <- ggtree(new_stree, ladderize=FALSE) + geom_tiplab(size = 1, align = TRUE, linesize=0.05, linetype="dotted")
 
-test <- parameters::parameters(simple_model)
-check_model(simple_model)
+weights_p2 <- p2$data %>%
+  left_join(res %>% 
+    group_by(OTU) %>%
+    summarise(values = mean(values)) %>%
+    dplyr::rename(label = OTU) %>%
+    mutate(label = label  %>% 
+             str_replace_all("-", "_")%>%
+             str_replace_all(" ", "_"))
+    )
 
-plot(check_distribution(simple_model))
+p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=values)) +  scale_color_gradient(low="steelblue", high="darkorange1")
 
-# plot this on the bacterial and colour the the branches by weight to highlight those with the highest importance?
-# Could do with GGtree, then do the same on the psyllid tree.
-# Make a gglineplot just lining 2 sides together, stitch the 3 into 1 using patchwork
-test <- res %>% 
-  group_by(OTU) %>%
-  summarise(values = mean(values))  
+dd <- assoc %>%
+  as_data_frame() %>%
+  magrittr::set_colnames(c("label.x", "label.y")) %>%
+  left_join(res %>% 
+              dplyr::select(Sample_Name, OTU, values) %>% 
+              dplyr::rename(label.x = Sample_Name, label.y = OTU) %>%
+              mutate(label.y = str_replace_all(label.y, "-", "_"))%>%
+              mutate(label.y = str_replace_all(label.y, " ", "_"))) %>%
+  left_join(p1$data %>% dplyr::select(label, y) %>% dplyr::rename(label.x = label), by="label.x") %>%
+  left_join(p2$data %>% dplyr::select(label, y) %>% dplyr::rename(label.y = label), by="label.y") %>%
+  rownames_to_column("assoc") %>%
+  mutate(highlight = case_when(
+    str_detect(label.y, "Candidatus_Carsonella") ~ TRUE,
+    TRUE ~ FALSE
+  ))
 
-ggplot(res, aes(x=values, y=family)) + 
-  geom_point()
+d1_new <- dd %>% 
+  dplyr::select(assoc, label.x, y.x, highlight, values) %>%
+  dplyr::rename(label = label.x, y = y.x)%>%
+  mutate(tree = "host") 
+  
+d2_new <- dd %>% 
+  dplyr::select(assoc, label.y, y.y, highlight, values) %>%
+  dplyr::rename(label = label.y, y = y.y) %>%
+  mutate(tree = "microbe")
 
+gg.tangle <- bind_rows(d1_new, d2_new) %>%
+  filter(!is.na(label))%>% 
+  group_by(tree) %>%
+  mutate(y = y / max(y)) %>%
+  ungroup %>%
+  #mutate(values = as.numeric((1-values)/100)) %>%
+  ggplot(aes(x=tree, y=y, group=assoc, colour=values)) +
+    geom_line(alpha=0.1) +  
+    scale_color_gradient(low="steelblue", high="darkorange1") +
+    scale_x_discrete(expand = c(0,0)) + 
+    theme_void() +
+    theme(legend.position = "bottom")
 
-
+whole_tanglegram <- p1 + gg.tangle + (p2 + scale_x_reverse())
+whole_tanglegram 
 ```
-
-# Triozid cophylogeny
-
-Could you then use a regression to look at the influence on results by bacterial taxonomy? ie Family?
 
 ## Carsonella cophylogeny
 
