@@ -39,7 +39,6 @@ opts_chunk$set(dev = 'png')
                     "ggtree", 
                     "castor", 
                     "picante", 
-                    "MCMCglmm", 
                     "phylosignal", 
                     "adephylo",
                     "TreeDist",
@@ -481,6 +480,86 @@ barplot.phylo4d(lipa.p4d, bar.col = (lipa$p.value < 0.05) + 1, center = FALSE, s
 ## Should be able to make these in ggtree if necessary 
 ```	
 
+# Beta diversity
+
+## PCA plot
+```{r}
+
+
+```
+
+## Barplot
+
+Use the means and standard errors? of the beta diversities by sample
+
+Merge species, arrange microbiome by phylogeny, try the mantel tests on the merged data as well (but the seperate is probs more statistically better)
+
+RESULTS: while there were significant differences between psyllid species there were no significant associations with phylogeny
+```{r Figure 1}
+ps3_bar <- #subset_taxa(ps3, !Family == "Enterobacteriaceae") %>%
+            ps3 %>%
+  speedyseq::tax_glom(taxrank = "order") %>%           # agglomerate at Order level
+  transform_sample_counts(function(x) {x/sum(x)} ) %>% # Transform to rel. abundance
+  speedyseq::psmelt() %>%
+  mutate(plotlabel = phylum) %>%
+  mutate(plotlabel = case_when(
+    Abundance >= 0.01 & phylum=="Proteobacteria" ~ paste0(phylum, " - ", order), # Change this to whatever taxrank we want
+    Abundance >= 0.01 & !phylum=="Proteobacteria"~ phylum ,
+    Abundance < 0.01 ~ "NA"
+    )) %>%
+  dplyr::na_if("NA") %>%
+  dplyr::select(Sample, plotlabel, phylum, order, Abundance)
+
+# Plot them together
+library(ggtree)
+library(treeio)
+library(ggstance)
+p <- ggtree(pruned.tree) + geom_tiplab(align=TRUE) + geom_nodelab(geom='label') +
+    scale_x_continuous(expand=c(0, 0.1)) + theme_tree2()
+
+
+Fig1 <- facet_plot(p, panel='Relative Abundance', data = ps3_bar %>% mutate(id = Sample), geom=ggstance::geom_barh,
+                 mapping=aes(x = Abundance, fill = plotlabel), stat="identity")  + 
+  scale_fill_manual(values=colorRampPalette(brewer.pal(11, "Set1"))(length(unique(ps3_bar$plotlabel))-1), na.value="grey")
+
+
+Fig1 <- facet_plot(Fig1, panel='Species Richness', data = bt_randomdf %>% mutate(id = psyllid_spp),
+                          geom=ggstance::geom_pointrangeh,
+                           mapping=aes(x=Estimates, xmin=Estimates-SE, xmax=Estimates+SE),
+                           stat="identity", size=0.5, colour="#696969") +
+  theme_classic2()   +
+  theme(legend.position = "bottom",
+  panel.grid.major.x = element_line(colour="grey92", size=0.5, linetype="dashed"),
+  strip.background = element_rect(fill = "grey92", 
+                colour = "black", size = 1)
+  )
+
+## Collection_hist
+gg.spp <- as_tibble(sample_data(ps2)) %>%
+  dplyr::rename(label = psyllid_spp) %>%
+  group_by(label) %>%
+  summarise(n_species = n()) %>%
+  left_join(p$data %>%
+  filter(isTip) %>% select(c(label, y))) %>%
+  filter(!is.na(y)) %>%
+  ggplot(aes(x=factor(.$label, levels=.$label[order(.$y)]), y=1, fill=n_species)) +
+  geom_tile() +
+  coord_flip() + theme_void() +
+  scale_fill_distiller(palette = "Reds", direction=1)
+
+Fig1 + gg.spp 
+  
+# Change relative grid sizes
+library(grid)
+library(gtable)
+
+gt = ggplot_gtable(ggplot_build(Fig1))
+gt$layout$l[grep('panel-3', gt$layout$name)] # you want to find the column specific to panel-2
+
+gt$widths[9] = 0.3*gt$widths[9] # reduce width of column 9
+grid.draw(gt) # plot with grid draw
+```
+
 
 ## Phylosymbiosis
 
@@ -608,7 +687,7 @@ write_csv(adonis_results, "output/phylosymbiosis/adonis_fulldata.csv")
 
 # Matrix correlations
 #only use samples present in all
-samples <- Reduce(intersect, list(rownames(otu_table(ps2)), colnames(phylo.dist), colnames(coi.dist), colnames(plant.dist),colnames(newplant.dist), colnames(spat.dist)))
+samples <- Reduce(intersect, list(rownames(otu_table(ps2)), colnames(phylo.dist), colnames(plant.dist), colnames(spat.dist)))
 
 # Mantel test
 mantel_results <- distlist %>%
@@ -1167,85 +1246,6 @@ u_mntd <- picante::ses.mntd(comm, phydist, null.model = "taxa.labels", abundance
 
 # Figures
 
-## Barplot
-
-Use the means and standard errors? of the beta diversities by sample
-
-Merge species, arrange microbiome by phylogeny, try the mantel tests on the merged data as well (but the seperate is probs more statistically better)
-
-RESULTS: while there were significant differences between psyllid species there were no significant associations with phylogeny
-```{r Figure 1}
-ps3_bar <- #subset_taxa(ps3, !Family == "Enterobacteriaceae") %>%
-            ps3 %>%
-  speedyseq::tax_glom(taxrank = "order") %>%           # agglomerate at Order level
-  transform_sample_counts(function(x) {x/sum(x)} ) %>% # Transform to rel. abundance
-  speedyseq::psmelt() %>%
-  mutate(plotlabel = phylum) %>%
-  mutate(plotlabel = case_when(
-    Abundance >= 0.01 & phylum=="Proteobacteria" ~ paste0(phylum, " - ", order), # Change this to whatever taxrank we want
-    Abundance >= 0.01 & !phylum=="Proteobacteria"~ phylum ,
-    Abundance < 0.01 ~ "NA"
-    )) %>%
-  dplyr::na_if("NA") %>%
-  dplyr::select(Sample, plotlabel, phylum, order, Abundance)
-
-# Plot them together
-library(ggtree)
-library(treeio)
-library(ggstance)
-p <- ggtree(pruned.tree) + geom_tiplab(align=TRUE) + geom_nodelab(geom='label') +
-    scale_x_continuous(expand=c(0, 0.1)) + theme_tree2()
-
-
-Fig1 <- facet_plot(p, panel='Relative Abundance', data = ps3_bar %>% mutate(id = Sample), geom=ggstance::geom_barh,
-                 mapping=aes(x = Abundance, fill = plotlabel), stat="identity")  + 
-  scale_fill_manual(values=colorRampPalette(brewer.pal(11, "Set1"))(length(unique(ps3_bar$plotlabel))-1), na.value="grey")
-
-
-Fig1 <- facet_plot(Fig1, panel='Species Richness', data = bt_randomdf %>% mutate(id = psyllid_spp),
-                          geom=ggstance::geom_pointrangeh,
-                           mapping=aes(x=Estimates, xmin=Estimates-SE, xmax=Estimates+SE),
-                           stat="identity", size=0.5, colour="#696969") +
-  theme_classic2()   +
-  theme(legend.position = "bottom",
-  panel.grid.major.x = element_line(colour="grey92", size=0.5, linetype="dashed"),
-  strip.background = element_rect(fill = "grey92", 
-                colour = "black", size = 1)
-  )
-
-## Collection_hist
-gg.spp <- as_tibble(sample_data(ps2)) %>%
-  dplyr::rename(label = psyllid_spp) %>%
-  group_by(label) %>%
-  summarise(n_species = n()) %>%
-  left_join(p$data %>%
-  filter(isTip) %>% select(c(label, y))) %>%
-  filter(!is.na(y)) %>%
-  ggplot(aes(x=factor(.$label, levels=.$label[order(.$y)]), y=1, fill=n_species)) +
-  geom_tile() +
-  coord_flip() + theme_void() +
-  scale_fill_distiller(palette = "Reds", direction=1)
-
-Fig1 + gg.spp 
-  
-# Change relative grid sizes
-library(grid)
-library(gtable)
-
-gt = ggplot_gtable(ggplot_build(Fig1))
-gt$layout$l[grep('panel-3', gt$layout$name)] # you want to find the column specific to panel-2
-
-gt$widths[9] = 0.3*gt$widths[9] # reduce width of column 9
-grid.draw(gt) # plot with grid draw
-```
-
-# Beta diversity
-
-## PCA plot
-```{r}
-
-
-```
 
 
 
