@@ -1,7 +1,7 @@
 
 # Run mantel --------------------------------------------------------------
 
-run_mantel <- function(matrix, dists, samples, type="mantel"){
+run_mantel_vegan <- function(matrix, dists, samples, type="mantel"){
   if(type=="mantel" && class(dists)=="character"){
     dists <- enframe(dists) %>% dplyr::rename(dist1 = value)
   } else if (type=="partial" && class(dists)=="character"){
@@ -33,6 +33,55 @@ run_mantel <- function(matrix, dists, samples, type="mantel"){
   }
   return(out)
 }
+
+## ecodist
+dists=c("phylo.dist", "plant.dist", "spat.dist")
+
+matrix <- distlist$Aitchison
+
+samples <- Reduce(intersect, list(rownames(otu_table(ps2)), colnames(phylo.dist), colnames(plant.dist), colnames(spat.dist)))
+
+
+test <- ecodist::mantel(as.dist(matrix[samples, samples]) ~ as.dist(get(y$dist1)[samples, samples]))
+
+test <- 
+
+run_mantel_ecodist <- function(matrix, dists, samples, type="mantel"){
+  if(type=="mantel" && class(dists)=="character"){
+    dists <- enframe(dists) %>% dplyr::rename(dist1 = value)
+  } else if (type=="partial" && class(dists)=="character"){
+    message("Expanding all possible combinations for partial mantel")
+    dists <- combinat::permn(dists) %>%
+      purrr::map(t) %>%
+      purrr::map(as_tibble) %>%
+      dplyr::bind_rows() %>%
+      dplyr::filter(!duplicated(V1))
+  }
+  if(type=="mantel"){
+    out <- dists %>% 
+      split(rownames(.)) %>%
+      purrr::map(function(y){
+        as.data.frame(t(ecodist::mantel(as.dist(matrix[samples, samples]) ~ as.dist(get(y$dist1)[samples, samples])))) %>%
+          mutate(dist1 = y$dist1, type="mantel") 
+      })%>%
+      bind_rows()
+  }else if (type=="partial"){
+    out <- dists %>% 
+      split(rownames(.)) %>%
+      purrr::map(function(y){
+        as.data.frame(t(ecodist::mantel(as.dist(matrix[samples, samples]) ~ 
+                                          as.dist(get(y$V1)[samples, samples]) +
+                                          as.dist(get(y$V2)[samples, samples]) +
+                                          as.dist(get(y$V3)[samples, samples])))) %>%
+          mutate(dist1 = y$dist1, type="mantel") %>%
+          mutate(dist1 = y$V1, dist2=y$V2, dist3=y$V3, type="partial_mantel") 
+      }) %>%
+      bind_rows()
+  }
+  return(out)
+}
+
+
 
 # compare_trees --------------------------------------------------------------
 compare_trees <- function(tree1, tree2, measure="all", runs=99){
