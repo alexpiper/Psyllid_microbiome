@@ -451,11 +451,29 @@ https://github.com/epruesse/SINA
 see paper: https://www.nature.com/articles/ncomms14319#Sec12
 
 ```{r phylogenetic tree}
-seqtab_final <- readRDS("output/rds/seqtab_final.rds")
+seqtab_final <- readRDS("output/rds/seqtab_curated.rds")
 
-seqs <- getSequences(seqtab_final)
+seqs <- rownames(seqtab_final)
 names(seqs) <- seqs # This propagates to the tip labels of the tree
-alignment <- AlignSeqs(DNAStringSet(seqs), anchor=NA)
+seqs <- DNAStringSet(seqs)
+writeXStringSet(seqs, "output/curated_asv.fasta", width=1000)
+
+## SINA TREE AND ALIGNMENT
+
+alignment <- insect::readFASTA("arb-silva.de_2020-04-16_id809405/arb-silva.de_2020-04-16_id809405_merged.fasta")
+
+test <- 
+charlist <- insect::dna2char(aphid::unalign(as.matrix(alignment)))
+
+#Subset charlist to the original sequences, retain names
+# Prune trees to charlist subset
+# Replace names on trees with sequence
+# Export for phyloseq
+
+tree <- read.tree("arb-silva.de_2020-04-16_id809405/arb-silva.de_2020-04-16_id809405.tree")
+
+#align
+alignment <- AlignSeqs(seqs, anchor=NA)
 
 library(phangorn)
 phang.align <- phyDat(as(alignment, "matrix"), type="DNA")

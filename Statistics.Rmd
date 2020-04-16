@@ -128,6 +128,12 @@ ps <- phyloseq(tax_table(tax), sample_data(samdf),
                otu_table(t(seqtab), taxa_are_rows = FALSE),
                phy_tree(fitGTR$tree))
 
+#Write out fasta
+seqs <- Biostrings::DNAStringSet(colnames(phyloseq::get_taxa(ps)))
+names(seqs) <- make.unique(unname(phyloseq::tax_table(ps)[, "species"]), sep = "_")
+seqs <- seqs
+writeXStringSet(seqs, "output/final_otus.fasta")
+
 if(nrow(seqtab) > nrow(sample_data(ps))){warning("Warning: All samples not included in phyloseq object, check sample names match the sample metadata")}
 
 #Rename taxa
@@ -151,6 +157,7 @@ seqateurs::summarise_taxa(ps, "species", "SampleID") %>%
 seqateurs::summarise_taxa(ps, "genus", "SampleID") %>%
   spread(key="SampleID", value="totalRA") %>%
   write.csv(file = "output/otu_tables/unfiltered/gen_sum.csv")
+
 ```
 
 
@@ -707,7 +714,7 @@ write_csv(mantel_results, "output/phylosymbiosis/mantel_fulldata.csv")
 # Partial Mantel Test
 pmantel_results <- distlist %>%
   purrr::map(function(x){
-    run_mantel(x, dists=c("phylo.dist", "plant.dist", "spat.dist"),
+    run_mantel_ecodist(x, dists=c("phylo.dist", "plant.dist", "spat.dist"),
                samples=samples, type="partial")
   }) %>%
   bind_rows(.id="dist") 
@@ -731,9 +738,32 @@ write_csv(topo_results, "output/phylosymbiosis/topo_fulldata.csv")
 #tree2 <- as.phylo(hclust(as.dist(distlist$Aitchison[samples,samples]), method = "ward.D2"))
 #VisualizeMatching(RobinsonFoulds,tree1, tree2)
 
-```
+# make data
 
-Potentially just drop the topo comparison in favor of PACO
+## Plot circular barplot
+gg.mantels <- bind_rows(mantel_results, pmantel_results) %>%
+              dplyr::mutate(dist1 = case_when(
+                str_detect(dist1, "plant.dist") ~ "Hostplant phylogeny",
+                str_detect(dist1, "phylo.dist") ~ "Psyllid phylogeny",                
+                str_detect(dist1, "spat.dist") ~ "Spatial distance"                   
+              )) %>%
+  filter(dist == "Aitchison") %>%
+              ggplot(aes(x=dist1, y=mantelr, group=type, fill=type)) + 
+  geom_bar(stat="identity", position="identity", alpha=0.6) +
+  #facet_wrap(~dist) + 
+  coord_polar(start=0) +
+  ylim(-0.2,0.25) +
+  theme_minimal() 
+
+gg.mantels
+
+# Plot circular phylogeny
+gg.tree <- ggtree(phy_tree(ps2),  layout='circular') #branch.length='none',
+
+gg.tree
+
+# could colour by nodes most associated with the cofactor?
+```
 
 ### Without Gammaproteobacteria
 

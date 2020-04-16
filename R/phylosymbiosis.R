@@ -35,17 +35,8 @@ run_mantel_vegan <- function(matrix, dists, samples, type="mantel"){
 }
 
 ## ecodist
-dists=c("phylo.dist", "plant.dist", "spat.dist")
-
-matrix <- distlist$Aitchison
-
-samples <- Reduce(intersect, list(rownames(otu_table(ps2)), colnames(phylo.dist), colnames(plant.dist), colnames(spat.dist)))
-
-
-test <- ecodist::mantel(as.dist(matrix[samples, samples]) ~ as.dist(get(y$dist1)[samples, samples]))
-
-test <- 
-
+  
+# need to generalize to take in N matrices rather than just 3 
 run_mantel_ecodist <- function(matrix, dists, samples, type="mantel"){
   if(type=="mantel" && class(dists)=="character"){
     dists <- enframe(dists) %>% dplyr::rename(dist1 = value)
