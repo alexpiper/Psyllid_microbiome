@@ -1,7 +1,7 @@
 
-# Run mantel --------------------------------------------------------------
+# Run mantel vegan --------------------------------------------------------------
 
-run_mantel_vegan <- function(matrix, dists, samples, type="mantel"){
+run_mantel_vegan <- function(x, dists, subsample, type="mantel"){
   if(type=="mantel" && class(dists)=="character"){
     dists <- enframe(dists) %>% dplyr::rename(dist1 = value)
   } else if (type=="partial" && class(dists)=="character"){
@@ -13,8 +13,8 @@ run_mantel_vegan <- function(matrix, dists, samples, type="mantel"){
     out <- dists %>% 
       split(rownames(.)) %>%
       purrr::map(function(y){
-        as.data.frame(mantel(matrix[samples, samples],
-                             get(y$dist1)[samples, samples]
+        as.data.frame(vegan::mantel(x[subsample, subsample],
+                             get(y$dist1)[subsample, subsample]
         )[c("statistic","signif", "permutations")]) %>%
           mutate(dist1 = y$dist1, type="mantel") 
       })%>%
@@ -23,9 +23,9 @@ run_mantel_vegan <- function(matrix, dists, samples, type="mantel"){
     out <- dists %>% 
       split(rownames(.)) %>%
       purrr::map(function(y){
-        as.data.frame(mantel.partial(matrix[samples, samples],
-                                     get(y$dist1)[samples, samples], 
-                                     get(y$dist2)[samples,samples]
+        as.data.frame(vegan::mantel.partial(x[subsample, subsample],
+                                     get(y$dist1)[subsample, subsample], 
+                                     get(y$dist2)[subsample,subsample]
         )[c("statistic","signif", "permutations")]) %>%
           mutate(dist1 = y$dist1, dist2=y$dist2, type="partial_mantel") 
       }) %>%
@@ -34,10 +34,9 @@ run_mantel_vegan <- function(matrix, dists, samples, type="mantel"){
   return(out)
 }
 
-## ecodist
-  
+# Run mantel ecodist ------------------------------------------------------
 # need to generalize to take in N matrices rather than just 3 
-run_mantel_ecodist <- function(matrix, dists, samples, type="mantel"){
+run_mantel <- function(x, dists, subsample, type="mantel"){
   if(type=="mantel" && class(dists)=="character"){
     dists <- enframe(dists) %>% dplyr::rename(dist1 = value)
   } else if (type=="partial" && class(dists)=="character"){
@@ -52,7 +51,7 @@ run_mantel_ecodist <- function(matrix, dists, samples, type="mantel"){
     out <- dists %>% 
       split(rownames(.)) %>%
       purrr::map(function(y){
-        as.data.frame(t(ecodist::mantel(as.dist(matrix[samples, samples]) ~ as.dist(get(y$dist1)[samples, samples])))) %>%
+        as.data.frame(t(ecodist::mantel(as.dist(x[subsample, subsample]) ~ as.dist(get(y$dist1)[subsample, subsample])))) %>%
           mutate(dist1 = y$dist1, type="mantel") 
       })%>%
       bind_rows()
@@ -60,10 +59,10 @@ run_mantel_ecodist <- function(matrix, dists, samples, type="mantel"){
     out <- dists %>% 
       split(rownames(.)) %>%
       purrr::map(function(y){
-        as.data.frame(t(ecodist::mantel(as.dist(matrix[samples, samples]) ~ 
-                                          as.dist(get(y$V1)[samples, samples]) +
-                                          as.dist(get(y$V2)[samples, samples]) +
-                                          as.dist(get(y$V3)[samples, samples])))) %>%
+        as.data.frame(t(ecodist::mantel(as.dist(x[subsample, subsample]) ~ 
+                                          as.dist(get(y$V1)[subsample, subsample]) +
+                                          as.dist(get(y$V2)[subsample, subsample]) +
+                                          as.dist(get(y$V3)[subsample, subsample])))) %>%
           mutate(dist1 = y$dist1, type="mantel") %>%
           mutate(dist1 = y$V1, dist2=y$V2, dist3=y$V3, type="partial_mantel") 
       }) %>%
@@ -71,7 +70,6 @@ run_mantel_ecodist <- function(matrix, dists, samples, type="mantel"){
   }
   return(out)
 }
-
 
 
 # compare_trees --------------------------------------------------------------
@@ -174,13 +172,13 @@ compare_trees <- function(tree1, tree2, measure="all", runs=99){
 }
 
 # Run tree comparison  --------------------------------------------------------------
-run_tree_comparison <- function(matrix, dists, samples, clust.method = "average", measure="all", runs = 100){
+run_tree_comparison <- function(x, dists, subsample, clust.method = "average", measure="all", runs = 100){
     dists <- enframe(dists) %>% dplyr::rename(dist1 = value)
     out <- dists %>% 
       split(rownames(.)) %>%
       purrr::map(function(y){
-        tree1  <- as.phylo(hclust(as.dist(get(y$dist1)[samples, samples]), method = clust.method))
-        tree2 <- as.phylo(hclust(as.dist(matrix[samples, samples]), method = clust.method))
+        tree1  <- as.phylo(hclust(as.dist(get(y$dist1)[subsample, subsample]), method = clust.method))
+        tree2 <- as.phylo(hclust(as.dist(x[subsample, subsample]), method = clust.method))
         compare_trees(tree1, tree2, measure=measure, runs=runs) %>%
           dplyr::mutate(dist = y$dist1)
       })%>%

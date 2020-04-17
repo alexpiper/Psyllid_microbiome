@@ -460,36 +460,41 @@ writeXStringSet(seqs, "output/curated_asv.fasta", width=1000)
 
 ## SINA TREE AND ALIGNMENT
 
-alignment <- insect::readFASTA("arb-silva.de_2020-04-16_id809405/arb-silva.de_2020-04-16_id809405_merged.fasta")
-
-test <- 
-charlist <- insect::dna2char(aphid::unalign(as.matrix(alignment)))
+test <- charlist[intersect(tree$tip.label, rownames(seqtab_final))]
 
 #Subset charlist to the original sequences, retain names
-# Prune trees to charlist subset
-# Replace names on trees with sequence
-# Export for phyloseq
-
 tree <- read.tree("arb-silva.de_2020-04-16_id809405/arb-silva.de_2020-04-16_id809405.tree")
+library(ape)
 
-#align
-alignment <- AlignSeqs(seqs, anchor=NA)
+samples <- intersect(tree$tip.label, rownames(seqtab_final))
+tree2 <- drop.tip(tree, tree$tip.label[!tree$tip.label %in% samples])
 
-library(phangorn)
-phang.align <- phyDat(as(alignment, "matrix"), type="DNA")
-dm <- dist.ml(phang.align)
-treeNJ <- NJ(dm) # Note, tip order != sequence order
-fit = pml(treeNJ, data=phang.align)
+ggtree(tree2)
+# REROOT TREE
 
-## negative edges length changed to 0!
+# DATE TREE
 
-fitGTR <- update(fit, k=4, inv=0.2)
-fitGTR <- optim.pml(fitGTR, model="GTR", optInv=TRUE, optGamma=TRUE,
-                      rearrangement = "stochastic", control = pml.control(trace = 0))
-detach("package:phangorn", unload=TRUE)
 
-# Write taxonomy table to disk
-saveRDS(fitGTR, "output/rds/phytree.rds") 
+##align
+#alignment <- AlignSeqs(seqs, anchor=NA)
+#
+#library(phangorn)
+#phang.align <- phyDat(as(alignment, "matrix"), type="DNA")
+#dm <- dist.ml(phang.align)
+#treeNJ <- NJ(dm) # Note, tip order != sequence order
+#fit = pml(treeNJ, data=phang.align)
+#
+### negative edges length changed to 0!
+#
+#fitGTR <- update(fit, k=4, inv=0.2)
+#fitGTR <- optim.pml(fitGTR, model="GTR", optInv=TRUE, optGamma=TRUE,
+#                      rearrangement = "stochastic", control = pml.control(trace = 0))
+#detach("package:phangorn", unload=TRUE)
+# Write tree to disk
+#write.tree(fitGTR$tree, "output/phytree.nwk")
+
+# Write tree to disk
+write.tree(tree2, "output/phytree.nwk")
 ```
 
 # Sessioninfo

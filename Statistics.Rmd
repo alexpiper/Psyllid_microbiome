@@ -89,7 +89,7 @@ Following taxonomic assignment, the sequence table and taxonomic table are merge
 ```{r create PS, eval = FALSE}
 seqtab <- readRDS("output/rds/seqtab_curated.rds")
 tax <- readRDS("output/rds/tax_IdTaxaExact.rds") 
-fitGTR <- readRDS("output/rds/phytree.rds") 
+tree <- read.tree("output/phytree.nwk") 
 
 #Load sample information (Put all collection and geographic distances here?)
 ## ---- samdat ----
@@ -126,13 +126,13 @@ samdf <- samdf %>%
 ## ---- phyloseq ----
 ps <- phyloseq(tax_table(tax), sample_data(samdf),
                otu_table(t(seqtab), taxa_are_rows = FALSE),
-               phy_tree(fitGTR$tree))
+               phy_tree(tree))
 
 #Write out fasta
-seqs <- Biostrings::DNAStringSet(colnames(phyloseq::get_taxa(ps)))
-names(seqs) <- make.unique(unname(phyloseq::tax_table(ps)[, "species"]), sep = "_")
-seqs <- seqs
-writeXStringSet(seqs, "output/final_otus.fasta")
+#seqs <- Biostrings::DNAStringSet(colnames(phyloseq::get_taxa(ps)))
+#names(seqs) <- make.unique(unname(phyloseq::tax_table(ps)[, "species"]), sep = "_")
+#seqs <- seqs
+#writeXStringSet(seqs, "output/final_otus.fasta")
 
 if(nrow(seqtab) > nrow(sample_data(ps))){warning("Warning: All samples not included in phyloseq object, check sample names match the sample metadata")}
 
@@ -426,10 +426,8 @@ richness <- phyloseq::estimate_richness(ps2, measures=c("Shannon")) %>%
            str_replace_all("\\.", " "))
 
 #Set number of randomisations for calculating significance
-randoms <- 10
-
 # Calculate Faith's PD-index & Species richness - with Standard errors
-sespd <- picante::ses.pd(comm, phy, null.model = "taxa.labels", include.root = F, runs = randoms)
+sespd <- picante::ses.pd(comm, phy, null.model = "taxa.labels", include.root = F, runs = 10)
 
 # Join together
 div_table <- sespd %>%
@@ -670,16 +668,16 @@ otutab_n0 <- as.matrix(zCompositions::cmultRepl(otutab, method="CZM", output="pr
 phy_tree(ps2) <- multi2di(phy_tree(ps2))
 
 #Calculate different distance metrics
-metrics <- c("Bray", "Jaccard", "Aitchison","Philr", "Unifrac", "WUnifrac") 
+metrics <- c("Bray", "Jaccard", "Aitchison", "Unifrac", "WUnifrac")  #"Philr",
 distlist <- vector("list", length=length(metrics))
 names(distlist) <- metrics
 
 distlist$Jaccard <- as.matrix(vegdist(otutab, method="jac",binary = T))
 distlist$Bray <- as.matrix(vegdist(otutab, method="bray"))
 distlist$Aitchison <- as.matrix(vegdist(CoDaSeq::codaSeq.clr(otutab_n0), method="euclidean"))
-distlist$Philr <- as.matrix(vegdist(philr::philr(otutab_n0, phy_tree(ps2),
-                                                part.weights='enorm.x.gm.counts',
-                                                ilr.weights='blw.sqrt'), method="euclidean"))
+#distlist$Philr <- as.matrix(vegdist(philr::philr(otutab_n0, phy_tree(ps2),
+#                                                part.weights='enorm.x.gm.counts',
+#                                                ilr.weights='blw.sqrt'), method="euclidean"))
 distlist$Unifrac <- as.matrix(phyloseq::UniFrac(ps2, weighted=FALSE, parallel = TRUE))
 distlist$WUnifrac <- as.matrix(phyloseq::UniFrac(ps2, weighted=TRUE, parallel = TRUE))
 
@@ -699,13 +697,13 @@ write_csv(adonis_results, "output/phylosymbiosis/adonis_fulldata.csv")
 
 # Matrix correlations
 #only use samples present in all
-samples <- Reduce(intersect, list(rownames(otu_table(ps2)), colnames(phylo.dist), colnames(plant.dist), colnames(spat.dist)))
+subsample <- Reduce(intersect, list(rownames(otu_table(ps2)), colnames(phylo.dist), colnames(plant.dist), colnames(spat.dist)))
 
 # Mantel test
 mantel_results <- distlist %>%
   purrr::map(function(x){
     run_mantel(x, dists=c("phylo.dist", "plant.dist", "spat.dist"),
-               samples=samples, type="mantel")
+               subsample=subsample, type="mantel")
   }) %>%
   bind_rows(.id="dist") 
 
@@ -714,8 +712,8 @@ write_csv(mantel_results, "output/phylosymbiosis/mantel_fulldata.csv")
 # Partial Mantel Test
 pmantel_results <- distlist %>%
   purrr::map(function(x){
-    run_mantel_ecodist(x, dists=c("phylo.dist", "plant.dist", "spat.dist"),
-               samples=samples, type="partial")
+    run_mantel(x, dists=c("phylo.dist", "plant.dist", "spat.dist"),
+               subsample=subsample, type="partial")
   }) %>%
   bind_rows(.id="dist") 
 
@@ -725,7 +723,7 @@ write_csv(pmantel_results, "output/phylosymbiosis/pmantel_fulldata.csv")
 topo_results <- distlist %>%
   purrr::map(function(x){
     run_tree_comparison(x, dists=c("phylo.dist", "plant.dist", "spat.dist"), #Change these to matrices
-               samples=samples,
+               subsample=subsample,
                clust.method="average",
                measure="all",
                runs=100)
@@ -734,8 +732,8 @@ topo_results <- distlist %>%
 write_csv(topo_results, "output/phylosymbiosis/topo_fulldata.csv")
 
 ## Visualise what these look like
-#tree1  <- as.phylo(hclust(as.dist(phylo.dist[samples,samples]), method = "ward.D2"))
-#tree2 <- as.phylo(hclust(as.dist(distlist$Aitchison[samples,samples]), method = "ward.D2"))
+#tree1  <- as.phylo(hclust(as.dist(phylo.dist[subsample,subsample]), method = "ward.D2"))
+#tree2 <- as.phylo(hclust(as.dist(distlist$Aitchison[subsample,subsample]), method = "ward.D2"))
 #VisualizeMatching(RobinsonFoulds,tree1, tree2)
 
 # make data
