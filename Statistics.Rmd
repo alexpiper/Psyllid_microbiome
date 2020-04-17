@@ -41,7 +41,6 @@ opts_chunk$set(dev = 'png')
                     "picante", 
                     "phylosignal", 
                     "adephylo",
-                    "TreeDist",
                     "paco",
                     "phytools")
 .bioc_packages <- c("dada2",
@@ -74,6 +73,8 @@ devtools::install_github("mikemc/speedyseq")
 library(speedyseq)
 devtools::install_github('ggloor/CoDaSeq/CoDaSeq')
 library(CoDaSeq)
+devtools::install_github('ms609/TreeDist')
+library(TreeDist)
 
 #Source internal functions
 source('R/BDTT.R')
@@ -89,7 +90,8 @@ Following taxonomic assignment, the sequence table and taxonomic table are merge
 ```{r create PS, eval = FALSE}
 seqtab <- readRDS("output/rds/seqtab_curated.rds")
 tax <- readRDS("output/rds/tax_IdTaxaExact.rds") 
-tree <- read.tree("output/phytree.nwk") 
+seqs <- DNAStringSet(rownames(seqtab))
+names(seqs) <- seqs
 
 #Load sample information (Put all collection and geographic distances here?)
 ## ---- samdat ----
@@ -124,15 +126,11 @@ samdf <- samdf %>%
   magrittr::set_rownames(.$SampleID) #Collection
 
 ## ---- phyloseq ----
-ps <- phyloseq(tax_table(tax), sample_data(samdf),
+ps <- phyloseq(tax_table(tax),
+               sample_data(samdf),
                otu_table(t(seqtab), taxa_are_rows = FALSE),
-               phy_tree(tree))
-
-#Write out fasta
-#seqs <- Biostrings::DNAStringSet(colnames(phyloseq::get_taxa(ps)))
-#names(seqs) <- make.unique(unname(phyloseq::tax_table(ps)[, "species"]), sep = "_")
-#seqs <- seqs
-#writeXStringSet(seqs, "output/final_otus.fasta")
+               refseq(seqs))
+#phy_tree(tree)
 
 if(nrow(seqtab) > nrow(sample_data(ps))){warning("Warning: All samples not included in phyloseq object, check sample names match the sample metadata")}
 
@@ -144,7 +142,7 @@ saveRDS(ps, "output/rds/ps.rds")
 
 #Output tables of results
 dir.create("output/csv")
-dir.create("output/otu_tables/unfiltered/")
+dir.create("output/otu_tables/unfiltered/", recursive = TRUE)
 
 ##Export raw csv
 speedyseq::psmelt(ps) %>%
@@ -254,6 +252,10 @@ message(nsamples(ps) - nsamples(ps1), " Samples and ", ntaxa(ps) - ntaxa(ps1), "
 
 Calculate Average dissimilarities between PCR replicates, biological replicates of the same species, hostplants, and different species on same hostplants
 
+Could just calculate the average dissimilarities across all, then look at the factors we are interested in, and do a statistical test between - Could actually do this way down in the beta diversity section
+
+Then could move everything up to beta diversity to the bioinformatics section, as its all technically bioinformatics not statistics
+
 ```{r Avg Dissimiarity}
 # Calculate overall distance
 #Rarefy replicates to same read depth
@@ -316,13 +318,114 @@ dist2 <- ps1 %>%
 #adonis(~ psyllid_spp, method = "euclidean", data = metadata))
 ```
 
+
+## Taxon Filtering
+
+Remove all non-bacterial taxa, mitochondria, chloroplast and cyanobacteria.
+We also remove all taxa contained within the blank sample from other samples? - Check these
+
+```{r taxon-cleaning}
+get_taxa_unique(ps1, "domain")
+
+ps1 # Check the number of taxa prior to removal
+ps2 <- ps1 %>%
+  subset_taxa(
+    domain == "Bacteria" & 
+    family  != "Mitochondria" &
+    order   != "Chloroplast" &
+    phylum != "Cyanobacteria"
+  )
+ps2 # Confirm that the taxa were removed
+get_taxa_unique(ps2, "phylum")
+get_taxa_unique(ps2, "class")
+get_taxa_unique(ps2, "family")
+```
+
+
+
+# Update phylogenetic tree
+
+Now that we have removed the badly assigned taxonomy, we will make a new phylogenetic tree, constrianed by the taxonomy
+
+Methods:
+1- Align with silva online
+2- Retrieve all nearest neighbours in alignment
+3- Make tree in fasttree using constraints of taxonomy
+4- Reroot tree
+5- Date with PATHd8 
+using dating anchors of: 
+https://www.nature.com/articles/s41598-019-54869-6#Sec30 Supplementary table 5: https://static-content.springer.com/esm/art%3A10.1038%2Fs41559-018-0625-0/MediaObjects/41559_2018_625_MOESM1_ESM.pdf
+
+also :https://static-content.springer.com/esm/art%3A10.1038%2Fncomms14319/MediaObjects/41467_2017_BFncomms14319_MOESM1451_ESM.pdf
+
+
+would be better to use the SINA algorithm for this, as its recommended in the BDTT papers
+https://github.com/epruesse/SINA
+
+see paper: https://www.nature.com/articles/ncomms14319#Sec12
+
+```{r phylogenetic tree}
+#Write out fasta and align with silva online
+seqs <- refseq(ps2)
+writeXStringSet(seqs, "output/curated_asv.fasta", width=1000)
+
+# Make constraints table at phylum level
+taxonomy <- as.data.frame(tax_table(ps2)) %>%
+  dplyr::select(-rootrank)
+
+# Domain constraints
+taxonomy[["Bacteria"]][taxonomy$domain=="Bacteria"] <- 1
+
+# Phylum constrains
+Phylum <- unique(taxonomy$phylum)
+Phylum <- subset(Phylum, !Phylum %in% c("d__Bacteria")) #remove this factor
+
+for (i in Phylum){
+  taxonomy[[as.character(i)]][taxonomy$phylum==i]=1
+  taxonomy[[as.character(i)]][!taxonomy$phylum==i]=0
+}
+
+constraints=taxonomy[,c("Bacteria", as.character(Phylum))] #keep only the constrains 
+head(constraints)
+
+# Output fasta
+seqs <- list()
+for (i in 1:nrow(constraints)){
+  seqs[[i]] <- constraints[i,]
+  }
+write.fasta(seqs, names=rownames(constraints), file.out="output/phylogenetic_constraints.fasta", open = "w", nbchar = 60, as.string = FALSE)
+
+
+test <- charlist[intersect(tree$tip.label, rownames(seqtab_final))]
+
+#Subset charlist to the original sequences, retain names
+tree <- read.tree("arb-silva.de_2020-04-16_id809405/arb-silva.de_2020-04-16_id809405.tree")
+library(ape)
+
+samples <- intersect(tree$tip.label, rownames(seqtab_final))
+tree2 <- drop.tip(tree, tree$tip.label[!tree$tip.label %in% samples])
+
+ggtree(tree2)
+# REROOT TREE
+
+# DATE TREE
+
+write.tree(tree2, "output/phytree.nwk")
+```
+
+## FASTTREE
+
+compare with, without constraints, and to silva tree
+
 ### Merge technical replicates
 
 With only 16 samples replicated, and only on the first 2 sequencing runs i dont think there is a way to explicitly take into account replicate variability, therefore all replicates were merged
 
+This can be done with DADA2 - mergeSequenceTables(st1, st2, st3, repeats = "sum"
+
 ```{r replicates}
 # Merge replicates
-ps.merged <- ps1 %>%
+ps.merged <- ps2 %>%
     merge_samples(group = "Sample_Name")
 
 #This loses the sample metadata - Need to add it agian
@@ -330,8 +433,11 @@ sample_data(ps.merged) <- sample_data(ps1) %>%
   filter(!duplicated(Sample_Name)) %>%
   magrittr::set_rownames(.$Sample_Name)
 
-#Drop missing taxa from table
-ps.merged <- filter_taxa(ps.merged, function(x) mean(x) > 0, TRUE)
+#Problem - this loses refseq!
+
+
+ps2 <- ps.merged
+
 ```
 
 ## Prevalence assesment
@@ -357,27 +463,9 @@ gg.prev <- subset(prevdf, phylum %in% get_taxa_unique(ps0, "phylum")) %>%
 gg.prev
 ```
 
-## Taxon Filtering
 
-Remove all non-bacterial taxa, mitochondria, chloroplast and cyanobacteria.
-We also remove all taxa contained within the blank sample from other samples? - Check these
 
-```{r taxon-cleaning}
-get_taxa_unique(ps.merged, "domain")
 
-ps.merged # Check the number of taxa prior to removal
-ps2 <- ps.merged %>%
-  subset_taxa(
-    domain == "Bacteria" & #This is probably the only required one
-    family  != "Mitochondria" &
-    order   != "Chloroplast" &
-    phylum != "Cyanobacteria"
-  )
-ps2 # Confirm that the taxa were removed
-get_taxa_unique(ps2, "phylum")
-get_taxa_unique(ps2, "class")
-get_taxa_unique(ps2, "family")
-```
 
 # Alpha diversity 
 
