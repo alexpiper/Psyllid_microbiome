@@ -303,12 +303,6 @@ barplot.phylo4d(lipa.p4d, bar.col = (lipa$p.value < 0.05) + 1, center = FALSE, s
 
 # Beta diversity
 
-## PCA plot
-```{r}
-
-
-```
-
 ## Barplot
 
 Use the means and standard errors? of the beta diversities by sample
@@ -317,8 +311,20 @@ Merge species, arrange microbiome by phylogeny, try the mantel tests on the merg
 
 RESULTS: while there were significant differences between psyllid species there were no significant associations with phylogeny
 ```{r Figure 1}
-ps3_bar <- #subset_taxa(ps3, !Family == "Enterobacteriaceae") %>%
-            ps3 %>%
+# Merge species for beta diversity
+ps.sppmerged <- ps2 %>%
+    merge_samples(group = "psyllid_spp", fun=mean)
+
+#This loses the sample metadata - Need to add it agian
+sample_data(ps.sppmerged) <- sample_data(ps2) %>%
+  filter(!duplicated(psyllid_spp)) %>%
+  magrittr::set_rownames(.$psyllid_spp)
+
+ps3 <- ps.sppmerged
+#Rename taxa - only keep first 30 characters
+taxa_names(ps3) <- substr(paste0("SV", seq(ntaxa(ps3)),"-",tax_table(ps3)[,7]), 1,30)
+
+ps3_bar <- ps3 %>%
   speedyseq::tax_glom(taxrank = "order") %>%           # agglomerate at Order level
   transform_sample_counts(function(x) {x/sum(x)} ) %>% # Transform to rel. abundance
   speedyseq::psmelt() %>%
@@ -479,7 +485,7 @@ dir.create("output/phylosymbiosis")
 # Get OTU tables
 otutab <- otu_table(ps2)
 #Impute zeroes for compositional distances
-otutab_n0 <- as.matrix(zCompositions::cmultRepl(otutab, method="CZM", output="prop"))
+otutab_n0 <- as.matrix(zCompositions::cmultRepl(otutab, method="BL", output="p-counts"))
 #Root phylogenetic tree
 phy_tree(ps2) <- multi2di(phy_tree(ps2))
 
@@ -491,9 +497,9 @@ names(distlist) <- metrics
 distlist$Jaccard <- as.matrix(vegdist(otutab, method="jac",binary = T))
 distlist$Bray <- as.matrix(vegdist(otutab, method="bray"))
 distlist$Aitchison <- as.matrix(vegdist(CoDaSeq::codaSeq.clr(otutab_n0), method="euclidean"))
-#distlist$Philr <- as.matrix(vegdist(philr::philr(otutab_n0, phy_tree(ps2),
-#                                                part.weights='enorm.x.gm.counts',
-#                                                ilr.weights='blw.sqrt'), method="euclidean"))
+distlist$Philr <- as.matrix(vegdist(philr::philr(otutab_n0, phy_tree(ps2),
+                                                part.weights='enorm.x.gm.counts',
+                                                ilr.weights='blw.sqrt'), method="euclidean"))
 distlist$Unifrac <- as.matrix(phyloseq::UniFrac(ps2, weighted=FALSE, parallel = TRUE))
 distlist$WUnifrac <- as.matrix(phyloseq::UniFrac(ps2, weighted=TRUE, parallel = TRUE))
 
@@ -543,18 +549,19 @@ gg.mantels <- bind_rows(mantel_results, pmantel_results) %>%
                 str_detect(dist1, "spat.dist") ~ "Spatial distance"                   
               )) %>%
   filter(dist == "Aitchison") %>%
-              ggplot(aes(x=dist1, y=mantelr, group=type, fill=type)) + 
-  geom_bar(stat="identity", position="identity", alpha=0.6) +
-  #facet_wrap(~dist) + 
-  coord_polar(start=0) +
-  ylim(-0.2,0.25) +
-  theme_minimal() 
+              ggplot(aes(x=dist1, y=mantelr, fill=dist1)) + 
+  geom_bar(stat="identity", position="identity", alpha=1) +
+  geom_errorbar(aes(ymin=`llim.2.5%`, ymax=`ulim.97.5%`), width=.1) +
+  scale_fill_brewer(palette="Paired")  +
+  facet_wrap(~type, ncol=1) +
+  theme_classic() +
+  theme(legend.position = "bottom",
+        strip.background = element_rect(fill="grey85"))+
+  guides(fill=guide_legend(ncol=1))
 
-gg.mantels
-
-# Plot circular phylogeny
-gg.tree <- ggtree(phy_tree(ps2),  layout='circular') #branch.length='none',
-gg.tree
+pdf(file="figs/bar_mantels.pdf", width = 5, height = 5 , paper="a4r")
+  plot(gg.mantels)
+try(dev.off(), silent=TRUE)
 ```
 
 ### Without Gammaproteobacteria
@@ -566,33 +573,34 @@ ps2_subset <- ps2 %>%
  subset_taxa(class != "Gammaproteobacteria") %>% #is this working?
  filter_taxa(function(x) mean(x) > 0, TRUE)#Drop missing taxa from table
 ps2_subset <- prune_samples(sample_sums(ps2_subset) >0 , ps2_subset)
-message(nsamples(ps2_subset) - nsamples(ps2_subset), " Samples and ", ntaxa(ps2) - ntaxa(ps2_subset), " taxa under read threshold Dropped")
+message(nsamples(ps2) - nsamples(ps2_subset), " Samples and ", ntaxa(ps2) - ntaxa(ps2_subset), " taxa Dropped")
 
 # Get OTU tables
-otutab <- otu_table(ps2_subset)
+otutab_subset <- otu_table(ps2_subset)
 #Impute zeroes for compositional distances
-otutab_n0 <- as.matrix(zCompositions::cmultRepl(otutab, method="CZM", output="prop", suppress.print=quiet))
+otutab_subset_n0 <- as.matrix(zCompositions::cmultRepl(otutab_subset, method="BL", output="p-counts"))
 #Root phylogenetic tree
 phy_tree(ps2_subset) <- multi2di(phy_tree(ps2_subset))
 
 #Calculate different distance metrics
 metrics <- c("Bray", "Jaccard", "Aitchison", "Unifrac", "WUnifrac") # "Philr"
-distlist <- vector("list", length=length(metrics))
-names(distlist) <- metrics
+distlist_subset <- vector("list", length=length(metrics))
+names(distlist_subset) <- metrics
 
-distlist$Jaccard <- as.matrix(vegdist(otutab, method="jac",binary = T))
-distlist$Bray <- as.matrix(vegdist(otutab, method="bray"))
-distlist$Aitchison <- as.matrix(vegdist(CoDaSeq::codaSeq.clr(otutab_n0), method="euclidean"))
-distlist$Philr <- as.matrix(vegdist(philr::philr(otutab_n0, phy_tree(ps2),
-                                                part.weights='enorm.x.gm.counts',
-                                                ilr.weights='blw.sqrt'), method="euclidean"))
-distlist$Unifrac <- as.matrix(phyloseq::UniFrac(ps2, weighted=FALSE, parallel = TRUE))
-distlist$WUnifrac <- as.matrix(phyloseq::UniFrac(ps2, weighted=TRUE, parallel = TRUE))
+distlist_subset$Jaccard <- as.matrix(vegdist(otutab_subset, method="jac",binary = T))
+distlist_subset$Bray <- as.matrix(vegdist(otutab_subset, method="bray"))
+distlist_subset$Aitchison <- as.matrix(vegdist(CoDaSeq::codaSeq.clr(otutab_subset_n0, aitch=TRUE)
+                                               , method="euclidean"))
+#distlist_subset$Philr <- as.matrix(vegdist(philr::philr(otutab_n0, phy_tree(ps2),
+#                                                part.weights='enorm.x.gm.counts',
+#                                                ilr.weights='blw.sqrt'), method="euclidean"))
+distlist_subset$Unifrac <- as.matrix(phyloseq::UniFrac(ps2_subset, weighted=FALSE, parallel = TRUE))
+distlist_subset$WUnifrac <- as.matrix(phyloseq::UniFrac(ps2_subset, weighted=TRUE, parallel = TRUE))
 
 # Adonis test
 metadata <- sample_data(ps2_subset) %>%
   as_data_frame()
-adonis_results <- distlist %>%
+adonis_results <- distlist_subset %>%
   purrr::map(function(x) {
     bind_rows(
     broom::tidy(adonis(x~psyllid_spp, method="euclidean", data=metadata)$aov.tab) %>% dplyr::slice(1),
@@ -605,37 +613,37 @@ write_csv(adonis_results, "output/phylosymbiosis/adonis_subset.csv")
 
 # Matrix correlations
 #only use samples present in all
-samples <- Reduce(intersect, list(rownames(otu_table(ps2)), colnames(phylo.dist), colnames(plant.dist), colnames(spat.dist)))
+subsample <- Reduce(intersect, list(rownames(otu_table(ps2_subset)), colnames(phylo.dist), colnames(plant.dist), colnames(spat.dist)))
 
 # Mantel test
-mantel_results <- distlist %>%
+mantel_results <- distlist_subset %>%
   purrr::map(function(x){
     run_mantel(x, dists=c("phylo.dist", "plant.dist", "spat.dist"),
-               samples=samples, type="mantel")
+               subsample=subsample, type="mantel")
   }) %>%
   bind_rows(.id="dist") 
+
 write_csv(mantel_results, "output/phylosymbiosis/mantel_subset.csv")
 
 # Partial Mantel Test
-pmantel_results <- distlist %>%
-  map(function(x){
+pmantel_results <- distlist_subset %>%
+  purrr::map(function(x){
     run_mantel(x, dists=c("phylo.dist", "plant.dist", "spat.dist"),
-               samples=samples, type="partial")
+               subsample=subsample, type="partial")
   }) %>%
   bind_rows(.id="dist") 
-
 write_csv(pmantel_results, "output/phylosymbiosis/pmantel_subset.csv")
 ```
 
 ## BDTT
 
 ```{r timeslice}
-library(TreeDist)
 #Look at depth categories in tree
-hist(get_all_node_depths(phy_tree(ps2)))
+hist(get_all_node_depths(phy_tree(ps2))) # PLOT THIS NEXT TO TREE
 
-#Set slices
-slices=seq(0,1.6,0.1)
+# Full slices - 2e+09 / 1e07
+#Set slices every 100M years
+slices=seq(0, 2e+09, 1e07)
 
 treelist <- vector("list", length=length(slices))
 for (i in 1:length(slices)){
@@ -644,44 +652,220 @@ for (i in 1:length(slices)){
 }
 class(treelist) <- "multiPhylo"
 names(treelist) <- paste0("Timeslice = ",slices)
-gg.tree <- ggtree(treelist) + facet_wrap(~.id, scale="free", nrow=1) + theme_tree2()
+gg.BTDDtrees <- ggtree(treelist) + facet_wrap(~.id, scale="free") + theme_tree2()
 
-Betas <- BDTT(ps2, slices, metrics=c("Bray", "Aitchison", "Philr"), zeroes="Impute", cores=1, quiet=FALSE) #"Unifrac", "WUnifrac"
+Betas <- BDTT(ps2, slices, metrics=c("Bray", "Aitchison"), zeroes="Impute", cores=1, quiet=FALSE) #"Unifrac", "WUnifrac" , "Philr"
 
 # Matrix correlations
 #only use samples present in all
-samples <- Reduce(intersect, list(rownames(otu_table(ps2)), colnames(phylo.dist), colnames(coi.dist), colnames(plant.dist),colnames(newplant.dist), colnames(spat.dist)))
+subsamples <- Reduce(intersect, list(rownames(otu_table(ps2)), colnames(phylo.dist), colnames(plant.dist), colnames(spat.dist)))
 
 # Partial Mantel
 BTDD_pm <- Betas %>%
   purrr::map_depth(.depth=2, function(x){
     run_mantel(x, dists=c("phylo.dist", "plant.dist", "spat.dist"),
-               samples=samples, type="partial")
+               subsample=subsamples, type="partial")
   }) %>%
   purrr::map(bind_rows,.id="dist") %>%
-  bind_rows(.id="slice")
+  bind_rows(.id="slice") %>%
+  mutate(Comparison = paste0("Microbiome ~ ",dist1," + ",dist2," + ",dist3),
+         Mya = as.numeric(slice)/1e+6)
 
-gg.pmantel <- BTDD_pm %>%
-  mutate(Comparison = paste0("microbe~",dist1,"~",dist2)) %>%
-  ggplot(aes(y=statistic, x=slice, colour=Comparison, group=factor(Comparison)))+ 
+#Write out
+write_csv(BTDD_pm,"output/phylosymbiosis/BTDD.csv")
+
+gg.BTDD <- BTDD_pm %>%
+  filter(dist=="Aitchison") %>%
+  ggplot(aes(y=mantelr, x=Mya, colour=Comparison, group=factor(Comparison)))+ 
   geom_line(linetype="dashed") +
-  geom_line(data=BTDD_pm %>% mutate(Comparison = paste0("microbe~",dist1,"~",dist2)) %>% mutate(statistic = case_when (signif > 0.01 ~ as.double(NA), signif < 0.01 ~ statistic)), linetype="solid") +
-  geom_hline(yintercept=0) +
-  facet_wrap(~dist) +
-     #theme_classic2()   +
-     theme(legend.position = "right",
-           panel.grid.major.y = element_line(colour="grey", size=0.5, linetype="dashed"),
+  # Add a ribbon with the confidence band
+  geom_ribbon(aes(ymin = `llim.2.5%`, ymax = `ulim.97.5%`, fill=Comparison),colour=NA, alpha=0.3) +
+  geom_line(data=BTDD_pm %>%
+            filter(dist=="Aitchison") %>%
+            mutate(mantelr = case_when (pval3 > 0.01 ~ as.double(NA), pval3 < 0.01 ~ mantelr)), linetype="solid") +
+     theme_classic()   +
+     theme(legend.position = "bottom",
+           #panel.grid.major.y = element_line(colour="grey", size=0.5, linetype="dashed"),
            strip.background = element_rect(fill = "grey92", 
                                            colour = "black", size = 1)
-     )  + scale_color_brewer(palette="Paired")
+     )  + 
+  scale_color_brewer(palette="Paired")+
+  scale_fill_brewer(palette="Paired")  +
+  guides(colour=guide_legend(ncol=1))
 
-gg.pmantel
+# Would be nice to add the actual null model to this plot
+
+pdf(file="figs/BTDD.pdf", width = 11, height = 8 , paper="a4r")
+  plot(gg.BTDD)
+try(dev.off(), silent=TRUE)
+  
+# output together
+gg.allmantels <- gg.mantels + gg.BTDD  + 
+  plot_layout(widths = c(1, 2))
+  
+pdf(file="figs/all_mantels.pdf",  width = 11, height = 8, paper="a4r")
+  plot(gg.allmantels)
+try(dev.off(), silent=TRUE)
 ```
 
-# Cophylogeny
-Due to the association with close branches we looked for patterns of cophylogeny
 
-ggtree tanglegrams: https://stackoverflow.com/questions/57161083/coloring-lines-in-tanglegram-based-on-position-of-nodes
+## PCA plots
+```{r PCA}
+#Impute zeroes for compositional distances
+otutab_n0 <- as.matrix(zCompositions::cmultRepl(otu_table(ps2), method="BL", output="p-counts"))
+
+# Get aitchison distance
+Aitchison <- as.matrix(vegdist(CoDaSeq::codaSeq.clr(otutab_n0), method="euclidean"))
+
+#PCA 
+r.pcx <- prcomp(Aitchison)
+pc_samp <- data.frame(Sample_Name = rownames(r.pcx$x), r.pcx$x[, 1:2])%>%
+  left_join(as_data_frame(sample_data(ps2)), by="Sample_Name")
+# calculate percent variance explained for the axis labels
+pc1 <- round(r.pcx$sdev[1]^2/sum(r.pcx$sdev^2),2)
+pc2 <- round(r.pcx$sdev[2]^2/sum(r.pcx$sdev^2),2)
+pc_ylab <- paste("PC1: ", pc1, sep="")
+pc_xlab <- paste("PC2: ", pc2, sep="")
+library(ggplot2)
+
+## colour by psyllid phylogeny
+dend <- as.dendrogram(force.ultrametric(pruned.tree))
+membership <- as.data.frame(cutree(dend, k=11)) %>%
+  rownames_to_column("psyllid_spp") %>%
+  magrittr::set_colnames(c("psyllid_spp", "cluster"))
+
+pca_phylo <- pc_samp %>%
+  left_join(membership)
+gg.pca <- ggplot(data=pca_phylo, aes(x=PC2, y=PC1, colour=as.factor(cluster))) + 
+  geom_point(alpha=0.5, size=3) + #, shape=21, colour="black"
+  #geom_point(data=pc_otu,aes(PC1, PC2)) +
+  theme_classic() +
+  scale_colour_brewer(palette="Paired") +
+  geom_hline(yintercept = 0, linetype=2, alpha=0.5) +  
+  geom_vline(xintercept = 0, linetype=2, alpha=0.5) +
+  xlab(pc_xlab) + 
+  ylab(pc_ylab) +
+  theme(legend.position = "none") +
+  scale_y_reverse(position = "right") 
+  #coord_fixed(ratio=pc2/pc1) # Scale plot by variance explained
+print(gg.pca )
+
+p1 <- ggtree(pruned.tree) +
+    scale_x_continuous(expand=c(0, 0.2)) + theme_tree2()
+
+colours_p1 <- p1$data %>%
+  left_join(membership %>%
+  dplyr::rename(label = psyllid_spp)
+    )
+p1 <- p1 %<+% colours_p1  + 
+  geom_tippoint(aes(colour=as.factor(cluster)))  + 
+  geom_tiplab(aes(colour=as.factor(cluster)))+
+  scale_colour_brewer(palette="Paired") 
+
+gg.psyllid_pca <- p1 + gg.pca + plot_annotation(title="Psyllid phylogenetic distance")
+gg.psyllid_pca
+
+pdf(file="figs/psyllid_pca.pdf",  width = 8, height = 11, paper="a4")
+  plot(gg.psyllid_pca)
+try(dev.off(), silent=TRUE)
+  
+# Colour by plant phylogeny
+plant.tree <- read.tree("sample_data/plant_tree.nwk")
+plant.tree  <- drop.tip(plant.tree, "Sophora_microphylla_-kowhai" )
+plant.tree <- multi2di(plant.tree)
+
+dend <- as.dendrogram(plant.tree )
+#test <- color_branches(dend, k=12)
+#plot(test)
+membership <- as.data.frame(cutree(dend, k=12)) %>%
+  rownames_to_column("hostplant_spp") %>%
+  magrittr::set_colnames(c("hostplant_spp", "cluster"))
+
+pca_phylo <- pc_samp %>%
+  left_join(membership)
+gg.pca <- ggplot(data=pca_phylo, aes(x=PC2, y=PC1, colour=as.factor(cluster))) + 
+  geom_point(alpha=0.5, size=3) + #, shape=21, colour="black"
+  #geom_point(data=pc_otu,aes(PC1, PC2)) +
+  theme_classic() +
+  scale_colour_brewer(palette="Paired") +
+  geom_hline(yintercept = 0, linetype=2, alpha=0.5) +  
+  geom_vline(xintercept = 0, linetype=2, alpha=0.5) +
+  xlab(pc_xlab) + 
+  ylab(pc_ylab) +
+  theme(legend.position = "none") +
+  scale_y_reverse(position = "right")
+  #coord_fixed(ratio=pc2/pc1) # Scale plot by variance explained
+print(gg.pca )
+
+p2 <- ggtree(plant.tree) +
+    scale_x_continuous(expand=c(0, 70)) + theme_tree2()
+
+colours_p2 <- p2$data %>%
+  left_join(membership %>%
+  dplyr::rename(label = hostplant_spp)
+    )
+p2 <- p2 %<+% colours_p2  + 
+  geom_tippoint(aes(colour=as.factor(cluster)))  + 
+  geom_tiplab(aes(colour=as.factor(cluster)))+
+  scale_colour_brewer(palette="Paired") 
+
+gg.plant_pca <- p2 + gg.pca + plot_annotation(title="Plant phylogenetic distance")
+gg.plant_pca
+
+pdf(file="figs/plant_pca.pdf",  width = 8, height = 11, paper="a4")
+  plot(gg.plant_pca)
+try(dev.off(), silent=TRUE)
+
+# HC of spatial distance
+  
+dend <- hclust(as.dist(spat.dist), method="average")
+#test <- color_branches(dend, k=12)
+#plot(test)
+
+membership <- as.data.frame(cutree(dend, k=12)) %>%
+  rownames_to_column("Sample_Name") %>%
+  magrittr::set_colnames(c("Sample_Name", "cluster"))
+
+pca_phylo <- pc_samp %>%
+  left_join(membership)
+gg.pca <- ggplot(data=pca_phylo, aes(x=PC2, y=PC1, colour=as.factor(cluster))) + 
+  geom_point(alpha=0.5, size=3) + #, shape=21, colour="black"
+  #geom_point(data=pc_otu,aes(PC1, PC2)) +
+  theme_classic() +
+  scale_colour_brewer(palette="Paired") +
+  geom_hline(yintercept = 0, linetype=2, alpha=0.5) +  
+  geom_vline(xintercept = 0, linetype=2, alpha=0.5) +
+  xlab(pc_xlab) + 
+  ylab(pc_ylab) +
+  theme(legend.position = "none") +
+  scale_y_reverse(position = "right")
+  #coord_fixed(ratio=pc2/pc1) # Scale plot by variance explained
+print(gg.pca )
+
+p3 <- ggtree(as.phylo(dend) )+
+    scale_x_continuous(expand=c(0, 400)) + theme_tree2()
+
+colours_p3 <- p3$data %>%
+  left_join(membership %>%
+  dplyr::rename(label = Sample_Name)
+    )
+p3 <- p3 %<+% colours_p3  + 
+  geom_tippoint(aes(colour=as.factor(cluster)))  + 
+  geom_tiplab(aes(colour=as.factor(cluster)))+
+  scale_colour_brewer(palette="Paired") 
+
+gg.spat_pca <- p3 + gg.pca + plot_annotation(title="Spatial Distance")
+gg.spat_pca
+
+pdf(file="figs/spatial_pca.pdf",  width = 8, height = 11, paper="a4")
+  plot(gg.spat_pca)
+try(dev.off(), silent=TRUE)
+```
+
+
+# Cophylogeny
+
+Due to the higher correlations with recent branches, we looked for patterns of cophylogeny
 
 ## Whole dataset - PACO
 
@@ -695,8 +879,9 @@ sample_data(ps.sppmerged) <- sample_data(ps2) %>%
   filter(!duplicated(psyllid_spp)) %>%
   magrittr::set_rownames(.$psyllid_spp)
 
+ps3 <- ps.sppmerged
 #Rename taxa - only keep first 30 characters
-#taxa_names(ps3) <- substr(paste0("SV", seq(ntaxa(ps3)),"-",tax_table(ps3)[,7]), 1,30)
+taxa_names(ps3) <- substr(paste0("SV", seq(ntaxa(ps3)),"-",tax_table(ps3)[,7]), 1,30)
 
 #Prepare co-occurance matrix
 coocur <- ps3 %>%
@@ -1327,48 +1512,54 @@ u_mntd <- picante::ses.mntd(comm, phydist, null.model = "taxa.labels", abundance
 ## Map of colleciton locations
 
 ```{r Collection map}
-#Make spatial distance matrix
-library(sp)
- # Spatial distance
-  envData <- read.csv("sample_data/Sample_info.csv", header=TRUE)  %>%
-    dplyr::filter(!duplicated(SampleID)) %>%
-    set_rownames(.$SampleID) %>%
-    separate(Collection, into= c("Lat", "Long"), sep=" ", remove = FALSE) %>%
-    separate(Lat, paste("lat",c("d","m","s"), sep="_") ) %>%
-    separate(Long, paste("long",c("d","m","s"), sep="_" ) ) %>%
-    mutate_at(vars(-SampleID, -psyllid_spp), funs(as.numeric)) %>%
-    mutate(lat=-(lat_d + lat_m/60 + lat_s/60^2),
-              long=long_d + long_m/60 + long_s/60^2) %>%
-    dplyr::select(SampleID, psyllid_spp, lat, long) %>%
-    column_to_rownames("SampleID") %>%
-    drop_na()
-
 #Plot on map to confirm points
-library("maptools")
-data(wrld_simpl)
-wrld_simpl@data$id <- wrld_simpl@data$NAME
-wrld <- fortify(wrld_simpl, region="id")
+library(rgeos)
+library(maptools)
+envData <- sample_data(ps2) %>%
+  as_data_frame() %>%
+  dplyr::select(Sample_Name,psyllid_spp, lat, long) %>%
+  tibble::column_to_rownames("Sample_Name") %>%
+  drop_na()
 
-gg.worldmap <- ggplot(envData) +
-  geom_map(data=wrld, map=wrld, aes(map_id=id, x=long, y=lat), fill="lightgrey", color="#7f7f7f", size=0.25) +
-  geom_point(aes(x=long, y=lat, color=psyllid_spp), alpha=.5, size=3) + 
-  theme_bw() +
-  coord_fixed(ylim = c(-90,90), xlim=c(-180,180))  
+xlim <- c(165,180)
+ylim <- c(-50,-30)
 
-gg.anzmap <- ggplot(envData) +
-  geom_map(data=wrld, map=wrld, aes(map_id=id, x=long, y=lat), fill="lightgrey", color="#7f7f7f", size=0.25) +
-  geom_point(aes(x=long, y=lat, color=psyllid_spp), alpha=.5, size=3) + 
-  theme_bw() +
-  coord_fixed(ylim = c(-50,-30), xlim=c(130,180))+
-  theme(legend.position = "bottom")  
+nz <-map("worldHires", "New Zealand", fill=TRUE, xlim=xlim,
+  ylim=ylim) #, mar=c(0,0,0,0)
+
+p1 <- ggtree(pruned.tree, ladderize=TRUE)
+map_data <- p1$data%>%
+  left_join(envData %>% dplyr::mutate(label =psyllid_spp ))
 
 
-gg.nzmap <- ggplot(envData) +
-  geom_map(data=wrld, map=wrld, aes(map_id=id, x=long, y=lat), fill="lightgrey", color="#7f7f7f", size=0.25) +
-  geom_point(aes(x=long, y=lat, color=psyllid_spp), alpha=.5, size=3) + 
-  theme_bw() +
-  coord_fixed(ylim = c(-50,-30), xlim=c(160,180)) 
+col <- colorRampPalette(brewer.pal(12, "Paired"))(length(unique(map_data$psyllid_spp)))
 
+gg.nzmap <- ggplot(fortify(nz), aes(y=lat, x=long, group=group)) + 
+  geom_polygon(fill="lightgrey", color="#7f7f7f") +
+  geom_point(data=map_data, aes(x=long, y=lat, color=psyllid_spp), alpha=.5, size=3, inherit.aes = FALSE) + 
+    geom_segment(data=map_data %>%
+  mutate(y = scales::rescale(y, to = ylim )), aes(x=min(xlim), y=y, xend= long, yend=lat, color=psyllid_spp), alpha=.2, inherit.aes = FALSE) +
+    theme_classic() +
+    coord_fixed(ylim =ylim, xlim=xlim) +
+    scale_x_continuous(expand = c(0,0)) + 
+    scale_colour_manual(values=col) +
+    theme(legend.position = "none") +
+    scale_y_continuous(position = "right") +
+  xlab("Longitude") + 
+  ylab("Lattitude")
+gg.nzmap 
+
+#print(gg.nzmap, vp = viewport(width = .7, height = .7, angle = 35))
+p1 <- p1 %<+% map_data +
+  geom_tiplab(align=TRUE, aes(color=psyllid_spp), offset=0.1, hjust=1) +
+  scale_x_continuous(expand=c(0, 0))+ 
+  scale_colour_manual(values=col) 
+
+gg.phylomap <- p1 + gg.nzmap
+
+pdf(file="figs/phylomap.pdf",  width = 15, height = 15, paper="a4r")
+  plot(gg.phylomap)
+try(dev.off(), silent=TRUE)
 ```
 
 
