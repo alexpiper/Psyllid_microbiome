@@ -83,79 +83,13 @@ source('R/helper_functions.R')
 options(stringsAsFactors = FALSE)
 ```
 
-# Make Phyloseq object
+# Read in phyloseq object
 
-Following taxonomic assignment, the sequence table and taxonomic table are merged into a single phyloseq object alongside the sample info csv.
+```{r}
+ps2 <- readRDS("output/rds/ps2.rds")
+tree <- read.tree("output/phytree.nwk")
 
-```{r create PS, eval = FALSE}
-seqtab <- readRDS("output/rds/seqtab_curated.rds")
-tax <- readRDS("output/rds/tax_IdTaxaExact.rds") 
-seqs <- DNAStringSet(rownames(seqtab))
-names(seqs) <- seqs
-
-#Load sample information (Put all collection and geographic distances here?)
-## ---- samdat ----
-samdf <- read_csv("sample_data/Sample_info.csv")  %>%
-  dplyr::rename_all(funs( stringr::str_replace_all(., '\\ ', '_')) ) %>%
-  mutate(psyllid_spp = psyllid_spp %>% str_remove("\\.") %>%
-           str_replace_all(" ", "_") %>%
-           str_replace_all("Casuarinicola sp", "Triozid sp")) %>%
-  mutate(hostplant_spp = hostplant_spp %>% str_remove("\\.") %>%
-           str_replace_all(" ", "_") %>%
-           str_to_sentence() %>%
-           str_replace_all("Kamahi", "Weinmannia_racemosa") %>%
-           str_replace_all("Oleaeria_odorata", "Olearia_odorata"))
-
-write_csv(samdf, "sample_data/Sample_info2.csv")
-
-# Flag replicated samples
-samdf <- samdf %>%
-  dplyr::mutate(replicated = Sample_Name %in% (samdf %>% group_by(Sample_Name) %>% 
-                                                 add_count() %>%
-                                           filter(n >1) %>% 
-                                           pull(Sample_Name))) %>%
-  separate(Collection, into= c("Lat", "Long"), sep=" ", remove = TRUE) %>%
-  separate(Lat, paste("lat",c("d","m","s"), sep="_")) %>%
-  separate(Long, paste("long",c("d","m","s"), sep="_" )) %>%
-  mutate_at(vars(starts_with("lat")), .funs=as.numeric) %>%
-  mutate_at(vars(starts_with("long")), .funs=as.numeric) %>%
-  mutate(lat=-(lat_d + lat_m/60 + lat_s/60^2),
-            long=long_d + long_m/60 + long_s/60^2) %>%
-  dplyr::select(c("SampleID", "Sample_Name", "seqrun", "psyllid_spp", "psyllid_genus", "psyllid_family", "hostplant_spp","Collection_Date","replicated", "lat", "long")) %>%
-  as.data.frame(stringsAsFactors=FALSE) %>%
-  magrittr::set_rownames(.$SampleID) #Collection
-
-## ---- phyloseq ----
-ps <- phyloseq(tax_table(tax),
-               sample_data(samdf),
-               otu_table(t(seqtab), taxa_are_rows = FALSE),
-               refseq(seqs))
-#phy_tree(tree)
-
-if(nrow(seqtab) > nrow(sample_data(ps))){warning("Warning: All samples not included in phyloseq object, check sample names match the sample metadata")}
-
-#Rename taxa
-taxa_names(ps) <- paste0("SV", seq(ntaxa(ps)),"-",tax_table(ps)[,8])
-
-##save phyloseq object
-saveRDS(ps, "output/rds/ps.rds")
-
-#Output tables of results
-dir.create("output/csv")
-dir.create("output/otu_tables/unfiltered/", recursive = TRUE)
-
-##Export raw csv
-speedyseq::psmelt(ps) %>%
-  write.csv(file = "output/otu_tables/rawdata.csv")
-
-seqateurs::summarise_taxa(ps, "species", "SampleID") %>%
-  spread(key="SampleID", value="totalRA") %>%
-  write.csv(file = "output/otu_tables/unfiltered/spp_sum.csv")
-
-seqateurs::summarise_taxa(ps, "genus", "SampleID") %>%
-  spread(key="SampleID", value="totalRA") %>%
-  write.csv(file = "output/otu_tables/unfiltered/gen_sum.csv")
-
+phy_tree(ps2) <- tree
 ```
 
 
@@ -195,58 +129,6 @@ psyllid_tree$tip.label[!psyllid_tree$tip.label %in% samdf$psyllid_spp]
 pruned.tree <- drop.tip(psyllid_tree, psyllid_tree$tip.label[!psyllid_tree$tip.label %in% samdf$psyllid_spp] )
 ```
 
-# Filtering
-## Remove outlier Samples
-
-Detecting and potentially removing samples outliers (those samples with underlying data that do not conform to experimental or biological expectations) can be useful for minimizing technical variance. This can be caused by a number of reasons, including low-reads assigned to that sample. In this case we remove all samples below 1000 reads, as these include all samples contributing to lower than usual ASV counts.
-
-Rarefaction curves are useful	to	assess	sensitivity	of	sample	size	to	observed	alpha-diversity estimates.
-```{r replicate reproducibility}
-## Remove mocks
-rm_mocks <- c("mockA_S51", "MockEven_S193", "Mock_S192", "PCRctrl_S191", "MockStaggered_S194", "PCRctrl_S191", "91_S167")
-
-#check mocks
-ps0 <- ps %>% 
-  subset_samples(!sample_names(ps) %in% rm_mocks) %>% #Remove mocks
-  filter_taxa(function(x) mean(x) > 0, TRUE) #Drop missing taxa from table 
-
-message((nsamples(ps) - nsamples(ps0)), " outlier samples dropped")
-
-#Plot rarefaction curve
-out <- rarecurve(otu_table(ps0), step=100)
-
-rare <- lapply(out, function(x){
-  b <- as.data.frame(x)
-  b <- data.frame(OTU = b[,1], count = rownames(b))
-  b$count <- as.numeric(gsub("N", "",  b$count))
-  return(b)
-})
-names(rare) <- sample_names(ps1)
-
-rare <- map_dfr(rare, function(x){
-  z <- data.frame(x)
-  return(z)
-}, .id = "sample")
-
-# threshold for read removal
-threshold = 1000
-
-gg.rare <- ggplot(data = rare)+
-  geom_line(aes(x = count, y = OTU, group=sample), alpha=0.5)+
-  geom_point(data = rare %>% group_by(sample) %>% top_n(1, count),aes(x = count, y = OTU, colour=(count > threshold))) +
-  scale_x_continuous(labels =  scales::scientific_format()) +
-  geom_vline(xintercept=threshold, linetype="dashed") +
-  labs(colour = "> Read \n Threshold") +
-  xlab("Sequence reads") +
-  ylab("Observed ASV's")
-
-gg.rare
-
-#Remove all samples under the minimum read threshold 
-ps1 <- prune_samples(sample_sums(ps0)>=threshold, ps0) 
-ps1 <- filter_taxa(ps1, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
-message(nsamples(ps) - nsamples(ps1), " Samples and ", ntaxa(ps) - ntaxa(ps1), " taxa under read threshold Dropped")
-```
 
 ## Average dissimilarities
 
@@ -318,155 +200,6 @@ dist2 <- ps1 %>%
 #adonis(~ psyllid_spp, method = "euclidean", data = metadata))
 ```
 
-
-## Taxon Filtering
-
-Remove all non-bacterial taxa, mitochondria, chloroplast and cyanobacteria.
-We also remove all taxa contained within the blank sample from other samples? - Check these
-
-```{r taxon-cleaning}
-get_taxa_unique(ps1, "domain")
-
-ps1 # Check the number of taxa prior to removal
-ps2 <- ps1 %>%
-  subset_taxa(
-    domain == "Bacteria" & 
-    family  != "Mitochondria" &
-    order   != "Chloroplast" &
-    phylum != "Cyanobacteria"
-  )
-ps2 # Confirm that the taxa were removed
-get_taxa_unique(ps2, "phylum")
-get_taxa_unique(ps2, "class")
-get_taxa_unique(ps2, "family")
-```
-
-
-
-# Update phylogenetic tree
-
-Now that we have removed the badly assigned taxonomy, we will make a new phylogenetic tree, constrianed by the taxonomy
-
-Methods:
-1- Align with silva online
-2- Retrieve all nearest neighbours in alignment
-3- Make tree in fasttree using constraints of taxonomy
-4- Reroot tree
-5- Date with PATHd8 
-using dating anchors of: 
-https://www.nature.com/articles/s41598-019-54869-6#Sec30 Supplementary table 5: https://static-content.springer.com/esm/art%3A10.1038%2Fs41559-018-0625-0/MediaObjects/41559_2018_625_MOESM1_ESM.pdf
-
-also :https://static-content.springer.com/esm/art%3A10.1038%2Fncomms14319/MediaObjects/41467_2017_BFncomms14319_MOESM1451_ESM.pdf
-
-
-would be better to use the SINA algorithm for this, as its recommended in the BDTT papers
-https://github.com/epruesse/SINA
-
-see paper: https://www.nature.com/articles/ncomms14319#Sec12
-
-```{r phylogenetic tree}
-#Write out fasta and align with silva online
-seqs <- refseq(ps2)
-writeXStringSet(seqs, "output/curated_asv.fasta", width=1000)
-
-# Make constraints table at phylum level
-taxonomy <- as.data.frame(tax_table(ps2)) %>%
-  dplyr::select(-rootrank)
-
-# Domain constraints
-taxonomy[["Bacteria"]][taxonomy$domain=="Bacteria"] <- 1
-
-# Phylum constrains
-Phylum <- unique(taxonomy$phylum)
-Phylum <- subset(Phylum, !Phylum %in% c("d__Bacteria")) #remove this factor
-
-for (i in Phylum){
-  taxonomy[[as.character(i)]][taxonomy$phylum==i]=1
-  taxonomy[[as.character(i)]][!taxonomy$phylum==i]=0
-}
-
-constraints=taxonomy[,c("Bacteria", as.character(Phylum))] #keep only the constrains 
-head(constraints)
-
-# Output fasta
-seqs <- list()
-for (i in 1:nrow(constraints)){
-  seqs[[i]] <- constraints[i,]
-  }
-write.fasta(seqs, names=rownames(constraints), file.out="output/phylogenetic_constraints.fasta", open = "w", nbchar = 60, as.string = FALSE)
-
-
-test <- charlist[intersect(tree$tip.label, rownames(seqtab_final))]
-
-#Subset charlist to the original sequences, retain names
-tree <- read.tree("arb-silva.de_2020-04-16_id809405/arb-silva.de_2020-04-16_id809405.tree")
-library(ape)
-
-samples <- intersect(tree$tip.label, rownames(seqtab_final))
-tree2 <- drop.tip(tree, tree$tip.label[!tree$tip.label %in% samples])
-
-ggtree(tree2)
-# REROOT TREE
-
-# DATE TREE
-
-write.tree(tree2, "output/phytree.nwk")
-```
-
-## FASTTREE
-
-compare with, without constraints, and to silva tree
-
-### Merge technical replicates
-
-With only 16 samples replicated, and only on the first 2 sequencing runs i dont think there is a way to explicitly take into account replicate variability, therefore all replicates were merged
-
-This can be done with DADA2 - mergeSequenceTables(st1, st2, st3, repeats = "sum"
-
-```{r replicates}
-# Merge replicates
-ps.merged <- ps2 %>%
-    merge_samples(group = "Sample_Name")
-
-#This loses the sample metadata - Need to add it agian
-sample_data(ps.merged) <- sample_data(ps1) %>%
-  filter(!duplicated(Sample_Name)) %>%
-  magrittr::set_rownames(.$Sample_Name)
-
-#Problem - this loses refseq!
-
-
-ps2 <- ps.merged
-
-```
-
-## Prevalence assesment
-
-View prevalence of different phyla
-```{r prevalence-assessment}
-# Calculate taxon prevalence across the data set
-prevdf <- apply(X = otu_table(ps.merged), MARGIN = ifelse(taxa_are_rows(ps.merged), yes = 1, no = 2), FUN = function(x){sum(x > 0)})
-
-# Add taxonomy and total read counts to prevdf - change this to tidyverse code
-prevdf <- data.frame(Prevalence = prevdf, TotalAbundance = taxa_sums(ps.merged), tax_table(ps.merged))
-
-#Prevalence plot
-gg.prev <- subset(prevdf, phylum %in% get_taxa_unique(ps0, "phylum")) %>%
-  ggplot(aes(TotalAbundance, Prevalence / nsamples(ps.merged),color=family)) +
-  geom_point(size = 3, alpha = 0.7) +
-  scale_x_log10() +
-  xlab("Total Abundance") + ylab("Prevalence [Frac. Samples]") +
-  facet_wrap(~phylum) +
-  theme(legend.position="none") +
-  ggtitle("Phylum Prevalence in All Samples\nColored by Family")
-
-gg.prev
-```
-
-
-
-
-
 # Alpha diversity 
 
 ### Summarise taxonomic assignment
@@ -537,9 +270,6 @@ div_table %>%
 
 Here we calculate the phylogenetic signal in the alpha diversity and community assembly metrics, or the extent to which these values are statistically related to phylogeny.
 
-see supplementary 15 - https://static-content.springer.com/esm/art%3A10.1038%2Fs41467-019-10191-3/MediaObjects/41467_2019_10191_MOESM1_ESM.pdf
-
-see : https://doi.org/10.1111/j.2041-210X.2012.00196.x for deciding indices
 ```{r Phylosignal}
 dat <- div_table  %>%
   filter(psyllid_spp %in% pruned.tree$tip.label) %>% #Subset to common 
@@ -569,8 +299,6 @@ lipa.p4d <- lipaMoran(p4d, as.p4d = TRUE, reps=999)
 barplot.phylo4d(p4d, bar.col=(lipa$p.value < 0.05) + 1, center = FALSE , scale = FALSE)
 
 barplot.phylo4d(lipa.p4d, bar.col = (lipa$p.value < 0.05) + 1, center = FALSE, scale = FALSE)
-
-## Should be able to make these in ggtree if necessary 
 ```	
 
 # Beta diversity
@@ -807,25 +535,6 @@ pmantel_results <- distlist %>%
 
 write_csv(pmantel_results, "output/phylosymbiosis/pmantel_fulldata.csv")
 
-# Topological comparison metrics
-topo_results <- distlist %>%
-  purrr::map(function(x){
-    run_tree_comparison(x, dists=c("phylo.dist", "plant.dist", "spat.dist"), #Change these to matrices
-               subsample=subsample,
-               clust.method="average",
-               measure="all",
-               runs=100)
-  }) %>%
-  bind_rows(.id="metric") 
-write_csv(topo_results, "output/phylosymbiosis/topo_fulldata.csv")
-
-## Visualise what these look like
-#tree1  <- as.phylo(hclust(as.dist(phylo.dist[subsample,subsample]), method = "ward.D2"))
-#tree2 <- as.phylo(hclust(as.dist(distlist$Aitchison[subsample,subsample]), method = "ward.D2"))
-#VisualizeMatching(RobinsonFoulds,tree1, tree2)
-
-# make data
-
 ## Plot circular barplot
 gg.mantels <- bind_rows(mantel_results, pmantel_results) %>%
               dplyr::mutate(dist1 = case_when(
@@ -845,10 +554,7 @@ gg.mantels
 
 # Plot circular phylogeny
 gg.tree <- ggtree(phy_tree(ps2),  layout='circular') #branch.length='none',
-
 gg.tree
-
-# could colour by nodes most associated with the cofactor?
 ```
 
 ### Without Gammaproteobacteria
@@ -917,19 +623,8 @@ pmantel_results <- distlist %>%
                samples=samples, type="partial")
   }) %>%
   bind_rows(.id="dist") 
-write_csv(pmantel_results, "output/phylosymbiosis/pmantel_subset.csv")
 
-# Topological comparison metrics
-topo_results <- distlist %>%
-  purrr::map(function(x){
-    run_tree_comparison(x, dists=c("phylo.dist", "plant.dist", "spat.dist"), #Change these to matrices
-               samples=samples,
-               clust.method="average",
-               measure="all",
-               runs=100)
-  }) %>%
-  bind_rows(.id="metric") 
-write_csv(topo_results, "output/phylosymbiosis/topo_subset.csv")
+write_csv(pmantel_results, "output/phylosymbiosis/pmantel_subset.csv")
 ```
 
 ## BDTT
