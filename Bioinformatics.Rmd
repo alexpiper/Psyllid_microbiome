@@ -348,7 +348,7 @@ dna <- DNAStringSet(getSequences(seqtab_final))
 ids <- IdTaxa(dna, trainingSet, processors=12, threshold = 60, verbose=TRUE)  
 
 # Output plot of ids
-pdf(paste0("output/idtaxa.pdf"), width = 11, height = 8 , paper="a4r")
+pdf(paste0("figs/idtaxa.pdf"), width = 11, height = 8 , paper="a4r")
   plot(ids)
 try(dev.off(), silent=TRUE)
 
@@ -442,6 +442,210 @@ mapping <- curated_result[["otu_map"]] %>%
 # Write out curated seqtab
 saveRDS(curated_result[["curated_table"]], "output/rds/seqtab_curated.rds")
 ```
+
+
+# Make Phyloseq object
+
+Following taxonomic assignment, the sequence table and taxonomic table are merged into a single phyloseq object alongside the sample info csv.
+
+```{r create PS, eval = FALSE}
+# Load data
+seqtab <- readRDS("output/rds/seqtab_curated.rds")
+tax <- readRDS("output/rds/tax_IdTaxaExact.rds") 
+seqs <- DNAStringSet(rownames(seqtab))
+names(seqs) <- seqs
+samdf <- read_csv("sample_data/Sample_info2.csv") %>%
+  as.data.frame(stringsAsFactors=FALSE) %>%
+  magrittr::set_rownames(.$SampleID) #Collection
+
+# Make phyloseq object
+ps <- phyloseq(tax_table(tax),
+               sample_data(samdf),
+               otu_table(t(seqtab), taxa_are_rows = FALSE),
+               refseq(seqs))
+
+if(nrow(seqtab) > nrow(sample_data(ps))){warning("Warning: All samples not included in phyloseq object, check sample names match the sample metadata")}
+
+#Rename taxa
+#taxa_names(ps) <- paste0("SV", seq(ntaxa(ps)),"-",tax_table(ps)[,8])
+
+##save phyloseq object
+saveRDS(ps, "output/rds/ps.rds")
+
+#Output tables of results
+dir.create("output/csv")
+dir.create("output/otu_tables/unfiltered/", recursive = TRUE)
+
+##Export raw csv
+speedyseq::psmelt(ps) %>%
+  write.csv(file = "output/otu_tables/rawdata.csv")
+
+seqateurs::summarise_taxa(ps, "species", "SampleID") %>%
+  spread(key="SampleID", value="totalRA") %>%
+  write.csv(file = "output/otu_tables/unfiltered/spp_sum.csv")
+
+seqateurs::summarise_taxa(ps, "genus", "SampleID") %>%
+  spread(key="SampleID", value="totalRA") %>%
+  write.csv(file = "output/otu_tables/unfiltered/gen_sum.csv")
+
+```
+
+
+# Filtering
+## Remove outlier Samples
+
+Detecting and potentially removing samples outliers (those samples with underlying data that do not conform to experimental or biological expectations) can be useful for minimizing technical variance. This can be caused by a number of reasons, including low-reads assigned to that sample. In this case we remove all samples below 1000 reads, as these include all samples contributing to lower than usual ASV counts.
+
+Rarefaction curves are useful	to	assess	sensitivity	of	sample	size	to	observed	alpha-diversity estimates.
+```{r remove outliers}
+## Remove mocks
+rm_mocks <- c("mockA_S51", "MockEven_S193", "Mock_S192", "PCRctrl_S191", "MockStaggered_S194", "PCRctrl_S191", "91_S167")
+
+#check mocks
+ps0 <- ps %>% 
+  subset_samples(!sample_names(ps) %in% rm_mocks) %>% #Remove mocks
+  filter_taxa(function(x) mean(x) > 0, TRUE) #Drop missing taxa from table 
+
+message((nsamples(ps) - nsamples(ps0)), " outlier samples dropped")
+
+#Plot rarefaction curve
+out <- rarecurve(otu_table(ps0), step=100)
+
+rare <- lapply(out, function(x){
+  b <- as.data.frame(x)
+  b <- data.frame(OTU = b[,1], count = rownames(b))
+  b$count <- as.numeric(gsub("N", "",  b$count))
+  return(b)
+})
+names(rare) <- sample_names(ps1)
+
+rare <- map_dfr(rare, function(x){
+  z <- data.frame(x)
+  return(z)
+}, .id = "sample")
+
+# threshold for read removal
+threshold = 1000
+
+gg.rare <- ggplot(data = rare)+
+  geom_line(aes(x = count, y = OTU, group=sample), alpha=0.5)+
+  geom_point(data = rare %>% 
+               group_by(sample) %>% 
+               top_n(1, count),
+             aes(x = count, y = OTU, colour=(count > threshold))) +
+  scale_x_continuous(labels =  scales::scientific_format()) +
+  geom_vline(xintercept=threshold, linetype="dashed") +
+  labs(colour = "Sample kept?") +
+  xlab("Sequence reads") +
+  ylab("Observed ASV's")
+
+#Write out figure
+pdf(file="figs/rarefaction.pdf", width = 11, height = 8 , paper="a4r")
+  plot(gg.rare)
+try(dev.off(), silent=TRUE)
+
+#Remove all samples under the minimum read threshold 
+ps1 <- prune_samples(sample_sums(ps0)>=threshold, ps0) 
+ps1 <- filter_taxa(ps1, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
+message(nsamples(ps) - nsamples(ps1), " Samples and ", ntaxa(ps) - ntaxa(ps1), " taxa under read threshold Dropped")
+```
+
+## Taxon Filtering
+
+Remove all non-bacterial taxa, mitochondria, chloroplast and cyanobacteria.
+We also remove all taxa contained within the blank sample from other samples? - Check these
+
+```{r taxon-cleaning}
+get_taxa_unique(ps1, "domain")
+
+ps1 # Check the number of taxa prior to removal
+ps2 <- ps1 %>%
+  subset_taxa(
+    domain == "Bacteria" & 
+    family  != "Mitochondria" &
+    order   != "Chloroplast" &
+    phylum != "Cyanobacteria"
+  )
+ps2 # Confirm that the taxa were removed
+get_taxa_unique(ps2, "phylum")
+get_taxa_unique(ps2, "class")
+get_taxa_unique(ps2, "family")
+```
+
+# Create phylogenetic tree
+
+```{r phylogenetic tree}
+#Write out fasta and align with silva online
+seqs <- refseq(ps2)
+writeXStringSet(seqs, "output/curated_asv.fasta", width=1000)
+
+```
+
+## Date tree with PATHd8
+
+```{r PATHd8}
+# Date usign congruify
+tree <- read.tree("arb-silva.de_2020-04-18_id810131/arb-silva.de_2020-04-18_id810131.tree")
+ref_tree <- read.tree("bin/Dated trees/Bacteria_16S_SILVA_97sim_FastTree_PATHd8.tre")
+
+#839 congruent tips!
+table(tree$tip.label %in% ref_tree$tip.label)
+
+library(geiger)
+ref_tree_pruned <- drop.tip(ref_tree, ref_tree$tip.label[!ref_tree$tip.label %in% tree$tip.label])
+res <- congruify.phylo(reference=ref_tree_pruned, target=tree, scale="PATHd8")
+
+tree2 <- drop.tip(res$phy, res$phy$tip.label[!res$phy$tip.label %in% names(refseq(ps2))])
+write.tree(tree2, "output/phytree.nwk")
+```
+
+### Merge technical replicates
+
+With only 16 samples replicated, and only on the first 2 sequencing runs i dont think there is a way to explicitly take into account replicate variability, therefore all replicates were merged
+
+This can be done with DADA2 - mergeSequenceTables(st1, st2, st3, repeats = "sum"
+
+```{r replicates}
+# Merge replicates
+ps.merged <- ps2 %>%
+    merge_samples(group = "Sample_Name")
+
+#This loses the sample metadata - Need to add it agian
+sample_data(ps.merged) <- sample_data(ps1) %>%
+  filter(!duplicated(Sample_Name)) %>%
+  magrittr::set_rownames(.$Sample_Name)
+
+#Problem - this loses refseq!
+ps2 <- ps.merged
+
+saveRDS(ps2, "output/rds/ps2.rds")
+```
+
+## Prevalence assesment
+
+View prevalence of different phyla
+```{r prevalence-assessment}
+# Calculate taxon prevalence across the data set
+prevdf <- apply(X = otu_table(ps.merged), MARGIN = ifelse(taxa_are_rows(ps.merged), yes = 1, no = 2), FUN = function(x){sum(x > 0)})
+
+# Add taxonomy and total read counts to prevdf - change this to tidyverse code
+prevdf <- data.frame(Prevalence = prevdf, TotalAbundance = taxa_sums(ps.merged), tax_table(ps.merged))
+
+#Prevalence plot
+gg.prev <- subset(prevdf, phylum %in% get_taxa_unique(ps0, "phylum")) %>%
+  ggplot(aes(TotalAbundance, Prevalence / nsamples(ps.merged),color=order)) +
+  geom_point(size = 3, alpha = 0.7) +
+  scale_x_log10() +
+  xlab("Total Abundance") + ylab("Prevalence [Frac. Samples]") +
+  facet_wrap(~phylum) +
+  theme(legend.position="none") +
+  ggtitle("Phylum Prevalence in All Samples\nColored by Order")
+
+pdf(file="figs/prevalence.pdf", width = 11, height = 8 , paper="a4r")
+  plot(gg.prev)
+try(dev.off(), silent=TRUE)
+```
+
 
 # Sessioninfo
 
