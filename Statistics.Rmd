@@ -85,11 +85,14 @@ options(stringsAsFactors = FALSE)
 
 # Read in phyloseq object
 
-```{r}
+```{r read in phyloseq}
 ps2 <- readRDS("output/rds/ps2.rds")
 tree <- read.tree("output/phytree.nwk")
 
 phy_tree(ps2) <- tree
+
+#Rename taxa - only keep first 30 characters
+taxa_names(ps2) <- substr(paste0("SV", seq(ntaxa(ps2)),"-",tax_table(ps2)[,7]), 1,30)
 ```
 
 
@@ -125,80 +128,10 @@ psyllid_tree$tip.label <- psyllid_tree$tip.label %>%
   trimws(which="right")
 
 # Subset to only those in sample data
-psyllid_tree$tip.label[!psyllid_tree$tip.label %in% samdf$psyllid_spp]
-pruned.tree <- drop.tip(psyllid_tree, psyllid_tree$tip.label[!psyllid_tree$tip.label %in% samdf$psyllid_spp] )
+psyllid_tree$tip.label[!psyllid_tree$tip.label %in% sample_data(ps2)$psyllid_spp]
+pruned.tree <- drop.tip(psyllid_tree, psyllid_tree$tip.label[!psyllid_tree$tip.label %in% sample_data(ps2)$psyllid_spp] )
 ```
 
-
-## Average dissimilarities
-
-Calculate Average dissimilarities between PCR replicates, biological replicates of the same species, hostplants, and different species on same hostplants
-
-Could just calculate the average dissimilarities across all, then look at the factors we are interested in, and do a statistical test between - Could actually do this way down in the beta diversity section
-
-Then could move everything up to beta diversity to the bioinformatics section, as its all technically bioinformatics not statistics
-
-```{r Avg Dissimiarity}
-# Calculate overall distance
-#Rarefy replicates to same read depth
-nspec <- specnumber(otu_table(ps1)) # observed number of species
-raremax <- min(rowSums(otu_table(ps1)))
-rare <- rrarefy(otu_table(ps1), raremax)
-
-dist <- vegan::vegdist(rare, method="bray") %>%
-  as.matrix()
-
-# Plot pca
-r.pcx <- prcomp(dist)
-factoextra::fviz_pca_biplot(r.pcx)
-
-# Reformat to Long format
-xy <- t(combn(colnames(dist), 2))
-pw <- data.frame(xy, dist = dist[xy]) %>%
-  set_colnames(c("SampleID.x", "SampleID.y", "dist")) %>%
-  left_join(samdf %>% 
-              dplyr::select(SampleID, Sample_Name, psyllid_spp, psyllid_genus, hostplant_spp, replicated) %>%
-              dplyr::rename(SampleID.x = SampleID), by="SampleID.x")%>%
-  left_join(samdf %>% 
-              dplyr::select(SampleID, Sample_Name, psyllid_spp, psyllid_genus, hostplant_spp, replicated) %>%
-              dplyr::rename(SampleID.y = SampleID), by="SampleID.y")
-
-
-# Distance between replicates of same sample
-repdist <- pw %>% filter(Sample_Name.x == Sample_Name.y)
-
-# Distance between samples of same species
-sppdist <- pw %>% filter(psyllid_spp.x == psyllid_spp.y)
-
-# Distance between psyllids on same hostplat
-#      psyllopsis fraxini 94- 107 - 113
-# psyllopsis fraxinicola 93 - 106 - 112
-# 93+94 were the same tree, 106+107 on the same tree and 112+113 were the same treee
-hostplantdist <- pw %>% filter(psyllid_spp.x == psyllid_spp.y)
-
-dist <- ps1 %>% 
-    subset_samples(Sample_Name %in%  c("93", "94","106", "107","112", "113")) %>%
-    filter_taxa(function(x) mean(x) > 0, TRUE) %>%
-    otu_table()  %>%
-    vegan::vegdist(method="jaccard")
-
-factoextra::fviz_pca(prcomp(dist))
-
-# Otther set
-#psylla apicalis 200 - 201
-#psylla frodobagginsi 200 - 201 #in this case they are named after their tree - ie 200 and 200 were same tree, i shoul drename thes ein some way
-
-dist2 <- ps1 %>% 
-    subset_samples(Sample_Name %in%  c("200", "94","106", "107","112", "113")) %>%
-    filter_taxa(function(x) mean(x) > 0, TRUE) %>%
-    otu_table()  %>%
-    vegan::vegdist(method="jaccard")
-
-# could i do some cluster analysis here?
-
-# Or is adonis besst
-#adonis(~ psyllid_spp, method = "euclidean", data = metadata))
-```
 
 # Alpha diversity 
 
@@ -206,25 +139,25 @@ dist2 <- ps1 %>%
 
 ```{r sum taxa}
 #Fraction of reads assigned to each taxonomic rank
-sum_reads <- speedyseq::psmelt(ps) %>%
-  gather("Rank","Name",rank_names(ps)) %>%
+sum_reads <- speedyseq::psmelt(ps2) %>%
+  gather("Rank","Name",rank_names(ps2)) %>%
   group_by(Rank) %>% 
   mutate(Name = replace(Name, str_detect(Name, "__"),NA)) %>% # This line turns the "__" we added to lower ranks back to NA's
   dplyr::summarise(Reads_classified = sum(Abundance * !is.na(Name))) %>%
-  mutate(Frac_reads = Reads_classified / sum(sample_sums(ps))) %>%
-  mutate(Rank = factor(Rank, rank_names(ps))) %>%
+  mutate(Frac_reads = Reads_classified / sum(sample_sums(ps2))) %>%
+  mutate(Rank = factor(Rank, rank_names(ps2))) %>%
   arrange(Rank)
 
 #Fraction of ASV's assigned to each taxonomic rank
-sum_otu <- tax_table(ps) %>%
+sum_otu <- tax_table(ps2) %>%
   as("matrix") %>%
   as_tibble(rownames="OTU") %>%
-  gather("Rank","Name",rank_names(ps)) %>%
+  gather("Rank","Name",rank_names(ps2)) %>%
   group_by(Rank) %>%
   mutate(Name = replace(Name, str_detect(Name, "__"), NA)) %>% # This line turns the "__" we added to lower ranks back to NA's
   dplyr::summarise(OTUs_classified = sum(!is.na(Name))) %>%
-  mutate(Frac_OTUs = OTUs_classified / ntaxa(ps)) %>%
-  mutate(Rank = factor(Rank, rank_names(ps))) %>%
+  mutate(Frac_OTUs = OTUs_classified / ntaxa(ps2)) %>%
+  mutate(Rank = factor(Rank, rank_names(ps2))) %>%
   arrange(Rank)
 
 print(sum_reads)
@@ -869,6 +802,12 @@ Due to the higher correlations with recent branches, we looked for patterns of c
 
 ## Whole dataset - PACO
 
+Colour nodes by the average of the tip values in GGtree
+Add grey colour to middle of label
+Plot higher ranks on tree (See how phyloseq plot tree does it)
+
+Could use recursion function that i used for get_lineage_ott to calculate nodes
+
 ```{r PACO}
 # Merge species for beta diversity
 ps.sppmerged <- ps2 %>%
@@ -880,8 +819,6 @@ sample_data(ps.sppmerged) <- sample_data(ps2) %>%
   magrittr::set_rownames(.$psyllid_spp)
 
 ps3 <- ps.sppmerged
-#Rename taxa - only keep first 30 characters
-taxa_names(ps3) <- substr(paste0("SV", seq(ntaxa(ps3)),"-",tax_table(ps3)[,7]), 1,30)
 
 #Prepare co-occurance matrix
 coocur <- ps3 %>%
@@ -909,7 +846,7 @@ s_tree <- phy_tree(ps3)
 s_tree$tip.label <- s_tree$tip.label %>%
            str_replace_all(" |-", "_")
 s_tree <- drop.tip(s_tree, setdiff(s_tree$tip.label, colnames(coocur)))
-s_dist <- cophenetic(s_tree)
+s_dist <- cophenetic(s_tree) /1e+6 #convert to Mya so integers are small enough for PACO
 
 coocur <- coocur[h_tree$tip.label, s_tree$tip.label]
 
@@ -966,17 +903,32 @@ obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=FALSE)
 
 # Extract the goods for ggtree
 # psyllid_tree
-p1 <- ggtree(obj[["trees"]][[1]], ladderize=FALSE) + geom_tiplab()
+tree1 <- obj[["trees"]][[1]]
+p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=new_vals)) + geom_tiplab()
 weights_p1 <- p1$data %>%
   left_join(res %>%
   group_by(Sample_Name) %>%
   summarise(values = mean(values)) %>%
     dplyr::rename(label = Sample_Name)
-    )
-p1 <- p1 %<+% weights_p1  + geom_tippoint(aes(colour=values)) +  scale_color_gradient(low="steelblue", high="darkorange1")
+    )  
+
+## Get values for higher nodes
+average_descendants <- function(x, tree, df) {
+  descendants <- getDescendants(tree, x)
+  df %>%
+    dplyr::filter(node %in% descendants) %>%
+    pull(values) %>%
+    mean(na.rm=TRUE)
+}
+
+weights_p1 <- weights_p1 %>%
+  left_join(data.frame(node=weights_p1$node, new_vals = weights_p1$node %>% purrr::map_dbl(average_descendants, tree=tree1, df=weights_p1)))
+
+p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=new_vals)) +  scale_color_gradient(low="steelblue", high="darkorange1")
 
 # OTU tree
-p2 <- ggtree(obj[["trees"]][[2]], ladderize=FALSE) #+ geom_tiplab()
+tree2 <- obj[["trees"]][[2]]
+p2 <- ggtree(tree2, ladderize=TRUE, aes(colour=new_vals))
 weights_p2 <- p2$data %>%
   left_join(res %>% 
     group_by(OTU) %>%
@@ -984,7 +936,10 @@ weights_p2 <- p2$data %>%
     dplyr::rename(label = OTU)
     ) 
 
-p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=values)) +  scale_color_gradient(low="steelblue", high="darkorange1")
+weights_p2 <- weights_p2 %>%
+  left_join(data.frame(node=weights_p2$node, new_vals = weights_p2$node %>% purrr::map_dbl(average_descendants, tree=tree1, df=weights_p2)))
+
+p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=new_vals)) +  scale_color_gradient(low="steelblue", high="darkorange1")
 
 # Tanglegram
 dd <- obj$assoc %>%
@@ -1028,7 +983,7 @@ whole_tanglegram
 
 Definitely need to do the top carsonella, but need some flexibility in keeping the related ones, so top - 20% abundance? 
 
-```{r subsetting}
+```{r carsonella cophylo}
 #Flag top abundance carsonella epr sample
 top_carson <- ps2 %>%
   transform_sample_counts(function (x) x/sum(x)) %>%
@@ -1042,7 +997,6 @@ top_carson <- ps2 %>%
 coocur <- ps2 %>%
   transform_sample_counts(function (x) x/sum(x)) %>%
   speedyseq::psmelt() %>%
-  #filter(genus=="Candidatus Carsonella") %>%
   left_join(top_carson) %>%
   filter(genus=="Candidatus Carsonella", top==TRUE) %>%
   dplyr::select(OTU, psyllid_spp, SampleID, Abundance) %>%
@@ -1059,7 +1013,7 @@ coocur <- ps2 %>%
   apply(2, function(x) ifelse(x > 0, 1, 0)) 
 
 # H cophenetic distance
-h_tree <- pruned.tree
+h_tree <- pruned.tree2
 h_tree$tip.label <- h_tree$tip.label %>%
            str_replace_all(" |-", "_")
 h_tree <- drop.tip(h_tree, setdiff(h_tree$tip.label, rownames(coocur)))
@@ -1070,7 +1024,7 @@ s_tree <- phy_tree(ps3)
 s_tree$tip.label <- s_tree$tip.label %>%
            str_replace_all(" |-", "_")
 s_tree <- drop.tip(s_tree, setdiff(s_tree$tip.label, colnames(coocur)))
-s_dist <- cophenetic(s_tree)
+s_dist <- cophenetic(s_tree) /1e+6 #convert to Mya so integers are small enough for PACO
 
 coocur <- coocur[h_tree$tip.label, s_tree$tip.label]
 
@@ -1106,7 +1060,6 @@ paco_run <- paco_links(paco_run)
 
 #Get observed residuals of Procrustean superimposition 
 paco_residuals <- residuals_paco(paco_run$proc, type = "interaction")
-
 # Visualise residuals
 res <- data.frame(OTU=names(paco_residuals), values=unname(paco_residuals)) %>%
   separate(OTU, into=c("Sample_Name", "OTU"), sep="-", extra="merge") 
@@ -1116,6 +1069,10 @@ ggplot(res, aes(x=values))+
   theme_bw()+
   xlab('Procrustes residuals')+
   ylab('Frequency')
+
+# get links
+links <- data.frame(OTU=names(paco_run$jackknife$mean), values=unname(paco_run$jackknife$mean)) %>%
+ separate(OTU, into=c("Sample_Name", "OTU"), sep="-", extra="merge") 
 
 # Cophyloplot
 coocur.lut <- which(coocur ==1, arr.ind=TRUE)
@@ -1127,31 +1084,40 @@ obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=TRUE)
 
 # Extract the goods for ggtree
 # psyllid_tree
-p1 <- ggtree(obj[["trees"]][[1]], ladderize=FALSE) + geom_tiplab()
+tree1 <- obj[["trees"]][[1]]
+p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=new_vals)) + geom_tiplab()
 weights_p1 <- p1$data %>%
-  left_join(res %>%
+  left_join(links %>% #res
   group_by(Sample_Name) %>%
   summarise(values = mean(values)) %>%
     dplyr::rename(label = Sample_Name)
     )
-p1 <- p1 %<+% weights_p1  + geom_tippoint(aes(colour=values)) +  scale_color_gradient(low="steelblue", high="darkorange1")
+
+weights_p1 <- weights_p1 %>%
+  left_join(data.frame(node=weights_p1$node, new_vals = weights_p1$node %>% purrr::map_dbl(average_descendants, tree=tree1, df=weights_p1)))
+
+p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=new_vals)) +  scale_color_gradient(low="steelblue", high="darkorange1")
 
 # OTU tree
-p2 <- ggtree(obj[["trees"]][[2]], ladderize=FALSE) + geom_tiplab()
+tree2 <- obj[["trees"]][[2]]
+p2 <- ggtree(tree2, ladderize=FALSE, aes(colour=new_vals))
 weights_p2 <- p2$data %>%
-  left_join(res %>% 
+  left_join(links %>% 
     group_by(OTU) %>%
     summarise(values = mean(values)) %>%
     dplyr::rename(label = OTU)
     ) 
 
-p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=values)) +  scale_color_gradient(low="steelblue", high="darkorange1")
+weights_p2 <- weights_p2 %>%
+  left_join(data.frame(node=weights_p2$node, new_vals = weights_p2$node %>% purrr::map_dbl(average_descendants, tree=tree1, df=weights_p2)))
+
+p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=new_vals)) +  scale_color_gradient(low="steelblue", high="darkorange1")
 
 # Tanglegram
 dd <- obj$assoc %>%
   as_data_frame() %>%
   magrittr::set_colnames(c("label.x", "label.y")) %>%
-  left_join(res %>% 
+  left_join(links %>% 
               dplyr::select(Sample_Name, OTU, values) %>% 
               dplyr::rename(label.x = Sample_Name, label.y = OTU)) %>%
   left_join(p1$data %>% dplyr::select(label, y) %>% dplyr::rename(label.x = label), by="label.x") %>%
@@ -1183,6 +1149,7 @@ gg.tangle <- bind_rows(d1_new, d2_new) %>%
 
 carsonella_tanglegram <- p1 + gg.tangle + (p2 + scale_x_reverse())
 carsonella_tanglegram
+
 ```
 
 ## Psyllid hostplant cophylogeny
@@ -1193,7 +1160,7 @@ plant.tree <- read.tree("sample_data/plant_tree.nwk")
 plant.tree  <- drop.tip(plant.tree , "Sophora_microphylla_-kowhai" )
 
 #Prepare co-occurance matrix
-coocur <- samdf %>%
+coocur <- sample_data(ps2) %>%
   as_tibble() %>%
   dplyr::select(psyllid_spp, hostplant_spp) %>%
   filter(!is.na(psyllid_spp)) %>%
@@ -1254,6 +1221,10 @@ print(paco_run$gof)
 
 # Get interaction-specific cophylogenetic contributions using leave-one-out jacknifing
 paco_run <- paco_links(paco_run, .parallel = TRUE)
+# get links
+links <- data.frame(OTU=names(paco_run$jackknife$mean), values=unname(paco_run$jackknife$mean)) %>%
+ separate(OTU, into=c("hostplant_spp", "psyllid_spp"), sep="-", extra="merge") %>%
+  dplyr::mutate(values = scales::rescale(values, to=c(0,1)))
 
 #Get observed residuals of Procrustean superimposition 
 paco_residuals <- residuals_paco(paco_run$proc, type = "interaction")
@@ -1279,31 +1250,39 @@ obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=TRUE)
 
 # Extract the goods for ggtree
 # plant tree
-p1 <- ggtree(obj[["trees"]][[1]], ladderize=FALSE) + geom_tiplab()
+tree1 <- obj[["trees"]][[1]]
+p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=new_vals)) + geom_tiplab()
 weights_p1 <- p1$data %>%
-  left_join(res %>%
+  left_join(links %>%
   group_by(hostplant_spp) %>%
   summarise(values = mean(values)) %>%
     dplyr::rename(label = hostplant_spp)
     )
-p1 <- p1 %<+% weights_p1  + geom_tippoint(aes(colour=values)) +  scale_color_gradient(low="steelblue", high="darkorange1")
+
+weights_p1 <- weights_p1 %>%
+  left_join(data.frame(node=weights_p1$node, new_vals = weights_p1$node %>% purrr::map_dbl(average_descendants, tree=tree1, df=weights_p1)))
+
+p1 <- p1 %<+% weights_p1  + geom_tippoint(aes(colour=new_vals)) +  scale_color_gradient(low="steelblue", high="darkorange1")
 
 # psyllid_tree
-p2 <- ggtree(obj[["trees"]][[2]], ladderize=FALSE) + geom_tiplab()
+tree2 <- obj[["trees"]][[2]]
+p2 <- ggtree(tree2, ladderize=FALSE, aes(colour=new_vals)) + geom_tiplab()
 weights_p2 <- p2$data %>%
-  left_join(res %>% 
+  left_join(links %>% 
     group_by(psyllid_spp) %>%
     summarise(values = mean(values)) %>%
     dplyr::rename(label = psyllid_spp)
     ) 
+weights_p2 <- weights_p2 %>%
+  left_join(data.frame(node=weights_p2$node, new_vals = weights_p2$node %>% purrr::map_dbl(average_descendants, tree=tree2, df=weights_p2)))
 
-p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=values)) +  scale_color_gradient(low="steelblue", high="darkorange1")
+p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=new_vals)) +  scale_color_gradient(low="steelblue", high="darkorange1")
 
 # Tanglegram
 dd <- obj$assoc %>%
   as_data_frame() %>%
   magrittr::set_colnames(c("label.x", "label.y")) %>%
-  left_join(res %>% 
+  left_join(links %>% 
               dplyr::select(hostplant_spp, psyllid_spp, values) %>% 
               dplyr::rename(label.x = hostplant_spp, label.y = psyllid_spp)) %>%
   left_join(p1$data %>% dplyr::select(label, y) %>% dplyr::rename(label.x = label), by="label.x") %>%
@@ -1345,7 +1324,7 @@ plant.tree <- read.tree("sample_data/plant_tree.nwk")
 plant.tree  <- drop.tip(plant.tree , "Sophora_microphylla_-kowhai" )
 
 #Prepare co-occurance matrix
-coocur <- samdf %>%
+coocur <- sample_data(ps2) %>%
   as_tibble() %>%
   filter(psyllid_genus == "Trioza") %>%
   dplyr::select(psyllid_spp, hostplant_spp) %>%
@@ -1407,6 +1386,9 @@ print(paco_run$gof)
 
 # Get interaction-specific cophylogenetic contributions using jacknifing
 paco_run <- paco_links(paco_run)
+links <- data.frame(OTU=names(paco_run$jackknife$mean), values=unname(paco_run$jackknife$mean)) %>%
+ separate(OTU, into=c("hostplant_spp", "psyllid_spp"), sep="-", extra="merge") %>%
+  dplyr::mutate(values = scales::rescale(values, to=c(0,1)))
 
 #Get observed residuals of Procrustean superimposition 
 paco_residuals <- residuals_paco(paco_run$proc, type = "interaction")
@@ -1431,23 +1413,31 @@ obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=TRUE)
 
 # Extract the goods for ggtree
 # plant tree
-p1 <- ggtree(obj[["trees"]][[1]], ladderize=FALSE) + geom_tiplab()
+tree1 <- obj[["trees"]][[1]]
+p1 <- ggtree(tree1, ladderize=FALSE) + geom_tiplab()
 weights_p1 <- p1$data %>%
-  left_join(res %>%
+  left_join(links %>%
   group_by(hostplant_spp) %>%
   summarise(values = mean(values)) %>%
     dplyr::rename(label = hostplant_spp)
     )
+weights_p1 <- weights_p1 %>%
+  left_join(data.frame(node=weights_p1$node, new_vals = weights_p1$node %>% purrr::map_dbl(average_descendants, tree=tree1, df=weights_p1)))
+
+
 p1 <- p1 %<+% weights_p1  + geom_tippoint(aes(colour=values)) +  scale_color_gradient(low="steelblue", high="darkorange1")
 
 # psyllid_tree
-p2 <- ggtree(obj[["trees"]][[2]], ladderize=FALSE) + geom_tiplab()
+tree2 <- obj[["trees"]][[2]]
+p2 <- ggtree(tree2, ladderize=FALSE) + geom_tiplab()
 weights_p2 <- p2$data %>%
-  left_join(res %>% 
+  left_join(links %>% 
     group_by(psyllid_spp) %>%
     summarise(values = mean(values)) %>%
     dplyr::rename(label = psyllid_spp)
     ) 
+weights_p2 <- weights_p2 %>%
+  left_join(data.frame(node=weights_p2$node, new_vals = weights_p2$node %>% purrr::map_dbl(average_descendants, tree=tree2, df=weights_p2)))
 
 p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=values)) +  scale_color_gradient(low="steelblue", high="darkorange1")
 
@@ -1455,7 +1445,7 @@ p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=values)) +  scale_color_gra
 dd <- obj$assoc %>%
   as_data_frame() %>%
   magrittr::set_colnames(c("label.x", "label.y")) %>%
-  left_join(res %>% 
+  left_join(links %>% 
               dplyr::select(hostplant_spp, psyllid_spp, values) %>% 
               dplyr::rename(label.x = hostplant_spp, label.y = psyllid_spp)) %>%
   left_join(p1$data %>% dplyr::select(label, y) %>% dplyr::rename(label.x = label), by="label.x") %>%
@@ -1487,26 +1477,6 @@ gg.tangle <- bind_rows(d1_new, d2_new) %>%
 
 triozid_plant_tanglegram <- p1 + gg.tangle + (p2 + scale_x_reverse())
 triozid_plant_tanglegram 
-```
-
-Next- move everything to this style fof tanglegram
-
-## Community assembly
-
-```{r}
-
-# Weighted mpd
-w_mpd <- picante::ses.mpd(comm, phydist, null.model = "taxa.labels", abundance.weighted = TRUE, runs = randoms)
-
-#Unweighted mpd
-u_mpd <- picante::ses.mpd(comm, phydist, null.model = "taxa.labels", abundance.weighted = FALSE, runs = randoms) 
-
-# Weighted mntd
-w_mntd <- picante::ses.mntd(comm, phydist, null.model = "taxa.labels", abundance.weighted = TRUE, runs = randoms) 
-
-# Unweighted NRI
-u_mntd <- picante::ses.mntd(comm, phydist, null.model = "taxa.labels", abundance.weighted = FALSE, runs = randoms) 
-
 ```
 
 ## Map of colleciton locations
@@ -1561,6 +1531,79 @@ pdf(file="figs/phylomap.pdf",  width = 15, height = 15, paper="a4r")
   plot(gg.phylomap)
 try(dev.off(), silent=TRUE)
 ```
+
+
+
+## Average dissimilarities
+
+Calculate Average dissimilarities between PCR replicates, biological replicates of the same species, hostplants, and different species on same hostplants
+
+Could just calculate the average dissimilarities across all, then look at the factors we are interested in, and do a statistical test between - Could actually do this way down in the beta diversity section
+
+Then could move everything up to beta diversity to the bioinformatics section, as its all technically bioinformatics not statistics
+
+```{r Avg Dissimiarity}
+# Calculate overall distance
+#Rarefy replicates to same read depth
+nspec <- specnumber(otu_table(ps1)) # observed number of species
+raremax <- min(rowSums(otu_table(ps1)))
+rare <- rrarefy(otu_table(ps1), raremax)
+
+dist <- vegan::vegdist(rare, method="bray") %>%
+  as.matrix()
+
+# Plot pca
+r.pcx <- prcomp(dist)
+factoextra::fviz_pca_biplot(r.pcx)
+
+# Reformat to Long format
+xy <- t(combn(colnames(dist), 2))
+pw <- data.frame(xy, dist = dist[xy]) %>%
+  set_colnames(c("SampleID.x", "SampleID.y", "dist")) %>%
+  left_join(samdf %>% 
+              dplyr::select(SampleID, Sample_Name, psyllid_spp, psyllid_genus, hostplant_spp, replicated) %>%
+              dplyr::rename(SampleID.x = SampleID), by="SampleID.x")%>%
+  left_join(samdf %>% 
+              dplyr::select(SampleID, Sample_Name, psyllid_spp, psyllid_genus, hostplant_spp, replicated) %>%
+              dplyr::rename(SampleID.y = SampleID), by="SampleID.y")
+
+
+# Distance between replicates of same sample
+repdist <- pw %>% filter(Sample_Name.x == Sample_Name.y)
+
+# Distance between samples of same species
+sppdist <- pw %>% filter(psyllid_spp.x == psyllid_spp.y)
+
+# Distance between psyllids on same hostplat
+#      psyllopsis fraxini 94- 107 - 113
+# psyllopsis fraxinicola 93 - 106 - 112
+# 93+94 were the same tree, 106+107 on the same tree and 112+113 were the same treee
+hostplantdist <- pw %>% filter(psyllid_spp.x == psyllid_spp.y)
+
+dist <- ps1 %>% 
+    subset_samples(Sample_Name %in%  c("93", "94","106", "107","112", "113")) %>%
+    filter_taxa(function(x) mean(x) > 0, TRUE) %>%
+    otu_table()  %>%
+    vegan::vegdist(method="jaccard")
+
+factoextra::fviz_pca(prcomp(dist))
+
+# Otther set
+#psylla apicalis 200 - 201
+#psylla frodobagginsi 200 - 201 #in this case they are named after their tree - ie 200 and 200 were same tree, i shoul drename thes ein some way
+
+dist2 <- ps1 %>% 
+    subset_samples(Sample_Name %in%  c("200", "94","106", "107","112", "113")) %>%
+    filter_taxa(function(x) mean(x) > 0, TRUE) %>%
+    otu_table()  %>%
+    vegan::vegdist(method="jaccard")
+
+# could i do some cluster analysis here?
+
+# Or is adonis besst
+#adonis(~ psyllid_spp, method = "euclidean", data = metadata))
+```
+
 
 
 ```{r session-info}
