@@ -52,7 +52,7 @@ run_mantel <- function(x, dists, subsample, type="mantel"){
       split(rownames(.)) %>%
       purrr::map(function(y){
         as.data.frame(t(ecodist::mantel(as.dist(x[subsample, subsample]) ~ as.dist(get(y$dist1)[subsample, subsample])))) %>%
-          mutate(dist1 = y$dist1, type="mantel") 
+          mutate(dist1 = y$dist1, type="mantel", nboot=1000) 
       })%>%
       bind_rows()
   }else if (type=="partial"){
