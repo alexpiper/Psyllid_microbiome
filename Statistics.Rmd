@@ -103,10 +103,23 @@ seqateurs::summarise_taxa(ps2, "genus", "SampleID") %>%
 
 #Rename taxa - only keep first 30 characters
 taxa_names(ps2) <- substr(paste0("SV", seq(ntaxa(ps2)),"-",tax_table(ps2)[,7]), 1,30)
-
-
 ```
 
+
+## Create species merged table
+
+```{r mergedspp}
+# Merge species for beta diversity
+ps.sppmerged <- ps2 %>%
+    merge_samples(group = "psyllid_spp", fun=mean)
+
+#This loses the sample metadata - Need to add it agian
+sample_data(ps.sppmerged) <- sample_data(ps2) %>%
+  filter(!duplicated(psyllid_spp)) %>%
+  magrittr::set_rownames(.$psyllid_spp)
+
+ps3 <- ps.sppmerged
+```
 
 ## Read in psyllid phylogeny
 ```{R psyllid phylogeny}
@@ -176,7 +189,6 @@ print(sum_otu)
 
 ## Alpha diversity metrics
 
-Test this with rarefied samples to see the robustness to sequencing depth variation - AS this could be driven by just seq depth
 ```{r alpha diversity}
 dir.create("output/alpha")
 # Get richness measures
@@ -193,8 +205,8 @@ sespd <- picante::ses.pd(as(phyloseq::otu_table(ps2), "matrix"),  phyloseq::phy_
 # Join together
 div_table <- sespd %>%
   rownames_to_column("Sample_Name") %>%
-  dplyr::select(Sample_Name, ntaxa, pd.obs.z) %>%
-  dplyr::rename(pd = pd.obs.z, alpha = ntaxa) %>%
+  dplyr::select(Sample_Name, ntaxa, pd.obs) %>%
+  dplyr::rename(pd = pd.obs, alpha = ntaxa) %>%
   left_join(richness, by="Sample_Name") %>%
   left_join(sample_data(ps2) %>% 
               as.data.frame() %>%
@@ -237,12 +249,12 @@ barplot.phylo4d(lipa.p4d, bar.col = (lipa$p.value < 0.05) + 1, center = FALSE, s
 #write out lipa
 lipa_out <- cbind(lipa$lipa %>%
                     as.data.frame %>%
-                    rename_all(funs(str_replace(., ".", "stat_"))),
+                    rename_all(funs(paste0(., "_stat"))),
                   lipa$p.value %>%
                     as.data.frame %>%
-                    rename_all(funs(str_replace(., ".", "pval_")))
+                    rename_all(funs(paste0(., "_pval")))
                                )%>%
-  rownames_to_column("measure")
+  rownames_to_column("psyllid_spp")
 write_csv(lipa_out, "output/alpha/lipa.csv")                  
                   
 ```
@@ -271,7 +283,7 @@ sespd_rare <- picante::ses.pd(as(phyloseq::otu_table(ps2_rare), "matrix"),  phyl
 div_table_rare <- sespd_rare %>%
   rownames_to_column("Sample_Name") %>%
   dplyr::select(Sample_Name, ntaxa, pd.obs.z) %>%
-  dplyr::rename(pd = pd.obs.z, alpha = ntaxa) %>%
+  dplyr::rename(pd = pd.obs, alpha = ntaxa) %>%
   left_join(richness_rare, by="Sample_Name") %>%
   left_join(sample_data(ps2) %>% 
               as.data.frame() %>%
@@ -315,12 +327,12 @@ barplot.phylo4d(lipa.p4d, bar.col = (lipa$p.value < 0.05) + 1, center = FALSE, s
 #write out lipa
 lipa_out_rare <- cbind(lipa$lipa %>%
                     as.data.frame %>%
-                    rename_all(funs(str_replace(., ".", "stat_"))),
+                    rename_all(funs(paste0(., "_stat"))),
                   lipa$p.value %>%
                     as.data.frame %>%
-                    rename_all(funs(str_replace(., ".", "pval_")))
+                    rename_all(funs(paste0(., "_pval")))
                                )%>%
-  rownames_to_column("measure")
+  rownames_to_column("psyllid_spp")
 write_csv(lipa_out_rare, "output/alpha/lipa_rarefied.csv")    
 ```	
 
@@ -369,61 +381,78 @@ write_csv(adonis_results, "output/beta/adonis_fulldata.csv")
 
 ## Barplot
 
-Use the means and standard errors? of the beta diversities by sample
+```{r barplot}
+# Plot tree
+p <- ggtree(pruned.tree) + geom_tiplab(align=TRUE) + geom_nodelab(geom='label') +
+    scale_x_continuous(expand=c(0, 0.1)) + theme_tree2()
 
-Merge species, arrange microbiome by phylogeny, try the mantel tests on the merged data as well (but the seperate is probs more statistically better)
-
-RESULTS: while there were significant differences between psyllid species there were no significant associations with phylogeny
-```{r Figure 1}
-# Merge species for beta diversity
-ps.sppmerged <- ps2 %>%
-    merge_samples(group = "psyllid_spp", fun=mean)
-
-#This loses the sample metadata - Need to add it agian
-sample_data(ps.sppmerged) <- sample_data(ps2) %>%
-  filter(!duplicated(psyllid_spp)) %>%
-  magrittr::set_rownames(.$psyllid_spp)
-
-ps3 <- ps.sppmerged
-#Rename taxa - only keep first 30 characters
-taxa_names(ps3) <- substr(paste0("SV", seq(ntaxa(ps3)),"-",tax_table(ps3)[,7]), 1,30)
-
+# Plot bar
 ps3_bar <- ps3 %>%
   speedyseq::tax_glom(taxrank = "order") %>%           # agglomerate at Order level
   transform_sample_counts(function(x) {x/sum(x)} ) %>% # Transform to rel. abundance
   speedyseq::psmelt() %>%
   mutate(plotlabel = phylum) %>%
   mutate(plotlabel = case_when(
-    Abundance >= 0.01 & phylum=="Proteobacteria" ~ paste0(phylum, " - ", order), # Change this to whatever taxrank we want
+    Abundance >= 0.01 & phylum=="Proteobacteria" ~ paste0("P - ", order), # Change this to whatever taxrank we want
     Abundance >= 0.01 & !phylum=="Proteobacteria"~ phylum ,
     Abundance < 0.01 ~ "NA"
     )) %>%
   dplyr::na_if("NA") %>%
-  dplyr::select(Sample, plotlabel, phylum, order, Abundance)
+  dplyr::select(psyllid_spp, plotlabel, phylum, order, Abundance) %>%
+  left_join(p$data %>%
+              as_data_frame %>%
+              dplyr::filter(isTip) %>%
+              dplyr::select(y, label) %>%
+              dplyr::rename(psyllid_spp=label)) 
 
-# Plot them together
-library(ggtree)
-library(treeio)
-library(ggstance)
-p <- ggtree(pruned.tree) + geom_tiplab(align=TRUE) + geom_nodelab(geom='label') +
-    scale_x_continuous(expand=c(0, 0.1)) + theme_tree2()
+gg.bar <- ggplot(ps3_bar, aes(x=y, y=Abundance, fill=plotlabel)) +
+  geom_col()  + 
+  coord_flip()+
+  scale_fill_manual(values=colorRampPalette(brewer.pal(9, "Set1"))(length(unique(ps3_bar$plotlabel))-1), na.value="grey") + 
+    theme_classic()   +
+    theme(legend.position = "bottom",
+      panel.grid.major.x = element_line(colour="grey92", size=0.5, linetype="dashed"),
+      strip.background = element_rect(fill = "grey92", 
+                    colour = "black", size = 1),
+      axis.text.y = element_blank(),
+      axis.ticks.y=element_blank(),
+      axis.title.y=element_blank()) +
+  scale_y_continuous(expand=c(0,0))
 
-
-Fig1 <- facet_plot(p, panel='Relative Abundance', data = ps3_bar %>% mutate(id = Sample), geom=ggstance::geom_barh,
-                 mapping=aes(x = Abundance, fill = plotlabel), stat="identity")  + 
-  scale_fill_manual(values=colorRampPalette(brewer.pal(11, "Set1"))(length(unique(ps3_bar$plotlabel))-1), na.value="grey")
-
-
-Fig1 <- facet_plot(Fig1, panel='Species Richness', data = bt_randomdf %>% mutate(id = psyllid_spp),
-                          geom=ggstance::geom_pointrangeh,
-                           mapping=aes(x=Estimates, xmin=Estimates-SE, xmax=Estimates+SE),
-                           stat="identity", size=0.5, colour="#696969") +
-  theme_classic2()   +
-  theme(legend.position = "bottom",
-  panel.grid.major.x = element_line(colour="grey92", size=0.5, linetype="dashed"),
-  strip.background = element_rect(fill = "grey92", 
-                colour = "black", size = 1)
-  )
+# Make richness plots
+gg.rich <-  div_table %>%
+  group_by(psyllid_spp) %>%
+  summarise(alpha=mean(alpha), pd=mean(pd)/10e+7, Shannon=mean(Shannon)) %>%
+  ungroup() %>%
+  pivot_longer(-psyllid_spp, names_to="measure",
+               values_to = "value")  %>%
+  left_join(lipa_out %>% 
+              dplyr::select(psyllid_spp, alpha_pval, pd_pval, Shannon_pval) %>%
+              pivot_longer(-psyllid_spp,
+                           names_to="measure",
+               values_to = "pval") %>%
+              mutate(measure = str_remove(measure, "_pval"))) %>%
+  left_join(p$data %>%
+              as_data_frame %>%
+              dplyr::filter(isTip) %>%
+              dplyr::select(y, label) %>%
+              dplyr::rename(psyllid_spp=label)) %>%
+  mutate_at(vars(measure), funs(factor(., levels=c("alpha","Shannon","pd")))) %>%
+  ggplot(aes(x=y, y=value, fill=pval<0.05)) + 
+    geom_col() +
+    facet_grid(~measure, scales="free") + 
+    coord_flip()+
+    theme_classic()   +
+    theme(legend.position = "bottom",
+    panel.grid.major.x = element_line(colour="grey92", size=0.5, linetype="dashed"),
+    strip.background = element_rect(fill = "grey92", 
+                  colour = "black", size = 1),
+    axis.text.y = element_blank(),
+    axis.ticks.y=element_blank(),
+    axis.title.y=element_blank(),
+    axis.text.x = element_text(angle=45, hjust=1)) +
+    scale_fill_manual(values=c("darkgray", "darkred")) +
+    scale_x_continuous(breaks=scales::pretty_breaks(n=1))
 
 ## Collection_hist
 gg.spp <- as_tibble(sample_data(ps2)) %>%
@@ -433,22 +462,19 @@ gg.spp <- as_tibble(sample_data(ps2)) %>%
   left_join(p$data %>%
   filter(isTip) %>% select(c(label, y))) %>%
   filter(!is.na(y)) %>%
-  ggplot(aes(x=factor(.$label, levels=.$label[order(.$y)]), y=1, fill=n_species)) +
+  ggplot(aes(x=y, y=1, fill=n_species)) +
   geom_tile() +
-  coord_flip() + theme_void() +
+  coord_flip() +
+  theme_void() +
+  theme(legend.position = "bottom") +
   scale_fill_distiller(palette = "Reds", direction=1)
 
-Fig1 + gg.spp 
-  
-# Change relative grid sizes
-library(grid)
-library(gtable)
+#Arrange
+Fig1 <- p + gg.spp + gg.bar + gg.rich + plot_layout(nrow=1, widths=c(1,0.08,2,0.6))  
 
-gt = ggplot_gtable(ggplot_build(Fig1))
-gt$layout$l[grep('panel-3', gt$layout$name)] # you want to find the column specific to panel-2
-
-gt$widths[9] = 0.3*gt$widths[9] # reduce width of column 9
-grid.draw(gt) # plot with grid draw
+pdf(file="figs/Beta.pdf", width = 8, height = 11 , paper="a4")
+  plot(Fig1)
+try(dev.off(), silent=TRUE)
 ```
 
 ## Phylosymbiosis
@@ -544,6 +570,7 @@ spat.dist <- spDists(as.matrix(envData), longlat=TRUE) %>%
 But also see how this paper has done it with PACO https://www.nature.com/articles/s41467-019-10191-3.pdf Using random subsampling? Then pull out the most associated also file:///C:/Users/ap0y/Dropbox/workprojects/Papers/10.1002_ecy.1955.pdf
 
 ```{r phylosymbiosis}
+set.seed(909)
 dir.create("output/phylosymbiosis")
 
 # Matrix correlations
@@ -558,7 +585,7 @@ mantel_results <- distlist %>%
   }) %>%
   bind_rows(.id="dist") 
 
-write_csv(mantel_results, "output/phylosymbiosis/mantel_fulldata.csv")
+write_csv(mantel_results %>% dplyr::select(-pval1,-pval2), "output/phylosymbiosis/mantel_fulldata.csv")
 
 # Partial Mantel Test
 pmantel_results <- distlist %>%
@@ -568,7 +595,7 @@ pmantel_results <- distlist %>%
   }) %>%
   bind_rows(.id="dist") 
 
-write_csv(pmantel_results, "output/phylosymbiosis/pmantel_fulldata.csv")
+write_csv(pmantel_results %>% dplyr::select(-pval1,-pval2), "output/phylosymbiosis/pmantel_fulldata.csv")
 
 ## Plot circular barplot
 gg.mantels <- bind_rows(mantel_results, pmantel_results) %>%
@@ -597,7 +624,6 @@ try(dev.off(), silent=TRUE)
 
 Probably dont need this bit if we are lookign at contribution to cophylogeny through paco
 ```{r phylosymbiosis no entero}
-## TRY WITHOUT Gammaproteobacteria
 ps2_subset <- ps2 %>%
  subset_taxa(class != "Gammaproteobacteria") %>% #is this working?
  filter_taxa(function(x) mean(x) > 0, TRUE)#Drop missing taxa from table
@@ -651,7 +677,7 @@ mantel_results <- distlist_subset %>%
   }) %>%
   bind_rows(.id="dist") 
 
-write_csv(mantel_results, "output/phylosymbiosis/mantel_subset.csv")
+write_csv(mantel_results %>% dplyr::select(-pval1,-pval2), "output/phylosymbiosis/mantel_subset.csv")
 
 # Partial Mantel Test
 pmantel_results <- distlist_subset %>%
@@ -660,7 +686,7 @@ pmantel_results <- distlist_subset %>%
                subsample=subsample, type="partial")
   }) %>%
   bind_rows(.id="dist") 
-write_csv(pmantel_results, "output/phylosymbiosis/pmantel_subset.csv")
+write_csv(pmantel_results %>% dplyr::select(-pval1,-pval2), "output/phylosymbiosis/pmantel_subset.csv")
 ```
 
 ## BDTT
@@ -700,7 +726,7 @@ BTDD_pm <- Betas %>%
          Mya = as.numeric(slice)/1e+6)
 
 #Write out
-write_csv(BTDD_pm,"output/phylosymbiosis/BTDD.csv")
+write_csv(BTDD_pm %>% dplyr::select(-pval1,-pval2,-type),"output/phylosymbiosis/BTDD.csv")
 
 gg.BTDD <- BTDD_pm %>%
   filter(dist=="Aitchison") %>%
@@ -904,17 +930,6 @@ Plot higher ranks on tree (See how phyloseq plot tree does it)
 Could use recursion function that i used for get_lineage_ott to calculate nodes
 
 ```{r PACO}
-# Merge species for beta diversity
-ps.sppmerged <- ps2 %>%
-    merge_samples(group = "psyllid_spp", fun=mean)
-
-#This loses the sample metadata - Need to add it agian
-sample_data(ps.sppmerged) <- sample_data(ps2) %>%
-  filter(!duplicated(psyllid_spp)) %>%
-  magrittr::set_rownames(.$psyllid_spp)
-
-ps3 <- ps.sppmerged
-
 #Prepare co-occurance matrix
 coocur <- ps3 %>%
     subset_samples(!psyllid_spp == "Atmetocranium_myersi") %>%

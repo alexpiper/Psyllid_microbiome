@@ -63,9 +63,9 @@ SA1B_S173,SA1B,2,Anoeconeossa_sp,Anoeconeossa,Aphalaridae,Eucalyptus_sp,4/11/14,
 117b_S98,117B,2,Calophya_schini,Calophya,Calophyidae,Schinus_molle,11/3/15,FALSE,-43.53111111111111,172.62555555555556
 150b_S121,150B,2,Casuarinicola_australis,Casuarinicola,Triozidae,Casuarina_sp,31/3/15,FALSE,-35.756388888888885,174.37722222222223
 SA3A_S174,SA3A,2,Casuarinicola_australis,Casuarinicola,Triozidae,Casuarina_sp,6/11/14,FALSE,-34.95916666666667,138.67916666666665
-125_S105,125,2,Casuarinicola_sp,Casuarinicola,Triozidae,Casuarina_sp,23/3/15,FALSE,-36.90277777777778,174.77972222222223
-147_S119,147,2,Casuarinicola_sp,Casuarinicola,Triozidae,Casuarina_sp,29/3/15,FALSE,-37.22222222222222,175.6288888888889
-SA8A_S177,SA8A,2,Casuarinicola_sp,Casuarinicola,Triozidae,Casuarina_sp,6/11/14,FALSE,-34.95916666666667,138.67916666666665
+125_S105,125,2,Triozid_sp,Casuarinicola,Triozidae,Casuarina_sp,23/3/15,FALSE,-36.90277777777778,174.77972222222223
+147_S119,147,2,Triozid_sp,Casuarinicola,Triozidae,Casuarina_sp,29/3/15,FALSE,-37.22222222222222,175.6288888888889
+SA8A_S177,SA8A,2,Triozid_sp,Casuarinicola,Triozidae,Casuarina_sp,6/11/14,FALSE,-34.95916666666667,138.67916666666665
 SA6A_S176,SA6A,2,Cryptoneossa_sp,Cryptoneossa,Aphalaridae,Eucalyptus_sp,6/11/14,FALSE,-34.95916666666667,138.67916666666665
 44_S42,44,2,Ctenarytaina_clavata_sp_B,Ctenarytaina,Aphalaridae,Kunzea_ericoides,23/10/14,FALSE,-42.51833333333333,172.8213888888889
 152_S123,152,2,Ctenarytaina_clavata_sp_A,Ctenarytaina,Aphalaridae,Kunzea_ericoides,4/4/15,FALSE,-43.22027777777778,171.7188888888889
