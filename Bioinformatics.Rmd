@@ -624,31 +624,6 @@ ps2 <- ps.merged
 saveRDS(ps2, "output/rds/ps2.rds")
 ```
 
-## Prevalence assesment
-
-View prevalence of different phyla
-```{r prevalence-assessment}
-# Calculate taxon prevalence across the data set
-prevdf <- apply(X = otu_table(ps.merged), MARGIN = ifelse(taxa_are_rows(ps.merged), yes = 1, no = 2), FUN = function(x){sum(x > 0)})
-
-# Add taxonomy and total read counts to prevdf - change this to tidyverse code
-prevdf <- data.frame(Prevalence = prevdf, TotalAbundance = taxa_sums(ps.merged), tax_table(ps.merged))
-
-#Prevalence plot
-gg.prev <- subset(prevdf, phylum %in% get_taxa_unique(ps0, "phylum")) %>%
-  ggplot(aes(TotalAbundance, Prevalence / nsamples(ps.merged),color=order)) +
-  geom_point(size = 3, alpha = 0.7) +
-  scale_x_log10() +
-  xlab("Total Abundance") + ylab("Prevalence [Frac. Samples]") +
-  facet_wrap(~phylum) +
-  theme(legend.position="none") +
-  ggtitle("Phylum Prevalence in All Samples\nColored by Order")
-
-pdf(file="figs/prevalence.pdf", width = 11, height = 8 , paper="a4r")
-  plot(gg.prev)
-try(dev.off(), silent=TRUE)
-```
-
 
 # Sessioninfo
 
