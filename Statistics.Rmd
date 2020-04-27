@@ -1,7 +1,7 @@
 ---
 title: "Psyllid microbiome - Statistics"
 author: "Alexander Piper"
-date: "07/04/2020"
+date: "`r Sys.Date()`"
 output:
   html_document:
     highlighter: null
@@ -307,11 +307,6 @@ speedyseq::tax_glom(ps2, taxrank="genus")  %>%
             sd = sd(Abundance),
             max = max(Abundance),
             min = min(Abundance))
-
-
-test2 <- speedyseq::tax_glom(ps, taxrank="genus")  %>%
-  speedyseq::psmelt() %>%
-  filter(SampleID =="145_S118")
 ```
 
 ## Alpha diversity metrics
@@ -1118,9 +1113,22 @@ paco_run <- readRDS("output/cophylogeny/psyllid_microbiome/paco_run_microbiome.r
 #print overall significance
 print(paco_run$gof)
 
-links <- data.frame(OTU=names(paco_run$jackknife$mean), values=unname(paco_run$jackknife$mean)) %>%
+links <- data.frame(OTU=names(paco_run$jackknife$mean), values=unname(paco_run$jackknife$mean), upper=unname(paco_run$jackknife$upper)) %>%
  separate(OTU, into=c("Sample_Name", "OTU"), sep="-", extra="merge") %>%
-  dplyr::mutate(values = scales::rescale(values, to=c(0,1)))
+  mutate(signif = case_when(
+    upper < mean(.$values) ~ TRUE,
+    upper > mean(.$values) ~ FALSE
+  ))
+
+test <- links %>%
+  filter(signif==TRUE) %>%
+  mutate(label = OTU) %>%
+  left_join(tax_groups)  %>%
+  group_by(genus) %>%
+  add_tally()
+  
+#%>%
+#  dplyr::mutate(values = scales::rescale(values, to=c(0,1))) 
 
 dir.create("output/cophylogeny/psyllid_microbiome")
 write_csv(links, "output/cophylogeny/psyllid_microbiome/psyllid_microbiome_links.csv")
@@ -1158,7 +1166,7 @@ obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=FALSE)
 tree1 <- obj[["trees"]][[1]]
 p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links)) + geom_tiplab()
 weights_p1 <- p1$data %>%
-  left_join(res %>%
+  left_join(links %>%
   group_by(Sample_Name) %>%
   summarise(values = mean(values)) %>%
     dplyr::rename(label = Sample_Name)
@@ -1179,7 +1187,7 @@ tax_groups <- as.data.frame(tax_table(ps3)) %>%
   dplyr::mutate(label = label %>% str_replace_all("-", "_") %>%
                   str_replace_all(" ", "_")) %>%
   select(label, genus) %>%
-  filter(label %in% p2$data$label) %>%
+  filter(label %in% tree2$tip.label) %>%
   group_by(genus) 
 
 group_name <- group_keys(tax_groups)  %>%
@@ -1194,7 +1202,7 @@ newtree <- groupOTU(tree2, cls)
 p2 <- ggtree(newtree, ladderize=TRUE, aes(colour=links)) + 
   geom_text2(aes(subset=!isTip, label=group), hjust=0, check_overlap=TRUE)
 weights_p2 <- p2$data %>%
-  left_join(res %>% 
+  left_join(links %>% 
     group_by(OTU) %>%
     summarise(values = mean(values)) %>%
     dplyr::rename(label = OTU)
@@ -1209,20 +1217,20 @@ p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=links)) +  scale_color_grad
 dd <- obj$assoc %>%
   as_data_frame() %>%
   magrittr::set_colnames(c("label.x", "label.y")) %>%
-  left_join(res %>% 
-              dplyr::select(Sample_Name, OTU, values) %>% 
+  left_join(links %>% 
+              dplyr::select(Sample_Name, OTU, values, signif) %>% 
               dplyr::rename(label.x = Sample_Name, label.y = OTU)) %>%
   left_join(p1$data %>% dplyr::select(label, y) %>% dplyr::rename(label.x = label), by="label.x") %>%
   left_join(p2$data %>% dplyr::select(label, y) %>% dplyr::rename(label.y = label), by="label.y") %>%
   rownames_to_column("assoc")
 
 d1_new <- dd %>% 
-  dplyr::select(assoc, label.x, y.x, values) %>%
+  dplyr::select(assoc, label.x, y.x, values, signif) %>%
   dplyr::rename(label = label.x, y = y.x)%>%
   mutate(tree = "host") 
   
 d2_new <- dd %>% 
-  dplyr::select(assoc, label.y, y.y, values) %>%
+  dplyr::select(assoc, label.y, y.y, values, signif) %>%
   dplyr::rename(label = label.y, y = y.y) %>%
   mutate(tree = "microbe")
 
@@ -1232,9 +1240,10 @@ gg.tangle <- bind_rows(d1_new, d2_new) %>%
   mutate(y = y / max(y)) %>%
   ungroup %>%
   #mutate(values = as.numeric((1-values)/100)) %>%
-  ggplot(aes(x=tree, y=y, group=assoc, colour=values)) +
+  ggplot(aes(x=tree, y=y, group=assoc, colour=signif)) +
     geom_line(alpha=0.1) +  
-    scale_color_gradient(low="steelblue", high="darkorange1") +
+    scale_color_manual(values=c("steelblue", "darkorange1")) +
+    #scale_color_gradient(low="steelblue", high="darkorange1") +
     scale_x_discrete(expand = c(0,0)) + 
     theme_void() +
     theme(legend.position = "bottom")
@@ -1245,6 +1254,44 @@ whole_tanglegram
 pdf(file="figs/microbiome_tanglegram.pdf",  width = 8, height = 11, paper="a4")
   plot(whole_tanglegram)
 try(dev.off(), silent=TRUE)
+  
+# Make plot ranking links, and nodes
+gg.hlinks <- d1_new %>%
+  group_by(label) %>%
+  summarise(values = mean(values)) %>%
+  mutate(label = as.factor(label),
+         label=fct_reorder(label, values, sum ))%>%
+  arrange(-values) %>%
+  ggplot(aes(x=label, y=values, fill=values)) +
+  geom_col(show.legend = FALSE) +  
+  scale_fill_gradient(low="steelblue", high="darkorange1") +
+  theme_classic()+ 
+  theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  labs(y = "Contribution", x=NULL, title ="Psyllid taxa")
+  
+gg.slinks <- d2_new %>%
+  left_join(tax_groups) %>%
+  group_by(genus) %>%
+  summarise(values = mean(values)) %>%
+  dplyr::rename(label = genus) %>%
+  mutate(label = as.factor(label),
+         label=fct_reorder(label, values, sum))%>%
+  arrange(-values) %>%
+  #top_frac(.25) %>%
+  ggplot(aes(x=label, y=values, fill=values)) +
+  geom_col(show.legend = FALSE) +  
+  scale_fill_gradient(low="steelblue", high="darkorange1") +
+  theme_classic()+ 
+  theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  labs(y = "Contribution", x=NULL, title = "Top 25% Bacterial genera")
+
+gg.hlinks / gg.slinks
+
+pdf(file="figs/microbiome_fit_summary.pdf",  width = 11, height = 8, paper="a4r")
+  plot(gg.hlinks / gg.slinks)
+try(dev.off(), silent=TRUE)
+
+# Add labels to the tanglegram to make sure they are lining up
 ```
 
 ## Psyllid ~ Carsonella 
@@ -1651,23 +1698,23 @@ D <- prepare_paco_data(H=h_dist, P=s_dist, HP=coocur)
 D <- add_pcoord(D, correction='cailliez') 
 
 ## plot Principal coordinates
-#D$H_PCo <-  neg_to_pos_eig(D$H_PCo)
-#D$P_PCo <-  neg_to_pos_eig(D$P_PCo)
-#
-#p_host <- ggplot(D$H_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, Axis.2)) +
-#    geom_point() +
-#    theme_bw() +
-#  ggtitle("H PCA")
-#
-#p_para <- ggplot(D$P_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, Axis.2))  +
-#    geom_point() +
-#    theme_bw()+
-#  ggtitle("P PCA")
-#    
-#plot(p_host + p_para)
-#
+D$H_PCo <-  neg_to_pos_eig(D$H_PCo)
+D$P_PCo <-  neg_to_pos_eig(D$P_PCo)
+
+p_host <- ggplot(D$H_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, Axis.2)) +
+    geom_point() +
+    theme_bw() +
+  ggtitle("H PCA")
+
+p_para <- ggplot(D$P_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, Axis.2))  +
+    geom_point() +
+    theme_bw()+
+  ggtitle("P PCA")
+    
+plot(p_host + p_para)
+
 # run paco
-paco_run <- PACo(D, nperm=9, seed=909, method='quasiswap', symmetric=FALSE) #Symetric - is one meant to track the evolution of another?
+paco_run <- PACo(D, nperm=99, seed=949, method='quasiswap', symmetric=TRUE) #Symetric - is one meant to track the evolution of another?
 
 # run paco
 #paco_run <- PACo(D, nperm=999, seed=909, method='quasiswap', symmetric=TRUE) #Symetric - is one meant to track the evolution of another?
@@ -1740,7 +1787,7 @@ tax_groups <- as.data.frame(tax_table(ps3)) %>%
   dplyr::mutate(label = label %>% str_replace_all("-", "_") %>%
                   str_replace_all(" ", "_")) %>%
   select(label, genus) %>%
-  filter(label %in% p2$data$label) %>%
+  filter(label %in% tree2$tip.label) %>%
   group_by(genus) 
 
 group_name <- group_keys(tax_groups)  %>%
