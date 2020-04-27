@@ -11,11 +11,14 @@ neg_to_pos_eig = function(PCo){
 
 # Average descendents -----------------------------------------------------
 # average a ggtree treedata value from tips over all nodes
-
 average_descendants <- function(x, tree, df) {
   descendants <- getDescendants(tree, x)
   df %>%
     dplyr::filter(node %in% descendants) %>%
+    dplyr::mutate(values = case_when(
+      !is.na(values) ~ values,
+      is.na(values) ~ 0
+    )) %>%
     pull(values) %>%
     mean(na.rm=TRUE)
 }
