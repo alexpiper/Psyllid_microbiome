@@ -12,8 +12,8 @@ NSW1C_S66,NSW1C,1,Acizzia_acaciaebaileyanae,Acizzia,Psyllidae,Acacia_baileyana,4
 179_S143,179,2,Acizzia_albizziae,Acizzia,Psyllidae,Acacia_sp,17/4/15,FALSE,-43.63472222222222,172.48999999999998
 11A_S89,11A,1,Acizzia_albizziae,Acizzia,Psyllidae,Acacia_sp,19/9/14,TRUE,-41.418055555555554,173.9647222222222
 11B_S90,11B,1,Acizzia_jucunda,Acizzia,Psyllidae,Acacia_sp,19/9/14,FALSE,-41.418055555555554,173.9647222222222
-19B_S62,19B,1,Acizzia_albizziae,Acizzia,Psyllidae,Acacia_sp,24/9/14,TRUE,-41.2575,172.8225
-19VOUCHB_S18,19B,2,Acizzia_albizziae,Acizzia,Psyllidae,Acacia_sp,24/9/14,TRUE,-41.2575,172.8225
+19B_S62,19B,1,Acizzia_albizziae,Acizzia,Psyllidae,Acacia_sp,24/9/14,FALSE,-41.2575,172.8225
+19VOUCHB_S18,19VOUCHB,2,Acizzia_albizziae,Acizzia,Psyllidae,Acacia_sp,24/9/14,FALSE,-41.2575,172.8225
 10_S10,10,2,Acizzia_dodonaeae,Acizzia,Psyllidae,Dodonaea_viscosa,19/9/14,FALSE,-42.15555555555555,173.92388888888888
 13_S12,13,2,Acizzia_dodonaeae,Acizzia,Psyllidae,Dodonaea_viscosa,21/9/14,FALSE,-41.30555555555555,173.28416666666666
 17_S15,17,2,Acizzia_dodonaeae,Acizzia,Psyllidae,Dodonaea_viscosa,22/9/14,FALSE,-40.948055555555555,173.04194444444445
@@ -29,7 +29,7 @@ SI1_S178,SI1,2,Acizzia_dodonaeae,Acizzia,Psyllidae,Dodonaea_viscosa,14/10/14,FAL
 11a_S11,11A,2,Acizzia_jucunda,Acizzia,Psyllidae,Acacia_sp,19/9/14,TRUE,-41.418055555555554,173.9647222222222
 19A_S61,19A,1,Acizzia_jucunda,Acizzia,Psyllidae,Acacia_sp,24/9/14,TRUE,-41.2575,172.8225
 19a_S16,19A,2,Acizzia_jucunda,Acizzia,Psyllidae,Acacia_sp,24/9/14,TRUE,-41.2575,172.8225
-19VOUCHA_S17,19A,2,Acizzia_jucunda,Acizzia,Psyllidae,Acacia_sp,24/9/14,TRUE,-41.2575,172.8225
+19VOUCHA_S17,19VOUCHA,2,Acizzia_jucunda,Acizzia,Psyllidae,Acacia_sp,24/9/14,FALSE,-41.2575,172.8225
 19C_S63,19C,1,Acizzia_jucunda,Acizzia,Psyllidae,Acacia_sp,24/9/14,FALSE,-41.2575,172.8225
 116a_S95,116A,2,Acizzia_solanicola,Acizzia,Psyllidae,Solanum_tuberosum,6/3/15,FALSE,-36.89944444444444,174.78194444444446
 116b_S96,116B,2,Acizzia_solanicola,Acizzia,Psyllidae,Solanum_tuberosum,6/3/15,FALSE,-36.89944444444444,174.78194444444446
@@ -171,8 +171,8 @@ mockA_S51,mockA,2,MOCK,MOCK,NA,NA,NA,FALSE,NA,NA
 MockEven_S193,MockEven,2,ND,ND,NA,NA,NA,FALSE,NA,NA
 MockStaggered_S194,MockStaggered,2,ND,ND,NA,NA,NA,FALSE,NA,NA
 187_S146,187,2,Psylla_apicalis,Psylla,Psyllidae,Sophora_microphylla,1/9/15,FALSE,-43.522777777777776,172.58527777777778
-200big_S149,200,2,Psylla_apicalis,Psylla,Psyllidae,Sophora_microphylla,2/11/15,TRUE,-45.08694444444445,170.9752777777778
-201big_S151,201,2,Psylla_apicalis,Psylla,Psyllidae,Sophora_microphylla,8/11/15,TRUE,-46.41583333333333,168.36249999999998
+200big_S149,200big,2,Psylla_apicalis,Psylla,Psyllidae,Sophora_microphylla,2/11/15,FALSE,-45.08694444444445,170.9752777777778
+201big_S151,201big,2,Psylla_apicalis,Psylla,Psyllidae,Sophora_microphylla,8/11/15,FALSE,-46.41583333333333,168.36249999999998
 206_S153,206,2,Psylla_apicalis,Psylla,Psyllidae,Sophora_microphylla,9/11/15,FALSE,-45.03666666666666,168.66055555555556
 26_S25,26,2,Psylla_carmichaeliae_A,Psylla,Psyllidae,Carmichaelia_sp,14/9/14,FALSE,-43.653888888888886,172.81222222222223
 22A_S91,22A,1,Psylla_carmichaeliae_A,Psylla,Psyllidae,Carmichaelia_sp,14/9/14,FALSE,-43.77833333333333,172.7861111111111
@@ -183,8 +183,8 @@ MockStaggered_S194,MockStaggered,2,ND,ND,NA,NA,NA,FALSE,NA,NA
 213_S157,213,2,Psylla_carmichaeliae_E,Psylla,Psyllidae,Carmichaelia_petri,9/11/15,FALSE,-45.034166666666664,169.19972222222222
 217_S158,217,2,Psylla_carmichaeliae_E,Psylla,Psyllidae,Carmichaelia_petri,10/11/15,FALSE,-44.974722222222226,168.94833333333332
 55_S52,55,2,Psylla_frodobagginsi,Psylla,Psyllidae,Sophora_microphylla,30/11/14,FALSE,-43.63972222222222,172.4752777777778
-200small_S150,200,2,Psylla_frodobagginsi,Psylla,Psyllidae,Sophora_microphylla,2/11/15,TRUE,-45.08694444444445,170.9752777777778
-201small_S152,201,2,Psylla_frodobagginsi,Psylla,Psyllidae,Sophora_microphylla,8/11/15,TRUE,-46.41583333333333,168.36249999999998
+200small_S150,200small,2,Psylla_frodobagginsi,Psylla,Psyllidae,Sophora_microphylla,2/11/15,FALSE,-45.08694444444445,170.9752777777778
+201small_S152,201small,2,Psylla_frodobagginsi,Psylla,Psyllidae,Sophora_microphylla,8/11/15,FALSE,-46.41583333333333,168.36249999999998
 209_S155,209,2,Psylla_frodobagginsi,Psylla,Psyllidae,Sophora_microphylla,9/11/15,FALSE,-45.03583333333333,169.1925
 238_S166,238,2,Psylla_frodobagginsi,Psylla,Psyllidae,Sophora_microphylla_(kowhai),12/11/15,FALSE,-41.25805555555556,172.11666666666667
 94_S80,94,2,Psyllopsis_fraxini,Psyllopsis,Liviidae,Fraxinus_excelsior,26/2/15,FALSE,-46.401944444444446,168.3563888888889

@@ -8,4 +8,4 @@
 .fastq
 .gz
 data/
-
+*.DS_Store

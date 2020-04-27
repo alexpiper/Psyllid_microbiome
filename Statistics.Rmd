@@ -506,6 +506,21 @@ dir.create("output/beta")
 write_csv(adonis_results, "output/beta/adonis_fulldata.csv")
 ```
 
+## Same tree dissimilarities
+
+```{r Avg Dissimiarity}
+hostplant_metadata <- metadata %>% mutate(ingroup = case_when(
+  Sample_Name %in% c("94","107", "113","93","106", "112") ~ "fraxini-fraxinicola",
+  Sample_Name %in% c("200big", "201big", "200small", "201small") ~ "apicalis-frodobagginsi",
+  TRUE ~ "other"
+  ))
+
+broom::tidy(adonis(distlist$Aitchison~ingroup + psyllid_spp, method="euclidean",
+                   data=hostplant_metadata)$aov.tab)
+
+pairwise.adonis2(distlist$Aitchison~ingroup + psyllid_spp, method="euclidean",
+                   data=hostplant_metadata)
+```
 
 ## Barplot
 
@@ -610,7 +625,8 @@ try(dev.off(), silent=TRUE)
 ### Prepare distance matrices
 ```{r prepare distances}
 ## Psyllid phylogeny cophenetic distance matrix
-phylo.dist <- cophenetic(pruned.tree) %>%
+phylo.dist <-cophenetic(pruned.tree) %>%
+   sqrt() %>%
   as.data.frame() %>%
   rownames_to_column("psyllid_spp.x") %>%
   pivot_longer(cols=-psyllid_spp.x,
@@ -633,27 +649,9 @@ phylo.dist <- cophenetic(pruned.tree) %>%
   dplyr::select(-Sample_Name.x)%>%
   as.matrix()
 
-# New plant  distance matrix
-#library(brranching)
-# Do this replacement at start
-#plants <- samdf  %>%
-#  dplyr::select(hostplant_spp)%>%
-#  unique() %>%
-#  mutate(branching = brranching::phylomatic_names(.$hostplant_spp, 
-#                                                format = "isubmit", 
-#                                                db = "ncbi"))
-#
-## Get tree
-#plant.tree <- brranching::phylomatic(plants$branching, taxnames = TRUE)
-#
-## add branch lengths using the wikstrom ages file
-#plant.tree <- brranching::rbladj(plant.tree, "wikstrom.ages")
-#plant.tree$tip.label <- str_to_sentence(plant.tree$tip.label)
-#write.tree(plant.tree, file="sample_data/plant_tree.nwk")
-
 plant.tree <- read.tree("sample_data/plant_tree.nwk")
-
 plant.dist <- cophenetic(plant.tree) %>%
+  sqrt() %>%
   as.data.frame() %>%
   rownames_to_column("hostplant_spp.x") %>%
   pivot_longer(cols=-hostplant_spp.x,
@@ -1071,25 +1069,25 @@ h_tree <- pruned.tree2
 h_tree$tip.label <- h_tree$tip.label %>%
            str_replace_all(" |-", "_")
 h_tree <- drop.tip(h_tree, setdiff(h_tree$tip.label, rownames(coocur)))
-h_dist <- cophenetic(h_tree)
+h_dist <- sqrt(cophenetic(h_tree))
 
 # P cophenetic distance
 s_tree <- phy_tree(ps3)
 s_tree$tip.label <- s_tree$tip.label %>%
            str_replace_all(" |-", "_")
 s_tree <- drop.tip(s_tree, setdiff(s_tree$tip.label, colnames(coocur)))
-s_dist <- cophenetic(s_tree) /1e+6 #convert to Mya so integers are small enough for PACO
+s_dist <- sqrt(cophenetic(s_tree) /1e+6) #convert to Mya so integers are small enough for PACO
 
 coocur <- coocur[h_tree$tip.label, s_tree$tip.label]
 
 # prepare paco data
 D <- prepare_paco_data(H=h_dist, P=s_dist, HP=coocur)
 # Add pcord
-D <- add_pcoord(D, correction='cailliez')
+D <- add_pcoord(D, correction='none')
 
 # plot Principal coordinates
-D$H_PCo <-  neg_to_pos_eig(D$H_PCo)
-D$P_PCo <-  neg_to_pos_eig(D$P_PCo)
+#D$H_PCo <-  neg_to_pos_eig(D$H_PCo)
+#D$P_PCo <-  neg_to_pos_eig(D$P_PCo)
 
 p_host <- ggplot(D$H_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, Axis.2)) +
     geom_point() +
@@ -1168,7 +1166,7 @@ obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=FALSE)
 # Extract the goods for ggtree
 # psyllid_tree
 tree1 <- obj[["trees"]][[1]]
-p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links)) + geom_tiplab()
+p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links)) #+ geom_tiplab()
 weights_p1 <- p1$data %>%
   left_join(links %>%
   group_by(Sample_Name) %>%
@@ -1237,15 +1235,21 @@ d2_new <- dd %>%
   dplyr::rename(label = label.y, y = y.y) %>%
   mutate(tree = "microbe")
 
-gg.tangle <- bind_rows(d1_new, d2_new) %>%
+tangle <- bind_rows(d1_new, d2_new) %>%
   filter(!is.na(label))%>% 
   group_by(tree) %>%
   mutate(y = y / max(y)) %>%
-  ungroup %>%
-  ggplot(aes(x=tree, y=y, group=assoc, colour=as.factor(signif))) +
+  ungroup
+gg.tangle <- ggplot(tangle, aes(x=tree, y=y, group=assoc, colour=as.factor(signif))) +
     geom_line(alpha=0.1) +  
+  geom_text(data = tangle %>% 
+              filter(tree=="host", !duplicated(y)),
+            aes(label=label),stat = 'unique', hjust=1)+
+  #geom_text(data = tangle %>% 
+  #            filter(tree=="microbe", !duplicated(y)),
+  #          aes(label=label),stat = 'unique', hjust=0)+
     scale_color_manual(values=c("steelblue", "darkorange1")) +
-    scale_x_discrete(expand = c(0,0)) + 
+    scale_x_discrete(expand = expansion(add=c(0.5,0))) + 
     theme_void() +
     theme(legend.position = "bottom")
 
@@ -1297,8 +1301,6 @@ try(dev.off(), silent=TRUE)
 
 ## Psyllid ~ Carsonella 
 
-Definitely need to do the top carsonella, but need some flexibility in keeping the related ones, so top - 20% abundance? 
-
 ```{r carsonella cophylo}
 #Flag top abundance carsonella by sample
 top_carson <- ps2 %>%
@@ -1333,25 +1335,22 @@ h_tree <- pruned.tree
 h_tree$tip.label <- h_tree$tip.label %>%
            str_replace_all(" |-", "_")
 h_tree <- drop.tip(h_tree, setdiff(h_tree$tip.label, rownames(coocur)))
-h_dist <- cophenetic(h_tree)
+h_dist <- sqrt(cophenetic(h_tree))
 
 # P cophenetic distance
 s_tree <- phy_tree(ps3)
 s_tree$tip.label <- s_tree$tip.label %>%
            str_replace_all(" |-", "_")
 s_tree <- drop.tip(s_tree, setdiff(s_tree$tip.label, colnames(coocur)))
-s_dist <- cophenetic(s_tree) /1e+6 #convert to Mya so integers are small enough for PACO
+s_dist <- sqrt(cophenetic(s_tree)/1e+6 ) ##convert to Mya so integers are small enough for PACO
 
+#alternatively - sqrt(cophenetic(s_tree))
 coocur <- coocur[h_tree$tip.label, s_tree$tip.label]
 
 # prepare paco data
 D <- prepare_paco_data(H=h_dist, P=s_dist, HP=coocur)
 # Add pcord
-D <- add_pcoord(D, correction='cailliez')
-
-# plot Principal coordinates
-D$H_PCo <-  neg_to_pos_eig(D$H_PCo)
-D$P_PCo <-  neg_to_pos_eig(D$P_PCo)
+D <- add_pcoord(D, correction='none') 
 
 p_host <- ggplot(D$H_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, Axis.2)) +
     geom_point() +
@@ -1374,7 +1373,8 @@ print(paco_run$gof)
 # Get interaction-specific cophylogenetic contributions using jacknifing
 
 paco_run <- paco_links(paco_run)
-links <- data.frame(joint=names(paco_run$jackknife$mean), values=unname(paco_run$jackknife$mean), upper=unname(paco_run$jackknife$upper)) %>%
+links <- data.frame(joint=names(paco_run$jackknife$mean), #losing sv50 here?
+                    values=unname(paco_run$jackknife$mean), upper=unname(paco_run$jackknife$upper)) %>%
   mutate(OTU = joint) %>%
  separate(OTU, into=c("Sample_Name", "OTU"), sep="-", extra="merge") %>%
   mutate(signif = case_when(
@@ -1426,7 +1426,7 @@ obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=TRUE)
 
 # psyllid_tree
 tree1 <- obj[["trees"]][[1]]
-p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links)) + geom_tiplab()
+p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links))
 weights_p1 <- p1$data %>%
   left_join(links %>%
   group_by(Sample_Name) %>%
@@ -1442,17 +1442,9 @@ p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=links)) +  scale_color_gradi
 
 # OTU tree
 tree2 <- obj[["trees"]][[2]]
+s_tree <- drop.tip(tree2, setdiff(tree2$tip.label, obj$assoc[,2]))
 
-# make a clade label list
-tax_groups <- as.data.frame(tax_table(ps3)) %>%
-  rownames_to_column("label") %>%
-  dplyr::mutate(label = label %>% str_replace_all("-", "_") %>%
-                  str_replace_all(" ", "_")) %>%
-  select(label, genus) %>%
-  filter(label %in% tree2$tip.label) %>%
-  group_by(genus) 
-
-p2 <- ggtree(newtree, ladderize=TRUE, aes(colour=links)) 
+p2 <- ggtree(tree2 , ladderize=TRUE, aes(colour=links)) + geom_tiplab()
 weights_p2 <- p2$data %>%
   left_join(links %>% 
     group_by(OTU) %>%
@@ -1485,22 +1477,26 @@ d2_new <- dd %>%
   dplyr::rename(label = label.y, y = y.y) %>%
   mutate(tree = "microbe")
 
-gg.tangle <- bind_rows(d1_new, d2_new) %>%
+tangle <- bind_rows(d1_new, d2_new) %>%
   filter(!is.na(label))%>% 
   group_by(tree) %>%
   mutate(y = y / max(y)) %>%
-  ungroup %>%
-  ggplot(aes(x=tree, y=y, group=assoc, colour=as.factor(signif))) +
+  ungroup
+gg.tangle <- ggplot(tangle, aes(x=tree, y=y, group=assoc, colour=as.factor(signif))) +
     geom_line(alpha=0.8) +  
+  geom_text(data = tangle %>% 
+              filter(tree=="host"),
+            aes(label=label),stat = 'unique', hjust=1)+
+  geom_text(data = tangle %>% 
+              filter(tree=="microbe"),
+            aes(label=label),stat = 'unique', hjust=0)+
     scale_color_manual(values=c("steelblue", "darkorange1")) +
-    scale_x_discrete(expand = c(0,0)) + 
+    scale_x_discrete(expand = expansion(add=c(0.8,0.8))) + 
     theme_void() +
     theme(legend.position = "bottom")
 
-gg.carson_tangle <- p1 + gg.tangle + (p2 + scale_x_reverse()) + plot_layout(widths = c(2, 1, 2))
+gg.carson_tangle <- p1 + gg.tangle + (p2 + scale_x_reverse()) #+ plot_layout(widths = c(2, 1, 2))
 gg.carson_tangle 
-
-# Check missing blue dot?
 
 pdf(file="figs/carsonella_tanglegram.pdf",  width = 8, height = 11, paper="a4")
   plot(gg.carson_tangle)
@@ -1537,24 +1533,21 @@ h_tree <- plant.tree
 h_tree$tip.label <- h_tree$tip.label %>%
            str_replace_all(" |-", "_")
 h_tree <- drop.tip(h_tree, setdiff(h_tree$tip.label, rownames(coocur)))
-h_dist <- cophenetic(h_tree)
+h_dist <- sqrt(cophenetic(h_tree))
 
 # P cophenetic distance
 s_tree <- pruned.tree
 s_tree$tip.label <- s_tree$tip.label %>%
            str_replace_all(" |-", "_")
 s_tree <- drop.tip(s_tree, setdiff(s_tree$tip.label, colnames(coocur)))
-s_dist <- cophenetic(s_tree)
+s_dist <- sqrt(cophenetic(s_tree))
 
 coocur <- coocur[h_tree$tip.label, s_tree$tip.label]
+
 # prepare paco data
 D <- prepare_paco_data(H=h_dist, P=s_dist, HP=coocur)
 # Add pcord
-D <- add_pcoord(D, correction='cailliez') 
-
-# plot Principal coordinates
-D$H_PCo <-  neg_to_pos_eig(D$H_PCo)
-D$P_PCo <-  neg_to_pos_eig(D$P_PCo)
+D <- add_pcoord(D, correction='none') 
 
 p_host <- ggplot(D$H_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, Axis.2)) +
     geom_point() +
@@ -1633,7 +1626,7 @@ obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=TRUE)
 # Extract the goods for ggtree
 # plant tree
 tree1 <- obj[["trees"]][[1]]
-p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links)) + geom_tiplab()
+p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links)) 
 weights_p1 <- p1$data %>%
   left_join(links %>%
   group_by(hostplant_spp) %>%
@@ -1648,8 +1641,7 @@ p1 <- p1 %<+% weights_p1  + geom_tippoint(aes(colour=links)) +  scale_color_grad
 
 # psyllid_tree
 tree2 <- obj[["trees"]][[2]]
-p2 <- ggtree(tree2, ladderize=FALSE, aes(colour=links)) +
-  geom_tiplab(align=TRUE , offset=0.3, hjust=1, linetype = "dashed", linesize=0)
+p2 <- ggtree(tree2, ladderize=FALSE, aes(colour=links))
 weights_p2 <- p2$data %>%
   left_join(links %>% 
     group_by(psyllid_spp) %>%
@@ -1682,27 +1674,33 @@ d2_new <- dd %>%
   mutate(tree = "microbe")
 
 # Should be able to have y = labels, but arrange b y
-
-gg.tangle <- bind_rows(d1_new, d2_new) %>%
+tangle <- bind_rows(d1_new, d2_new) %>%
   filter(!is.na(label))%>% 
   group_by(tree) %>%
   mutate(y = y / max(y)) %>%
-  ungroup %>%
-  #mutate(values = as.numeric((1-values)/100)) %>%
-  ggplot(aes(x=tree, y=y, group=assoc, colour=as.factor(signif))) +
+  ungroup
+gg.tangle <- ggplot(tangle, aes(x=factor(tree, levels=c("microbe", "host")), y=y, group=assoc, colour=as.factor(signif))) +
     geom_line(alpha=0.8) +  
-    scale_color_manual(values=c("steelblue", "darkorange1")) +
-    scale_x_discrete(expand = c(0,0)) + 
+  geom_text(data = tangle %>% 
+              filter(tree=="host"),
+            aes(label=label),stat = 'unique', hjust=0)+
+  geom_text(data = tangle %>% 
+              filter(tree=="microbe"),
+            aes(label=label),stat = 'unique', hjust=1)+
+    scale_color_manual(values=c("steelblue", "darkorange1"), name = "Significant") +
+    scale_x_discrete(expand = expansion(add=c(0.8,0.8))) + 
     theme_void() +
     theme(legend.position = "bottom")
 
-gg.plant_tangle <- p2 + gg.tangle + (p1 + scale_x_reverse()) + plot_layout(widths = c(2, 1, 2))
+gg.plant_tangle <- p2 + gg.tangle + (p1 + scale_x_reverse()) #+ plot_layout(widths = c(2, 1, 2))
 gg.plant_tangle
 
 pdf(file="figs/plant_tanglegram.pdf",  width = 8, height = 11, paper="a4")
   plot(gg.plant_tangle)
 try(dev.off(), silent=TRUE)
 ```
+
+# Trioza
 
 ## Trioza ~ microbe
 
@@ -1725,24 +1723,20 @@ h_tree <- pruned.tree
 h_tree$tip.label <- h_tree$tip.label %>%
            str_replace_all(" |-", "_")
 h_tree <- drop.tip(h_tree, setdiff(h_tree$tip.label, rownames(coocur)))
-h_dist <- cophenetic(h_tree)
+h_dist <- sqrt(cophenetic(h_tree))
 
 # P cophenetic distance
 s_tree <- phy_tree(ps3)
 s_tree$tip.label <- s_tree$tip.label %>%
            str_replace_all(" |-", "_")
 s_tree <- drop.tip(s_tree, setdiff(s_tree$tip.label, colnames(coocur)))
-s_dist <- cophenetic(s_tree) /1e+6 #convert to Mya so integers are small enough for PACO
+s_dist <- sqrt(cophenetic(s_tree) /1e+6) #convert to Mya so integers are small enough for PACO
 
 coocur <- coocur[h_tree$tip.label, s_tree$tip.label]
 # prepare paco data
 D <- prepare_paco_data(H=h_dist, P=s_dist, HP=coocur)
 # Add pcord
-D <- add_pcoord(D, correction='cailliez') 
-
-## plot Principal coordinates
-D$H_PCo <-  neg_to_pos_eig(D$H_PCo)
-D$P_PCo <-  neg_to_pos_eig(D$P_PCo)
+D <- add_pcoord(D, correction='none')
 
 p_host <- ggplot(D$H_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, Axis.2)) +
     geom_point() +
@@ -1757,7 +1751,7 @@ p_para <- ggplot(D$P_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, 
 plot(p_host + p_para)
 
 # run paco
-paco_run <- PACo(D, nperm=99, seed=949, method='quasiswap', symmetric=TRUE) #Symetric - is one meant to track the evolution of another?
+paco_run <- PACo(D, nperm=9, seed=909, method='quasiswap', symmetric=TRUE) #Symetric - is one meant to track the evolution of another?
 
 # run paco
 #paco_run <- PACo(D, nperm=999, seed=909, method='quasiswap', symmetric=TRUE) #Symetric - is one meant to track the evolution of another?
@@ -1784,7 +1778,7 @@ gg.links <- links %>%
   geom_point(show.legend = FALSE) +
   geom_errorbar(aes(ymin=values, ymax=upper)) +
   geom_hline(yintercept = mean(links$values)) +
-  scale_color_manual(values=c("steelblue", "darkorange1")) +
+  scale_color_manual(values=c("steelblue", "darkorange1"), name = "Significant") +
   theme_classic()+ 
   theme(axis.text.x = element_blank())
 
@@ -1893,15 +1887,21 @@ d2_new <- dd %>%
   dplyr::rename(label = label.y, y = y.y) %>%
   mutate(tree = "microbe")
 
-gg.tangle <- bind_rows(d1_new, d2_new) %>%
+tangle <- bind_rows(d1_new, d2_new) %>%
   filter(!is.na(label))%>% 
   group_by(tree) %>%
   mutate(y = y / max(y)) %>%
-  ungroup %>%
-  ggplot(aes(x=tree, y=y, group=assoc, colour=as.factor(signif))) +
-    geom_line(alpha=0.1) +  
-    scale_color_manual(values=c("steelblue", "darkorange1")) +
-    scale_x_discrete(expand = c(0,0)) + 
+  ungroup
+gg.tangle <- ggplot(tangle, aes(x=tree), y=y, group=assoc, colour=as.factor(signif)) +
+    geom_line(alpha=0.8) +  
+  geom_text(data = tangle %>% 
+              filter(tree=="host"),
+            aes(label=label),stat = 'unique', hjust=1)+
+  geom_text(data = tangle %>% 
+              filter(tree=="microbe"),
+            aes(label=label),stat = 'unique', hjust=0)+
+    scale_color_manual(values=c("steelblue", "darkorange1"), name = "Significant") +
+    scale_x_discrete(expand = expansion(add=c(0.8,0.8))) + 
     theme_void() +
     theme(legend.position = "bottom")
 
@@ -1910,6 +1910,209 @@ trioza_tanglegram
 
 pdf(file="figs/trioza_microbe_tanglegram.pdf",  width = 8, height = 11, paper="a4")
   plot(trioza_tanglegram)
+try(dev.off(), silent=TRUE)
+```
+
+## Trioza ~ carsonella
+
+```{r Trioza carsonella cophylo}
+#Flag top abundance carsonella by sample
+top_carson <- ps2 %>%
+  transform_sample_counts(function (x) x/sum(x)) %>%
+  speedyseq::psmelt() %>%
+  filter(genus=="Candidatus Carsonella") %>%
+  group_by(Sample) %>%  
+  filter(Abundance > 0) %>%
+  top_n(1, wt=Abundance) %>%
+  mutate(top = TRUE) 
+
+coocur <- ps2 %>%
+  subset_samples(psyllid_genus == "Trioza") %>%
+  filter_taxa(function(x) mean(x) > 0, TRUE) %>%
+  transform_sample_counts(function (x) x/sum(x)) %>%
+  speedyseq::psmelt() %>%
+  left_join(top_carson) %>%
+  filter(genus=="Candidatus Carsonella", top==TRUE) %>%
+  dplyr::select(OTU, psyllid_spp, SampleID, Abundance) %>%
+  mutate(OTU = OTU %>%
+           str_replace_all(" |-", "_")) %>%
+  dplyr::group_by(OTU, psyllid_spp) %>%
+    summarise(Abundance = sum(Abundance)) %>%
+  pivot_wider(id_cols = psyllid_spp,
+              names_from = OTU,
+              values_from=Abundance,
+              values_fill = list(Abundance = 0))  %>%
+  column_to_rownames("psyllid_spp") %>%
+    as.matrix() %>% 
+  apply(2, function(x) ifelse(x > 0, 1, 0)) 
+
+# H cophenetic distance
+h_tree <- pruned.tree
+h_tree$tip.label <- h_tree$tip.label %>%
+           str_replace_all(" |-", "_")
+h_tree <- drop.tip(h_tree, setdiff(h_tree$tip.label, rownames(coocur)))
+h_dist <- sqrt(cophenetic(h_tree))
+
+# P cophenetic distance
+s_tree <- phy_tree(ps3)
+s_tree$tip.label <- s_tree$tip.label %>%
+           str_replace_all(" |-", "_")
+s_tree <- drop.tip(s_tree, setdiff(s_tree$tip.label, colnames(coocur)))
+s_dist <- sqrt(cophenetic(s_tree)/1e+6 ) ##convert to Mya so integers are small enough for PACO
+
+coocur <- coocur[h_tree$tip.label, s_tree$tip.label]
+
+# prepare paco data
+D <- prepare_paco_data(H=h_dist, P=s_dist, HP=coocur)
+# Add pcord
+D <- add_pcoord(D, correction='none') 
+
+p_host <- ggplot(D$H_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, Axis.2)) +
+    geom_point() +
+    theme_bw() +
+  ggtitle("H PCA")
+
+p_para <- ggplot(D$P_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, Axis.2))  +
+    geom_point() +
+    theme_bw()+
+  ggtitle("P PCA")
+    
+plot(p_host + p_para)
+
+# run paco
+paco_run <- PACo(D, nperm=99, seed=909, method='quasiswap', symmetric=TRUE)
+
+#print overall significance
+print(paco_run$gof)
+
+# Get interaction-specific cophylogenetic contributions using jacknifing
+paco_run <- paco_links(paco_run)
+links <- data.frame(joint=names(paco_run$jackknife$mean), #losing sv50 here?
+                    values=unname(paco_run$jackknife$mean), upper=unname(paco_run$jackknife$upper)) %>%
+  mutate(OTU = joint) %>%
+ separate(OTU, into=c("Sample_Name", "OTU"), sep="-", extra="merge") %>%
+  mutate(signif = case_when(
+    upper < mean(.$values) ~ 1,
+    upper > mean(.$values) ~ 0
+  ))
+# Plot links
+links %>%
+  dplyr::rename(label = joint) %>%
+  mutate(label = as.factor(label),
+         label=fct_reorder(label, values, sum))%>%
+  arrange(-values) %>%
+  ggplot(aes(x=label, y=values, colour=as.factor(signif))) +
+  geom_point(show.legend = FALSE) +
+  geom_errorbar(aes(ymin=values, ymax=upper)) +
+  geom_hline(yintercept = mean(links$values)) +
+  scale_color_manual(values=c("steelblue", "darkorange1")) +
+  theme_classic()+ 
+  theme(axis.text.x = element_blank())
+
+dir.create("output/cophylogeny/trioza_carsonella")
+write_csv(links, "output/cophylogeny/trioza_carsonella/trioza_carsonella_links.csv")
+write_csv(links %>% 
+    group_by(OTU) %>%
+    summarise(values = mean(values)), "output/cophylogeny/trioza_carsonella/carsonella_weights.csv")
+write_csv(links %>% 
+    group_by(Sample_Name) %>%
+    summarise(values = mean(values)), "output/cophylogeny/trioza_carsonella/psyllid_weights.csv")
+
+#Get observed residuals of Procrustean superimposition 
+paco_residuals <- residuals_paco(paco_run$proc, type = "interaction")
+# Visualise residuals
+res <- data.frame(OTU=names(paco_residuals), values=unname(paco_residuals)) %>%
+  separate(OTU, into=c("Sample_Name", "OTU"), sep="-", extra="merge") 
+
+ggplot(res, aes(x=values))+
+  geom_density(fill='grey70')+
+  theme_bw()+
+  xlab('Procrustes residuals')+
+  ylab('Frequency')
+
+# Cophyloplot
+coocur.lut <- which(coocur ==1, arr.ind=TRUE)
+assoc <- cbind(rownames(coocur)[coocur.lut[,1]], colnames(coocur)[coocur.lut[,2]])
+
+# Rotate the nodes using phytools
+library(phytools)
+obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=TRUE) 
+
+# psyllid_tree
+tree1 <- obj[["trees"]][[1]]
+p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links)) #+ geom_tiplab()
+weights_p1 <- p1$data %>%
+  left_join(links %>%
+  group_by(Sample_Name) %>%
+  summarise(values = mean(signif)) %>%
+    dplyr::rename(label = Sample_Name)
+    )  
+
+## Get values for higher nodes
+weights_p1 <- weights_p1 %>%
+  left_join(data.frame(node=weights_p1$node, links = weights_p1$node %>% purrr::map_dbl(average_descendants, tree=tree1, df=weights_p1)))
+
+p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=links)) +  scale_color_gradient(low="steelblue", high="darkorange1")
+
+# OTU tree
+tree2 <- obj[["trees"]][[2]]
+
+p2 <- ggtree(tree2 , ladderize=TRUE, aes(colour=links)) 
+weights_p2 <- p2$data %>%
+  left_join(links %>% 
+    group_by(OTU) %>%
+    summarise(values = mean(signif)) %>%
+    dplyr::rename(label = OTU)
+    ) 
+
+weights_p2 <- weights_p2 %>%
+  left_join(data.frame(node=weights_p2$node, links = weights_p2$node %>% purrr::map_dbl(average_descendants, tree=tree2, df=weights_p2)))
+
+p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=links)) +  scale_color_gradient(low="steelblue", high="darkorange1")
+
+# Tanglegram
+dd <- obj$assoc %>%
+  as_data_frame() %>%
+  magrittr::set_colnames(c("label.x", "label.y")) %>%
+  left_join(links  %>% 
+              dplyr::rename(label.x = Sample_Name, label.y = OTU)) %>%
+  left_join(p1$data %>% dplyr::select(label, y) %>% dplyr::rename(label.x = label), by="label.x") %>%
+  left_join(p2$data %>% dplyr::select(label, y) %>% dplyr::rename(label.y = label), by="label.y") %>%
+  rownames_to_column("assoc")
+
+d1_new <- dd %>% 
+  dplyr::select(assoc, label.x, y.x, values, upper, signif) %>%
+  dplyr::rename(label = label.x, y = y.x)%>%
+  mutate(tree = "host") 
+  
+d2_new <- dd %>% 
+  dplyr::select(assoc, label.y, y.y, values, upper, signif) %>%
+  dplyr::rename(label = label.y, y = y.y) %>%
+  mutate(tree = "microbe")
+
+tangle <- bind_rows(d1_new, d2_new) %>%
+  filter(!is.na(label))%>% 
+  group_by(tree) %>%
+  mutate(y = y / max(y)) %>%
+  ungroup
+gg.tangle <- ggplot(tangle, aes(x=tree, y=y, group=assoc, colour=as.factor(signif))) +
+    geom_line(alpha=0.8) +  
+  geom_text(data = tangle %>% 
+              filter(tree=="host"),
+            aes(label=label),stat = 'unique', hjust=1)+
+  geom_text(data = tangle %>% 
+              filter(tree=="microbe"),
+            aes(label=label),stat = 'unique', hjust=0)+
+    scale_color_manual(values=c("steelblue", "darkorange1")) +
+    scale_x_discrete(expand = expansion(add=c(0.8,0.8))) + 
+    theme_void() +
+    theme(legend.position = "bottom")
+
+gg.trioza_carson_tangle <- p1 + gg.tangle + (p2 + scale_x_reverse()) 
+gg.trioza_carson_tangle
+
+pdf(file="figs/trioza_carsonella_tanglegram.pdf",  width = 8, height = 11, paper="a4")
+  plot(gg.trioza_carson_tangle)
 try(dev.off(), silent=TRUE)
 ```
 
@@ -1943,24 +2146,20 @@ h_tree <- plant.tree
 h_tree$tip.label <- h_tree$tip.label %>%
            str_replace_all(" |-", "_")
 h_tree <- drop.tip(h_tree, setdiff(h_tree$tip.label, rownames(coocur)))
-h_dist <- cophenetic(h_tree)
+h_dist <- sqrt(cophenetic(h_tree))
 
 # P cophenetic distance
 s_tree <- pruned.tree
 s_tree$tip.label <- s_tree$tip.label %>%
            str_replace_all(" |-", "_")
 s_tree <- drop.tip(s_tree, setdiff(s_tree$tip.label, colnames(coocur)))
-s_dist <- cophenetic(s_tree)
+s_dist <- sqrt(cophenetic(s_tree))
 
 coocur <- coocur[h_tree$tip.label, s_tree$tip.label]
 # prepare paco data
 D <- prepare_paco_data(H=h_dist, P=s_dist, HP=coocur)
 # Add pcord
-D <- add_pcoord(D, correction='cailliez') 
-
-# plot Principal coordinates
-D$H_PCo <-  neg_to_pos_eig(D$H_PCo)
-D$P_PCo <-  neg_to_pos_eig(D$P_PCo)
+D <- add_pcoord(D, correction='none')  
 
 p_host <- ggplot(D$H_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, Axis.2)) +
     geom_point() +
@@ -2036,7 +2235,7 @@ obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=TRUE)
 # Extract the goods for ggtree
 # plant tree
 tree1 <- obj[["trees"]][[1]]
-p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links)) + geom_tiplab()
+p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links)) 
 weights_p1 <- p1$data %>%
   left_join(links %>%
   group_by(hostplant_spp) %>%
@@ -2051,8 +2250,7 @@ p1 <- p1 %<+% weights_p1  + geom_tippoint(aes(colour=links)) +  scale_color_grad
 
 # psyllid_tree
 tree2 <- obj[["trees"]][[2]]
-p2 <- ggtree(tree2, ladderize=FALSE, aes(colour=links)) +
-  geom_tiplab(align=TRUE , offset=0.02, hjust=1, linetype = "dashed", linesize=0)
+p2 <- ggtree(tree2, ladderize=FALSE, aes(colour=links))
 weights_p2 <- p2$data %>%
   left_join(links %>% 
     group_by(psyllid_spp) %>%
@@ -2086,28 +2284,33 @@ d2_new <- dd %>%
 
 # Should be able to have y = labels, but arrange b y
 
-gg.tangle <- bind_rows(d1_new, d2_new) %>%
+tangle <- bind_rows(d1_new, d2_new) %>%
   filter(!is.na(label))%>% 
   group_by(tree) %>%
   mutate(y = y / max(y)) %>%
-  ungroup %>%
-  #mutate(values = as.numeric((1-values)/100)) %>%
-  ggplot(aes(x=factor(tree, levels=c("microbe", "host")), y=y, group=assoc,colour=as.factor(signif))) +
-    geom_line(alpha=1) +  
-    scale_color_manual(values=c("steelblue", "darkorange1")) +
-    scale_x_discrete(expand = c(0,0)) + 
+  ungroup
+gg.tangle <- ggplot(tangle, aes(x=factor(tree, levels=c("microbe", "host")), y=y, group=assoc, colour=as.factor(signif))) +
+    geom_line(alpha=0.8) +  
+  geom_text(data = tangle %>% 
+              filter(tree=="host"),
+            aes(label=label),stat = 'unique', hjust=0)+
+  geom_text(data = tangle %>% 
+              filter(tree=="microbe"),
+            aes(label=label),stat = 'unique', hjust=1)+
+    scale_color_manual(values=c("steelblue", "darkorange1"), name = "Significant") +
+    scale_x_discrete(expand = expansion(add=c(0.8,0.8))) + 
     theme_void() +
     theme(legend.position = "bottom")
 
-gg.triozid_tangle <- p2 + gg.tangle + (p1 + scale_x_reverse()) + plot_layout(widths = c(2, 1, 2))
+gg.triozid_tangle <- p2 + gg.tangle + (p1 + scale_x_reverse()) 
 gg.triozid_tangle
 
-pdf(file="figs/triozid_tanglegram.pdf",  width = 8, height = 11, paper="a4")
+pdf(file="figs/trioza_plant_tanglegram.pdf",  width = 8, height = 11, paper="a4")
   plot(gg.triozid_tangle)
 try(dev.off(), silent=TRUE)
 ```
 
-## Map of colleciton locations
+# Map of colleciton locations
 
 ```{r Collection map}
 #Plot on map to confirm points
@@ -2159,80 +2362,6 @@ pdf(file="figs/phylomap.pdf",  width = 15, height = 15, paper="a4r")
   plot(gg.phylomap)
 try(dev.off(), silent=TRUE)
 ```
-
-
-
-## Average dissimilarities
-
-Calculate Average dissimilarities between PCR replicates, biological replicates of the same species, hostplants, and different species on same hostplants
-
-Could just calculate the average dissimilarities across all, then look at the factors we are interested in, and do a statistical test between - Could actually do this way down in the beta diversity section
-
-Then could move everything up to beta diversity to the bioinformatics section, as its all technically bioinformatics not statistics
-
-```{r Avg Dissimiarity}
-# Calculate overall distance
-#Rarefy replicates to same read depth
-nspec <- specnumber(otu_table(ps1)) # observed number of species
-raremax <- min(rowSums(otu_table(ps1)))
-rare <- rrarefy(otu_table(ps1), raremax)
-
-dist <- vegan::vegdist(rare, method="bray") %>%
-  as.matrix()
-
-# Plot pca
-r.pcx <- prcomp(dist)
-factoextra::fviz_pca_biplot(r.pcx)
-
-# Reformat to Long format
-xy <- t(combn(colnames(dist), 2))
-pw <- data.frame(xy, dist = dist[xy]) %>%
-  set_colnames(c("SampleID.x", "SampleID.y", "dist")) %>%
-  left_join(samdf %>% 
-              dplyr::select(SampleID, Sample_Name, psyllid_spp, psyllid_genus, hostplant_spp, replicated) %>%
-              dplyr::rename(SampleID.x = SampleID), by="SampleID.x")%>%
-  left_join(samdf %>% 
-              dplyr::select(SampleID, Sample_Name, psyllid_spp, psyllid_genus, hostplant_spp, replicated) %>%
-              dplyr::rename(SampleID.y = SampleID), by="SampleID.y")
-
-
-# Distance between replicates of same sample
-repdist <- pw %>% filter(Sample_Name.x == Sample_Name.y)
-
-# Distance between samples of same species
-sppdist <- pw %>% filter(psyllid_spp.x == psyllid_spp.y)
-
-# Distance between psyllids on same hostplat
-#      psyllopsis fraxini 94- 107 - 113
-# psyllopsis fraxinicola 93 - 106 - 112
-# 93+94 were the same tree, 106+107 on the same tree and 112+113 were the same treee
-hostplantdist <- pw %>% filter(psyllid_spp.x == psyllid_spp.y)
-
-dist <- ps1 %>% 
-    subset_samples(Sample_Name %in%  c("93", "94","106", "107","112", "113")) %>%
-    filter_taxa(function(x) mean(x) > 0, TRUE) %>%
-    otu_table()  %>%
-    vegan::vegdist(method="jaccard")
-
-factoextra::fviz_pca(prcomp(dist))
-
-# Otther set
-#psylla apicalis 200 - 201
-#psylla frodobagginsi 200 - 201 #in this case they are named after their tree - ie 200 and 200 were same tree, i shoul drename thes ein some way
-
-dist2 <- ps1 %>% 
-    subset_samples(Sample_Name %in%  c("200", "94","106", "107","112", "113")) %>%
-    filter_taxa(function(x) mean(x) > 0, TRUE) %>%
-    otu_table()  %>%
-    vegan::vegdist(method="jaccard")
-
-# could i do some cluster analysis here?
-
-# Or is adonis besst
-#adonis(~ psyllid_spp, method = "euclidean", data = metadata))
-```
-
-
 
 ```{r session-info}
 # Display current R session information

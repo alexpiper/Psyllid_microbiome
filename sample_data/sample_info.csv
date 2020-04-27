@@ -13,7 +13,7 @@ NSW1C_S66,NSW1C,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Aci
 11A_S89,11A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia albizziae,Acacia sp.,"41°25'05.84""S 173°57'53.38""E",19/9/14
 11B_S90,11B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia jucunda,Acacia sp.,"41°25'05.84""S 173°57'53.38""E",19/9/14
 19B_S62,19B,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia albizziae,Acacia sp.,"41°15'27.81""S 172°49'21.79""E",24/9/14
-19VOUCHB_S18,19B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia albizziae,Acacia sp.,"41°15'27.81""S 172°49'21.79""E",24/9/14
+19VOUCHB_S18,19VOUCHB,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia albizziae,Acacia sp.,"41°15'27.81""S 172°49'21.79""E",24/9/14
 10_S10,10,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia dodonaeae,Dodonaea viscosa,"42°09'20.09""S 173°55'26.43""E",19/9/14
 13_S12,13,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia dodonaeae,Dodonaea viscosa,"41°18'20.94''S 173°17'03.14""E",21/9/14
 17_S15,17,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia dodonaeae,Dodonaea viscosa,"40°56'53.20""S 173°02'31.40""E",22/9/14
@@ -29,7 +29,7 @@ SI1_S178,SI1,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzi
 11a_S11,11A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia jucunda,Acacia sp.,"41°25'05.84""S 173°57'53.38""E",19/9/14
 19A_S61,19A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia jucunda,Acacia sp.,"41°15'27.81""S 172°49'21.79""E",24/9/14
 19a_S16,19A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia jucunda,Acacia sp.,"41°15'27.81""S 172°49'21.79""E",24/9/14
-19VOUCHA_S17,19A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia jucunda,Acacia sp.,"41°15'27.81""S 172°49'21.79""E",24/9/14
+19VOUCHA_S17,19VOUCHA,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia jucunda,Acacia sp.,"41°15'27.81""S 172°49'21.79""E",24/9/14
 19C_S63,19C,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia jucunda,Acacia sp.,"41°15'27.81""S 172°49'21.79""E",24/9/14
 116a_S95,116A,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia solanicola,Solanum tuberosum,"36°53'58.80""S 174°46'55.90""E",6/3/15
 116b_S96,116B,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Acizzia,Acizzia solanicola,Solanum tuberosum,"36°53'58.80""S 174°46'55.90""E",6/3/15
@@ -171,8 +171,8 @@ mockA_S51,mockA,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,,MOCK,MOCK,,,
 MockEven_S193,MockEven,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,,ND,ND,,,
 MockStaggered_S194,MockStaggered,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,,ND,ND,,,
 187_S146,187,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla apicalis,Sophora microphylla,"43°31'22.44""S 172°35'07.44""E",1/9/15
-200big_S149,200,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla apicalis,Sophora microphylla,"45°05'13.47""S 170°58'31.85""E",2/11/15
-201big_S151,201,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla apicalis,Sophora microphylla,"46°24'57.20""S 168°21'45.70""E",8/11/15
+200big_S149,200big,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla apicalis,Sophora microphylla,"45°05'13.47""S 170°58'31.85""E",2/11/15
+201big_S151,201big,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla apicalis,Sophora microphylla,"46°24'57.20""S 168°21'45.70""E",8/11/15
 206_S153,206,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla apicalis,Sophora microphylla,"45°02'12.80""S 168°39'38.30""E",9/11/15
 26_S25,26,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla carmichaeliae A,Carmichaelia sp.,"43°39'14.80""S 172°48'44.20""E",14/9/14
 22A_S91,22A,1,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla carmichaeliae A,Carmichaelia sp.,"43°46'42.50""S 172°47'10.90""E",14/9/14
@@ -183,8 +183,8 @@ MockStaggered_S194,MockStaggered,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni
 213_S157,213,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla carmichaeliae E,Carmichaelia petri,"45°02'03.10""S 169°11'59.10""E",9/11/15
 217_S158,217,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla carmichaeliae E,Carmichaelia petri,"44°58'29.00""S 168°56'54.80""E",10/11/15
 55_S52,55,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla frodobagginsi,Sophora microphylla,"43°38'23.40""S 172°28'31.30""E",30/11/14
-200small_S150,200,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla frodobagginsi,Sophora microphylla,"45°05'13.47""S 170°58'31.85""E",2/11/15
-201small_S152,201,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla frodobagginsi,Sophora microphylla,"46°24'57.20""S 168°21'45.70""E",8/11/15
+200small_S150,200small,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla frodobagginsi,Sophora microphylla,"45°05'13.47""S 170°58'31.85""E",2/11/15
+201small_S152,201small,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla frodobagginsi,Sophora microphylla,"46°24'57.20""S 168°21'45.70""E",8/11/15
 209_S155,209,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla frodobagginsi,Sophora microphylla,"45°02'09.70""S 169°11'33.80""E",9/11/15
 238_S166,238,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Psyllidae,Psylla,Psylla frodobagginsi,Sophora microphylla (Kowhai),"41°15'29.40""S 172°07'00.80""E",12/11/15
 94_S80,94,2,16S_F,16S_R,25,55,KAPA 3G,NZ Psyllids/Martoni F.,Liviidae,Psyllopsis,Psyllopsis fraxini,Fraxinus excelsior,"46°24'07.73""S 168°21'23.71""E",26/2/15

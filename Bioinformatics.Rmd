@@ -39,7 +39,8 @@ opts_chunk$set(dev = 'png')
                     "viridis", 
                     "ape", 
                     "data.table",
-                    "RColorBrewer")
+                    "RColorBrewer",
+                    "vegan")
 .bioc_packages <- c("dada2",
                     "phyloseq", 
                     "DECIPHER",
@@ -456,7 +457,7 @@ seqs <- DNAStringSet(rownames(seqtab))
 names(seqs) <- seqs
 samdf <- read_csv("sample_data/Sample_info2.csv") %>%
   as.data.frame(stringsAsFactors=FALSE) %>%
-  magrittr::set_rownames(.$SampleID) #Collection
+  magrittr::set_rownames(.$SampleID) 
 
 # Make phyloseq object
 ps <- phyloseq(tax_table(tax),
