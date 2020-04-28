@@ -73,8 +73,8 @@ devtools::install_github("mikemc/speedyseq")
 library(speedyseq)
 devtools::install_github('ggloor/CoDaSeq/CoDaSeq')
 library(CoDaSeq)
-devtools::install_github('ms609/TreeDist')
-library(TreeDist)
+devtools::install_github("easystats/report")
+library(report)
 
 #Source internal functions
 source('R/BDTT.R')
@@ -209,7 +209,7 @@ tax_table(ps2) %>%
 
 # Unique taxa at each rank
 speedyseq::psmelt(ps2) %>%
-  select(rank_names(ps2)) %>%
+  dplyr::select(rank_names(ps2)) %>%
   pivot_longer(everything(),
                names_to = "Rank",
                values_to = "value") %>%
@@ -1050,6 +1050,18 @@ Due to the higher correlations with recent branches, we looked for patterns of c
 ## Psyllid ~ Microbe
 
 ```{r PACO}
+# Test filtered
+
+filterfun1 <- function(x){
+  x[(x / sum(x)) < (1e-4)] <- 0
+  return(x)
+}
+ps3_filt  <- transform_sample_counts(ps3, fun = filterfun1)%>%
+  filter_taxa(function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
+
+print(paste0((ntaxa(ps3)-ntaxa(ps3_filt)), " taxa under threshold removed"))
+
+
 #Prepare co-occurance matrix
 coocur <- ps3 %>%
     subset_samples(!psyllid_spp == "Atmetocranium_myersi") %>%
@@ -1753,8 +1765,6 @@ plot(p_host + p_para)
 # run paco
 paco_run <- PACo(D, nperm=9, seed=909, method='quasiswap', symmetric=TRUE) #Symetric - is one meant to track the evolution of another?
 
-# run paco
-#paco_run <- PACo(D, nperm=999, seed=909, method='quasiswap', symmetric=TRUE) #Symetric - is one meant to track the evolution of another?
 # Get interaction-specific cophylogenetic contributions using jacknifing
 ##paco_run <- paco_links(paco_run)
 
