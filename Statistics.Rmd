@@ -42,7 +42,8 @@ opts_chunk$set(dev = 'png')
                     "phylosignal", 
                     "adephylo",
                     "paco",
-                    "phytools")
+                    "phytools",
+                    "ecodist")
 .bioc_packages <- c("dada2",
                     "phyloseq", 
                     "DECIPHER",
@@ -466,15 +467,27 @@ write_csv(lipa_out_rare, "output/alpha/lipa_rarefied.csv")
 
 # Beta diversity
 
-## Adonis
+## Microbe distances
+```{r distlist}
+# Test filtered
+filterfun1 <- function(x){
+  x[(x / sum(x)) < (1e-4)] <- 0
+  return(x)
+}
+ps2_filt  <- transform_sample_counts(ps2, fun = filterfun1) %>%
+  filter_taxa(function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
 
-```{r beta}
+print(paste0((ntaxa(ps2)-ntaxa(ps2_filt)), " taxa under threshold removed"))
+
+#ps2_dist <- ps2
+ps2_dist <- ps2_filt
+
 # Get OTU tables
-otutab <- otu_table(ps2)
+otutab <- otu_table(ps2_dist)
 #Impute zeroes for compositional distances
 otutab_n0 <- as.matrix(zCompositions::cmultRepl(otutab, method="BL", output="p-counts"))
 #Root phylogenetic tree
-phy_tree(ps2) <- multi2di(phy_tree(ps2))
+phy_tree(ps2_dist) <- multi2di(phy_tree(ps2_dist))
 
 #Calculate different distance metrics
 metrics <- c("Bray", "Jaccard", "Aitchison", "Unifrac", "WUnifrac")  #"Philr",
@@ -487,9 +500,15 @@ distlist$Aitchison <- as.matrix(vegdist(CoDaSeq::codaSeq.clr(otutab_n0), method=
 #distlist$Philr <- as.matrix(vegdist(philr::philr(otutab_n0, phy_tree(ps2),
 #                                                part.weights='enorm.x.gm.counts',
 #                                                ilr.weights='blw.sqrt'), method="euclidean"))
-distlist$Unifrac <- as.matrix(phyloseq::UniFrac(ps2, weighted=FALSE, parallel = TRUE))
-distlist$WUnifrac <- as.matrix(phyloseq::UniFrac(ps2, weighted=TRUE, parallel = TRUE))
+distlist$Unifrac <- as.matrix(phyloseq::UniFrac(ps2_dist, weighted=FALSE, parallel = TRUE))
+distlist$WUnifrac <- as.matrix(phyloseq::UniFrac(ps2_dist, weighted=TRUE, parallel = TRUE))
 
+```
+
+
+## Adonis
+
+```{r Adonis}
 # Adonis test
 metadata <- sample_data(ps2) %>%
   as_data_frame()
@@ -711,7 +730,7 @@ mantel_results <- distlist %>%
   }) %>%
   bind_rows(.id="dist") 
 
-write_csv(mantel_results %>% dplyr::select(-pval1,-pval2), "output/phylosymbiosis/mantel_fulldata.csv")
+write_csv(mantel_results %>% dplyr::select(-pval1,-pval2),  "output/phylosymbiosis/mantel_fulldata.csv")#only keep two sided P values
 
 # Partial Mantel Test
 pmantel_results <- distlist %>%
@@ -1050,17 +1069,6 @@ Due to the higher correlations with recent branches, we looked for patterns of c
 ## Psyllid ~ Microbe
 
 ```{r PACO}
-## Test filtered
-#
-#filterfun1 <- function(x){
-#  x[(x / sum(x)) < (1e-4)] <- 0
-#  return(x)
-#}
-#ps3_filt  <- transform_sample_counts(ps3, fun = filterf'un1)%>%
-#  filter_taxa(function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
-#
-#print(paste0((ntaxa(ps3)-ntaxa(ps3_filt)), " taxa under threshold removed"))
-
 #Prepare co-occurance matrix
 coocur <- ps3 %>%
     subset_samples(!psyllid_spp == "Atmetocranium_myersi") %>%
