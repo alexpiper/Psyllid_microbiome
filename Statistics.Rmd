@@ -410,7 +410,7 @@ sespd_rare <- picante::ses.pd(as(phyloseq::otu_table(ps2_rare), "matrix"),  phyl
 # Join together
 div_table_rare <- sespd_rare %>%
   rownames_to_column("Sample_Name") %>%
-  dplyr::select(Sample_Name, ntaxa, pd.obs.z) %>%
+  dplyr::select(Sample_Name, ntaxa, pd.obs) %>%
   dplyr::rename(pd = pd.obs, alpha = ntaxa) %>%
   left_join(richness_rare, by="Sample_Name") %>%
   left_join(sample_data(ps2) %>% 
@@ -445,12 +445,12 @@ signal_rare <- phylosignal::phyloSignal(p4d = p4d, methods = c("I", "Lambda", "K
 
 # print phylogenetic signal
 signal_rare
-write_csv(signal_rare, "output/phylosymbiosis/alpha/phylosignal_rarefied.csv")
+write_csv(signal_rare, "output/alpha/phylosignal_rarefied.csv")
 
 # Locate signal
+lipa <- lipaMoran(p4d, reps=999)
 lipa.p4d <- lipaMoran(p4d, as.p4d = TRUE, reps=999)
 barplot.phylo4d(lipa.p4d, bar.col = (lipa$p.value < 0.05) + 1, center = FALSE, scale = FALSE) + title("Rarefied")
-
 
 #write out lipa
 lipa_out_rare <- cbind(lipa$lipa %>%
@@ -1050,17 +1050,16 @@ Due to the higher correlations with recent branches, we looked for patterns of c
 ## Psyllid ~ Microbe
 
 ```{r PACO}
-# Test filtered
-
-filterfun1 <- function(x){
-  x[(x / sum(x)) < (1e-4)] <- 0
-  return(x)
-}
-ps3_filt  <- transform_sample_counts(ps3, fun = filterfun1)%>%
-  filter_taxa(function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
-
-print(paste0((ntaxa(ps3)-ntaxa(ps3_filt)), " taxa under threshold removed"))
-
+## Test filtered
+#
+#filterfun1 <- function(x){
+#  x[(x / sum(x)) < (1e-4)] <- 0
+#  return(x)
+#}
+#ps3_filt  <- transform_sample_counts(ps3, fun = filterf'un1)%>%
+#  filter_taxa(function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
+#
+#print(paste0((ntaxa(ps3)-ntaxa(ps3_filt)), " taxa under threshold removed"))
 
 #Prepare co-occurance matrix
 coocur <- ps3 %>%
@@ -1097,10 +1096,6 @@ D <- prepare_paco_data(H=h_dist, P=s_dist, HP=coocur)
 # Add pcord
 D <- add_pcoord(D, correction='none')
 
-# plot Principal coordinates
-#D$H_PCo <-  neg_to_pos_eig(D$H_PCo)
-#D$P_PCo <-  neg_to_pos_eig(D$P_PCo)
-
 p_host <- ggplot(D$H_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, Axis.2)) +
     geom_point() +
     theme_bw() +
@@ -1118,7 +1113,8 @@ plot(p_host + p_para)
 # Get interaction-specific cophylogenetic contributions using jacknifing
 ##paco_run <- paco_links(paco_run)
 
-paco_run <- readRDS("output/cophylogeny/psyllid_microbiome/paco_run_microbiome.rds")
+#Read filtered
+paco_run <- readRDS("paco_psyllid_microbe_filtered.rds")
 
 #print overall significance
 print(paco_run$gof)
@@ -1190,7 +1186,9 @@ weights_p1 <- p1$data %>%
 weights_p1 <- weights_p1 %>%
   left_join(data.frame(node=weights_p1$node, links = weights_p1$node %>% purrr::map_dbl(average_descendants, tree=tree1, df=weights_p1)))
 
-p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=links)) +  scale_color_gradient(low="steelblue", high="darkorange1")
+p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=links)) +
+  scale_color_gradient(low="steelblue", high="darkorange1") +
+  theme(legend.position = "none")
 
 # OTU tree
 tree2 <- obj[["trees"]][[2]]
@@ -1225,7 +1223,9 @@ weights_p2 <- p2$data %>%
 weights_p2 <- weights_p2 %>%
   left_join(data.frame(node=weights_p2$node, links = weights_p2$node %>% purrr::map_dbl(average_descendants, tree=tree2, df=weights_p2)))
 
-p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=links)) +  scale_color_gradient(low="steelblue", high="darkorange1")
+p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=links)) +  
+  scale_color_gradient(low="steelblue", high="darkorange1") +
+  theme(legend.position = "none")
 
 # Tanglegram
 dd <- obj$assoc %>%
@@ -1252,15 +1252,15 @@ tangle <- bind_rows(d1_new, d2_new) %>%
   group_by(tree) %>%
   mutate(y = y / max(y)) %>%
   ungroup
-gg.tangle <- ggplot(tangle, aes(x=tree, y=y, group=assoc, colour=as.factor(signif))) +
-    geom_line(alpha=0.1) +  
+
+gg.tangle <- ggplot(tangle, aes(x=tree, y=y, colour=signif)) +
+    geom_line(aes(group=assoc),alpha=0.1) +  
   geom_text(data = tangle %>% 
-              filter(tree=="host", !duplicated(y)),
+              dplyr::filter(tree=="host") %>%
+              group_by(label, y, tree) %>%
+              summarise(signif = mean(signif)),
             aes(label=label),stat = 'unique', hjust=1)+
-  #geom_text(data = tangle %>% 
-  #            filter(tree=="microbe", !duplicated(y)),
-  #          aes(label=label),stat = 'unique', hjust=0)+
-    scale_color_manual(values=c("steelblue", "darkorange1")) +
+    scale_colour_gradient(low="steelblue", high="darkorange1") +
     scale_x_discrete(expand = expansion(add=c(0.5,0))) + 
     theme_void() +
     theme(legend.position = "bottom")
@@ -1274,6 +1274,7 @@ try(dev.off(), silent=TRUE)
   
 # Make plot ranking links, and nodes
 gg.hlinks <- d1_new %>%
+  drop_na() %>%
   group_by(label) %>%
   summarise(values = sum(signif)) %>%
   mutate(label = as.factor(label),
@@ -1289,6 +1290,7 @@ gg.hlinks <- d1_new %>%
   
 gg.slinks <- d2_new %>%
   left_join(tax_groups) %>%
+  drop_na() %>%
   group_by(genus) %>%
   summarise(values = sum(signif)) %>%
   dplyr::rename(label = genus) %>%
@@ -1386,7 +1388,8 @@ print(paco_run$gof)
 
 paco_run <- paco_links(paco_run)
 links <- data.frame(joint=names(paco_run$jackknife$mean), #losing sv50 here?
-                    values=unname(paco_run$jackknife$mean), upper=unname(paco_run$jackknife$upper)) %>%
+                    values=unname(paco_run$jackknife$mean),
+                    upper=unname(paco_run$jackknife$upper)) %>%
   mutate(OTU = joint) %>%
  separate(OTU, into=c("Sample_Name", "OTU"), sep="-", extra="merge") %>%
   mutate(signif = case_when(
@@ -1727,7 +1730,7 @@ coocur <- ps3 %>%
 
 colnames(coocur) <- colnames(coocur) %>%
            str_replace_all(" |-", "_")
-rownames(coocur) <- rownames(coocur) %>%
+rownames(coocur) <- rownames(coocur) %>% 
            str_replace_all(" |-", "_")
 
 # H cophenetic distance
@@ -1768,6 +1771,9 @@ paco_run <- PACo(D, nperm=9, seed=909, method='quasiswap', symmetric=TRUE) #Syme
 # Get interaction-specific cophylogenetic contributions using jacknifing
 ##paco_run <- paco_links(paco_run)
 
+# Read in filtered
+paco_run <- readRDS("paco_trioza_microbe_filtered.rds")
+
 #print overall significance
 print(paco_run$gof)
 
@@ -1779,7 +1785,7 @@ links <- data.frame(joint=names(paco_run$jackknife$mean), values=unname(paco_run
     upper > mean(.$values) ~ 0
   ))
 # Plot links
-gg.links <- links %>%
+links %>%
   dplyr::rename(label = joint) %>%
   mutate(label = as.factor(label),
          label=fct_reorder(label, values, sum))%>%
@@ -1815,8 +1821,6 @@ ggplot(res, aes(x=values))+
   xlab('Procrustes residuals')+
   ylab('Frequency')
 
-links <- res
-
 # Cophyloplot
 coocur.lut <- which(coocur ==1, arr.ind=TRUE)
 assoc <- cbind(rownames(coocur)[coocur.lut[,1]], colnames(coocur)[coocur.lut[,2]])
@@ -1828,9 +1832,9 @@ obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=FALSE)
 # Extract the goods for ggtree
 # psyllid_tree
 tree1 <- obj[["trees"]][[1]]
-p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links)) + geom_tiplab()
+p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links))
 weights_p1 <- p1$data %>%
-  left_join(res %>%
+  left_join(links %>%
   group_by(Sample_Name) %>%
   summarise(values = mean(signif)) %>%
     dplyr::rename(label = Sample_Name)
@@ -1840,7 +1844,9 @@ weights_p1 <- p1$data %>%
 weights_p1 <- weights_p1 %>%
   left_join(data.frame(node=weights_p1$node, links = weights_p1$node %>% purrr::map_dbl(average_descendants, tree=tree1, df=weights_p1)))
 
-p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=links)) +  scale_color_gradient(low="steelblue", high="darkorange1")
+p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=links)) +
+  scale_color_gradient(low="steelblue", high="darkorange1") +
+    theme(legend.position = "none")
 
 # OTU tree
 tree2 <- obj[["trees"]][[2]]
@@ -1864,24 +1870,27 @@ cls <- tax_groups %>%
 
 newtree <- groupOTU(tree2, cls)
 p2 <- ggtree(newtree, ladderize=TRUE, aes(colour=links)) + 
-  geom_text2(aes(subset=!isTip, label=group), hjust=0, check_overlap=TRUE)
+  geom_text2(aes(subset=!isTip, label=group %>% na_if(0)), hjust=0, check_overlap=TRUE)
 weights_p2 <- p2$data %>%
-  left_join(res %>% 
+  left_join(links %>% 
     group_by(OTU) %>%
     summarise(values = mean(signif)) %>%
     dplyr::rename(label = OTU)
     ) 
 
 weights_p2 <- weights_p2 %>%
-  left_join(data.frame(node=weights_p2$node, links = weights_p2$node %>% purrr::map_dbl(average_descendants, tree=tree1, df=weights_p2)))
+  left_join(data.frame(node=weights_p2$node, links = weights_p2$node %>% purrr::map_dbl(average_descendants, tree=tree2, df=weights_p2)))
 
-p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=links)) +  scale_color_gradient(low="steelblue", high="darkorange1")
+p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=links)) +  
+  scale_color_gradient(low="steelblue", high="darkorange1") +
+  theme(legend.position = "none")
+
 
 # Tanglegram
 dd <- obj$assoc %>%
   as_data_frame() %>%
   magrittr::set_colnames(c("label.x", "label.y")) %>%
-  left_join(res %>% 
+  left_join(links %>% 
               dplyr::rename(label.x = Sample_Name, label.y = OTU)) %>%
   left_join(p1$data %>% dplyr::select(label, y) %>% dplyr::rename(label.x = label), by="label.x") %>%
   left_join(p2$data %>% dplyr::select(label, y) %>% dplyr::rename(label.y = label), by="label.y") %>%
@@ -1902,16 +1911,16 @@ tangle <- bind_rows(d1_new, d2_new) %>%
   group_by(tree) %>%
   mutate(y = y / max(y)) %>%
   ungroup
-gg.tangle <- ggplot(tangle, aes(x=tree), y=y, group=assoc, colour=as.factor(signif)) +
-    geom_line(alpha=0.8) +  
+
+gg.tangle <- ggplot(tangle, aes(x=tree, y=y, colour=signif)) +
+    geom_line(aes(group=assoc),alpha=0.1) +  
   geom_text(data = tangle %>% 
-              filter(tree=="host"),
+              dplyr::filter(tree=="host") %>%
+              group_by(label, y, tree) %>%
+              summarise(signif = mean(signif)),
             aes(label=label),stat = 'unique', hjust=1)+
-  geom_text(data = tangle %>% 
-              filter(tree=="microbe"),
-            aes(label=label),stat = 'unique', hjust=0)+
-    scale_color_manual(values=c("steelblue", "darkorange1"), name = "Significant") +
-    scale_x_discrete(expand = expansion(add=c(0.8,0.8))) + 
+    scale_colour_gradient(low="steelblue", high="darkorange1") +
+    scale_x_discrete(expand = expansion(add=c(0.5,0))) + 
     theme_void() +
     theme(legend.position = "bottom")
 
