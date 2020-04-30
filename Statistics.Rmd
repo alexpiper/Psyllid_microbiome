@@ -506,7 +506,7 @@ distlist$WUnifrac <- as.matrix(phyloseq::UniFrac(ps2_dist, weighted=TRUE, parall
 ```
 
 
-## Adonis
+## Adonis & Betadisper
 
 ```{r Adonis}
 # Adonis test
@@ -521,8 +521,24 @@ adonis_results <- distlist %>%
 })  %>%
   bind_rows(.id="dist")
 
+# Check homogeneity
+betadisper_results <- distlist %>%
+  purrr::map(function(x) {
+    y <- as.dist(x[metadata$Sample_Name, metadata$Sample_Name])
+  bind_rows(
+    broom::tidy(anova(vegan::betadisper(y, metadata$psyllid_spp))) %>%
+      dplyr::slice(1) %>% 
+      mutate(term="psyllid_spp"),
+    broom::tidy(anova(vegan::betadisper(y, metadata$hostplant_spp))) %>%
+      dplyr::slice(1) %>% 
+      mutate(term="hostplant_spp"),
+  )
+})  %>%
+  bind_rows(.id="dist")
+
 dir.create("output/beta")
 write_csv(adonis_results, "output/beta/adonis_fulldata.csv")
+write_csv(betadisper_results, "output/beta/adonis_fulldata.csv")
 ```
 
 ## Same tree dissimilarities
@@ -1084,7 +1100,8 @@ rownames(coocur) <- rownames(coocur) %>%
 pruned.tree2 <- drop.tip(pruned.tree, "Atmetocranium_myersi" )
 
 # H cophenetic distance
-h_tree <- pruned.tree2
+#h_tree <- pruned.tree2
+h_tree <- pruned.tree
 h_tree$tip.label <- h_tree$tip.label %>%
            str_replace_all(" |-", "_")
 h_tree <- drop.tip(h_tree, setdiff(h_tree$tip.label, rownames(coocur)))
@@ -1117,20 +1134,18 @@ p_para <- ggplot(D$P_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, 
 plot(p_host + p_para)
 
 # run paco
-#paco_run <- PACo(D, nperm=999, seed=909, method='quasiswap', symmetric=TRUE) #Symetric - is one meant to track the evolution of another?
+paco_run <- PACo(D, nperm=9, seed=909, method='quasiswap', symmetric=TRUE) #Symetric - is one meant to track the evolution of another?
 # Get interaction-specific cophylogenetic contributions using jacknifing
 ##paco_run <- paco_links(paco_run)
 
 #Read filtered
 paco_run <- readRDS("paco_psyllid_microbe_filtered.rds")
 
+# Parafit
+PF_run <- parafit(h_dist, s_dist, coocur, nperm=99, test.links=FALSE, silent=TRUE)
+
 #print overall significance
 print(paco_run$gof)
-
-# Parafit
-#Test paragit
-PF <- parafit(h_dist, s_dist, coocur, nperm=99, test.links=FALSE, silent=TRUE)
-
 
 links <- data.frame(joint=names(paco_run$jackknife$mean), values=unname(paco_run$jackknife$mean), upper=unname(paco_run$jackknife$upper)) %>%
   mutate(OTU = joint) %>%
@@ -1324,6 +1339,7 @@ gg.hlinks + gg.slinks
 pdf(file="figs/microbiome_fit_summary.pdf",  width = 8, height = 11, paper="a4")
   plot(gg.hlinks + gg.slinks)
 try(dev.off(), silent=TRUE)
+  
 ```
 
 ## Psyllid ~ Carsonella 
@@ -1398,7 +1414,6 @@ paco_run <- PACo(D, nperm=99, seed=909, method='quasiswap', symmetric=TRUE)
 print(paco_run$gof)
 
 # Get interaction-specific cophylogenetic contributions using jacknifing
-
 paco_run <- paco_links(paco_run)
 links <- data.frame(joint=names(paco_run$jackknife$mean), #losing sv50 here?
                     values=unname(paco_run$jackknife$mean),
@@ -1443,6 +1458,19 @@ ggplot(res, aes(x=values))+
   theme_bw()+
   xlab('Procrustes residuals')+
   ylab('Frequency')
+
+# Parafit run
+PF_run <- parafit(h_dist, s_dist, t(coocur), nperm=99, test.links=TRUE, silent=TRUE)
+PF_run$ParaFitGlobal
+PF_run$p.global
+
+PF_links <- as.data.frame(PF_run$link.table) %>%
+  left_join(as.data.frame(rownames(h_dist)) %>%
+              rownames_to_column("Host") %>%
+              mutate(Host = as.numeric(Host))) %>%
+  left_join(as.data.frame(rownames(s_dist)) %>%
+              rownames_to_column("Parasite") %>%
+              mutate(Parasite = as.numeric(Parasite)))
 
 # Cophyloplot
 coocur.lut <- which(coocur ==1, arr.ind=TRUE)
