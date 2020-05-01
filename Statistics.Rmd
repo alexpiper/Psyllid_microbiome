@@ -1,5 +1,6 @@
 ---
-title: "Psyllid microbiome - Statistics"
+title: "Psyllid microbiome"
+subtitle: "Statistical analysis"
 author: "Alexander Piper"
 date: "`r Sys.Date()`"
 output:
@@ -26,7 +27,7 @@ opts_chunk$set(dev = 'png')
 
 # Load packages 
 
-```{r install & Load packages} 
+```{r Load packages, eval=TRUE, warning=FALSE, message=FALSE, error=FALSE}
 #Set required packages
 .cran_packages <- c("tidyverse", 
                     "patchwork", 
@@ -72,7 +73,7 @@ devtools::install_github("alexpiper/seqateurs")
 library(seqateurs)
 devtools::install_github("mikemc/speedyseq")
 library(speedyseq)
-devtools::install_github('ggloor/CoDaSeq/CoDaSeq')
+#devtools::install_github('ggloor/CoDaSeq/CoDaSeq')
 library(CoDaSeq)
 devtools::install_github("easystats/report")
 library(report)
@@ -2666,7 +2667,8 @@ pdf(file="figs/phylomap.pdf",  width = 15, height = 15, paper="a4r")
 try(dev.off(), silent=TRUE)
 ```
 
-```{r session-info}
-# Display current R session information
-sessionInfo()
+# Sessioninfo
+
+```{r sessioninfo, eval=TRUE}
+devtools::session_info()
 ```
