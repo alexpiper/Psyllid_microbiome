@@ -38,7 +38,7 @@ opts_chunk$set(dev = 'png')
                     "RColorBrewer",
                     "ggtree", 
                     "castor", 
-                    "picante", 
+                    "picante",
                     "phylosignal", 
                     "adephylo",
                     "paco",
@@ -155,6 +155,7 @@ psyllid_tree$tip.label <- psyllid_tree$tip.label %>%
 # Subset to only those in sample data
 psyllid_tree$tip.label[!psyllid_tree$tip.label %in% sample_data(ps2)$psyllid_spp]
 pruned.tree <- drop.tip(psyllid_tree, psyllid_tree$tip.label[!psyllid_tree$tip.label %in% sample_data(ps2)$psyllid_spp] )
+
 ```
 
 
@@ -526,15 +527,19 @@ betadisper_results <- distlist %>%
   purrr::map(function(x) {
     y <- as.dist(x[metadata$Sample_Name, metadata$Sample_Name])
   bind_rows(
-    broom::tidy(anova(vegan::betadisper(y, metadata$psyllid_spp))) %>%
+    as.data.frame(permutest(vegan::betadisper(y, metadata$psyllid_spp))$tab) %>%
       dplyr::slice(1) %>% 
       mutate(term="psyllid_spp"),
-    broom::tidy(anova(vegan::betadisper(y, metadata$hostplant_spp))) %>%
+    as.data.frame(permutest(vegan::betadisper(y, metadata$hostplant_spp))$tab) %>%
       dplyr::slice(1) %>% 
       mutate(term="hostplant_spp"),
   )
 })  %>%
   bind_rows(.id="dist")
+
+  y <- as.dist(distlist[["Aitchison"]][metadata$Sample_Name, metadata$Sample_Name])
+
+test <- permutest(vegan::betadisper(y, metadata$psyllid_spp))
 
 dir.create("output/beta")
 write_csv(adonis_results, "output/beta/adonis_fulldata.csv")
@@ -1087,7 +1092,7 @@ Due to the higher correlations with recent branches, we looked for patterns of c
 ```{r PACO}
 #Prepare co-occurance matrix
 coocur <- ps3 %>%
-    subset_samples(!psyllid_spp == "Atmetocranium_myersi") %>%
+    #subset_samples(!psyllid_spp == "Atmetocranium_myersi") %>%
     otu_table %>%
     as.matrix() %>% 
   apply(2, function(x) ifelse(x > 0, 1, 0))
@@ -1097,10 +1102,7 @@ colnames(coocur) <- colnames(coocur) %>%
 rownames(coocur) <- rownames(coocur) %>%
            str_replace_all(" |-", "_")
 
-pruned.tree2 <- drop.tip(pruned.tree, "Atmetocranium_myersi" )
-
 # H cophenetic distance
-#h_tree <- pruned.tree2
 h_tree <- pruned.tree
 h_tree$tip.label <- h_tree$tip.label %>%
            str_replace_all(" |-", "_")
@@ -1133,17 +1135,17 @@ p_para <- ggplot(D$P_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, 
     
 plot(p_host + p_para)
 
+
 # run paco
-paco_run <- PACo(D, nperm=9, seed=909, method='quasiswap', symmetric=TRUE) #Symetric - is one meant to track the evolution of another?
+#paco_run <- PACo(D, nperm=9, seed=909, method='quasiswap', symmetric=TRUE) 
 # Get interaction-specific cophylogenetic contributions using jacknifing
 ##paco_run <- paco_links(paco_run)
+#write_rds(paco_run, "output/cophylogeny/paco_psyllid_microbe_filtered.rds")
 
-#Read filtered
-paco_run <- readRDS("paco_psyllid_microbe_filtered.rds")
-
-# Parafit
-PF_run <- parafit(h_dist, s_dist, coocur, nperm=99, test.links=FALSE, silent=TRUE)
-
+# Read in filtered 
+paco_run <- readRDS("output/cophylogeny/paco_psyllid_microbe_filtered.rds")
+# Read in unfiltered 
+#paco_run <- readRDS("output/cophylogeny/paco_psyllid_microbe.rds")
 #print overall significance
 print(paco_run$gof)
 
@@ -1191,13 +1193,27 @@ ggplot(res, aes(x=values))+
   xlab('Procrustes residuals')+
   ylab('Frequency')
 
+# Parafit run
+#PF_run <- parafit(h_dist, s_dist, t(coocur), nperm=99, test.links=TRUE, silent=TRUE)
+
+
+PF_run$ParaFitGlobal
+PF_run$p.global
+
+PF_links <- as.data.frame(PF_run$link.table) %>%
+  left_join(as.data.frame(rownames(h_dist)) %>%
+              rownames_to_column("Host") %>%
+              mutate(Host = as.numeric(Host))) %>%
+  left_join(as.data.frame(rownames(s_dist)) %>%
+              rownames_to_column("Parasite") %>%
+              mutate(Parasite = as.numeric(Parasite)))
+
 # Cophyloplot
 coocur.lut <- which(coocur ==1, arr.ind=TRUE)
 assoc <- cbind(rownames(coocur)[coocur.lut[,1]], colnames(coocur)[coocur.lut[,2]])
 
 # Rotate the nodes using phytools
-library(phytools)
-obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=FALSE) 
+obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=TRUE) 
 
 # Extract the goods for ggtree
 # psyllid_tree
@@ -1239,7 +1255,7 @@ cls <- tax_groups %>%
   set_names(group_name$group_name)
 
 newtree <- groupOTU(tree2, cls)
-p2 <- ggtree(newtree, ladderize=TRUE, aes(colour=links)) + 
+p2 <- ggtree(newtree, ladderize=FALSE, aes(colour=links)) + 
   geom_text2(aes(subset=!isTip, label=group %>% na_if(0)), hjust=0, check_overlap=TRUE)
 weights_p2 <- p2$data %>%
   left_join(links %>% 
@@ -1300,8 +1316,14 @@ pdf(file="figs/microbiome_tanglegram.pdf",  width = 8, height = 11, paper="a4")
   plot(whole_tanglegram)
 try(dev.off(), silent=TRUE)
   
-# Make plot ranking links, and nodes
-gg.hlinks <- d1_new %>%
+ # Make plot ranking links, and nodes
+
+gg.para_hlinks <- PF_links %>%
+  dplyr::rename(label = psyllid_spp) %>%
+  mutate(signif = case_when(
+    p.F1 < 0.05 ~ 1,
+    p.F1 > 0.05 ~ 0
+  )) %>%
   drop_na() %>%
   group_by(label) %>%
   summarise(values = sum(signif)) %>%
@@ -1312,11 +1334,46 @@ gg.hlinks <- d1_new %>%
   geom_col(show.legend = FALSE) +  
   scale_fill_gradient(low="steelblue", high="darkorange1") +
   theme_classic()+ 
-  #theme(axis.text.x = element_text(angle=45, hjust=1)) +
-  labs(y = "# Signficant links", x=NULL, title ="Psyllid taxa") + 
+  labs(y = "# Signficant links", x=NULL, title ="ParaFit Psyllid taxa") + 
+  coord_flip()
+
+gg.paco_hlinks <- d1_new %>%
+  drop_na() %>%
+  group_by(label) %>%
+  summarise(values = sum(signif)) %>%
+  mutate(label = as.factor(label),
+         label=fct_reorder(label, values, sum ))%>%
+  arrange(-values) %>%
+  ggplot(aes(x=label, y=values, fill=values)) +
+  geom_col(show.legend = FALSE) +  
+  scale_fill_gradient(low="steelblue", high="darkorange1") +
+  theme_classic()+ 
+  labs(y = "# Signficant links", x=NULL, title ="PACo Psyllid taxa") + 
+  coord_flip()
+
+gg.para_slinks <- PF_links %>%
+  dplyr::rename(label = OTU) %>%
+  mutate(signif = case_when(
+    p.F1 < 0.05 ~ 1,
+    p.F1 > 0.05 ~ 0
+  )) %>%
+  left_join(tax_groups) %>%
+  drop_na() %>%
+  group_by(genus) %>%
+  summarise(values = sum(signif)) %>%
+  dplyr::rename(label = genus) %>%
+  mutate(label = as.factor(label),
+         label=fct_reorder(label, values, sum ))%>%
+  arrange(-values) %>%
+    top_frac(.5) %>%
+  ggplot(aes(x=label, y=values, fill=values)) +
+  geom_col(show.legend = FALSE) +  
+  scale_fill_gradient(low="steelblue", high="darkorange1") +
+  theme_classic()+ 
+  labs(y = "# Signficant links", x=NULL, title ="ParaFit Top 50% Bacterial genera") + 
   coord_flip()
   
-gg.slinks <- d2_new %>%
+gg.paco_slinks <- d2_new %>%
   left_join(tax_groups) %>%
   drop_na() %>%
   group_by(genus) %>%
@@ -1331,13 +1388,19 @@ gg.slinks <- d2_new %>%
   scale_fill_gradient(low="steelblue", high="darkorange1") +
   theme_classic()+ 
   #theme(axis.text.x = element_text(angle=45, hjust=1)) +
-  labs(y = "# Signficant links", x=NULL, title = "Top 50% Bacterial genera") + 
+  labs(y = "# Signficant links", x=NULL, title = "PACo Top 50% Bacterial genera") + 
   coord_flip()
 
-gg.hlinks + gg.slinks
+gg.trioza_hlinks <- gg.para_hlinks + gg.paco_hlinks 
 
-pdf(file="figs/microbiome_fit_summary.pdf",  width = 8, height = 11, paper="a4")
-  plot(gg.hlinks + gg.slinks)
+gg.trioza_slinks <- gg.para_slinks + gg.paco_slinks
+
+pdf(file="figs/psyllid_microbiome_host_fit_summary.pdf",  width = 8, height = 11, paper="a4")
+  plot(gg.trioza_hlinks)
+try(dev.off(), silent=TRUE)
+  
+pdf(file="figs/psyllid_microbiome_symbiont_fit_summary.pdf",  width = 8, height = 11, paper="a4")
+  plot(gg.trioza_slinks)
 try(dev.off(), silent=TRUE)
   
 ```
@@ -1460,7 +1523,7 @@ ggplot(res, aes(x=values))+
   ylab('Frequency')
 
 # Parafit run
-PF_run <- parafit(h_dist, s_dist, t(coocur), nperm=99, test.links=TRUE, silent=TRUE)
+PF_run <- parafit(h_dist, s_dist,coocur, nperm=99, test.links=TRUE)
 PF_run$ParaFitGlobal
 PF_run$p.global
 
@@ -1494,13 +1557,15 @@ weights_p1 <- p1$data %>%
 weights_p1 <- weights_p1 %>%
   left_join(data.frame(node=weights_p1$node, links = weights_p1$node %>% purrr::map_dbl(average_descendants, tree=tree1, df=weights_p1)))
 
-p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=links)) +  scale_color_gradient(low="steelblue", high="darkorange1")
+p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=links)) +
+  scale_color_gradient(low="steelblue", high="darkorange1")  +
+  theme(legend.position = "none")
 
 # OTU tree
 tree2 <- obj[["trees"]][[2]]
 s_tree <- drop.tip(tree2, setdiff(tree2$tip.label, obj$assoc[,2]))
 
-p2 <- ggtree(tree2 , ladderize=TRUE, aes(colour=links)) + geom_tiplab()
+p2 <- ggtree(tree2 , ladderize=TRUE, aes(colour=links)) 
 weights_p2 <- p2$data %>%
   left_join(links %>% 
     group_by(OTU) %>%
@@ -1511,7 +1576,9 @@ weights_p2 <- p2$data %>%
 weights_p2 <- weights_p2 %>%
   left_join(data.frame(node=weights_p2$node, links = weights_p2$node %>% purrr::map_dbl(average_descendants, tree=tree2, df=weights_p2)))
 
-p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=links)) +  scale_color_gradient(low="steelblue", high="darkorange1")
+p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=links)) + 
+  scale_color_gradient(low="steelblue", high="darkorange1") +
+  theme(legend.position = "none")
 
 # Tanglegram
 dd <- obj$assoc %>%
@@ -1618,16 +1685,13 @@ p_para <- ggplot(D$P_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, 
 plot(p_host + p_para)
 
 # run paco
-paco_run <- PACo(D, nperm=1000, seed=92409, method='quasiswap', symmetric=TRUE)
+paco_run <- PACo(D, nperm=99, seed=909, method='quasiswap', symmetric=TRUE)
 
 #print overall significance
 print(paco_run$gof)
 
 # Get interaction-specific cophylogenetic contributions using leave-one-out jacknifing
 paco_run <- paco_links(paco_run, .parallel = TRUE)
-
-#Test paragit
-PF <- parafit(h_dist, s_dist, coocur, nperm=99, test.links=TRUE, silent=TRUE)
 
 # get links
 links <- data.frame(joint=names(paco_run$jackknife$mean), values=unname(paco_run$jackknife$mean), upper=unname(paco_run$jackknife$upper)) %>%
@@ -1674,6 +1738,19 @@ ggplot(res, aes(x=values))+
   xlab('Procrustes residuals')+
   ylab('Frequency')
 
+# Parafit run
+PF_run <- parafit(h_dist, s_dist, t(coocur), nperm=999, test.links=TRUE, silent=FALSE)
+PF_run$ParaFitGlobal
+PF_run$p.global
+
+PF_links <- as.data.frame(PF_run$link.table) %>%
+  left_join(as.data.frame(rownames(h_dist)) %>%
+              rownames_to_column("Host") %>%
+              mutate(Host = as.numeric(Host))) %>%
+  left_join(as.data.frame(rownames(s_dist)) %>%
+              rownames_to_column("Parasite") %>%
+              mutate(Parasite = as.numeric(Parasite)))
+
 # Cophyloplot
 coocur.lut <- which(coocur ==1, arr.ind=TRUE)
 assoc <- cbind(rownames(coocur)[coocur.lut[,1]], colnames(coocur)[coocur.lut[,2]])
@@ -1696,7 +1773,10 @@ weights_p1 <- p1$data %>%
 weights_p1 <- weights_p1 %>%
   left_join(data.frame(node=weights_p1$node, links = weights_p1$node %>% purrr::map_dbl(average_descendants, tree=tree1, df=weights_p1)))
 
-p1 <- p1 %<+% weights_p1  + geom_tippoint(aes(colour=links)) +  scale_color_gradient(low="steelblue", high="darkorange1")
+p1 <- p1 %<+% weights_p1  +
+  geom_tippoint(aes(colour=links)) + 
+  scale_color_gradient(low="steelblue", high="darkorange1") +
+  theme(legend.position = "none")
 
 # psyllid_tree
 tree2 <- obj[["trees"]][[2]]
@@ -1710,7 +1790,10 @@ weights_p2 <- p2$data %>%
 weights_p2 <- weights_p2 %>%
   left_join(data.frame(node=weights_p2$node, links = weights_p2$node %>% purrr::map_dbl(average_descendants, tree=tree2, df=weights_p2)))
 
-p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=links)) +  scale_color_gradient(low="steelblue", high="darkorange1")
+p2 <- p2 %<+% weights_p2  +
+  geom_tippoint(aes(colour=links)) +
+  scale_color_gradient(low="steelblue", high="darkorange1") +
+  theme(legend.position = "none")
 
 # Tanglegram
 dd <- obj$assoc %>%
@@ -1763,7 +1846,7 @@ try(dev.off(), silent=TRUE)
 
 ## Trioza ~ Microbe
 
-```{r trioza hostplant psyllid}
+```{r trioza microbe}
 #Prepare co-occurance matrix
 coocur <- ps3 %>%
     subset_samples(psyllid_genus == "Trioza") %>%
@@ -1813,9 +1896,12 @@ plot(p_host + p_para)
 #paco_run <- PACo(D, nperm=9, seed=909, method='quasiswap', symmetric=TRUE) 
 # Get interaction-specific cophylogenetic contributions using jacknifing
 ##paco_run <- paco_links(paco_run)
+#write_rds(paco_run, "output/cophylogeny/paco_trioza_microbe_filtered.rds")
 
-# Read in filtered
-paco_run <- readRDS("paco_trioza_microbe_filtered.rds")
+# Read in filtered 
+paco_run <- readRDS("output/cophylogeny/paco_trioza_microbe_filtered.rds")
+# Read in unfiltered 
+#paco_run <- readRDS("output/cophylogeny/paco_trioza_microbe.rds")
 
 #print overall significance
 print(paco_run$gof)
@@ -1865,13 +1951,35 @@ ggplot(res, aes(x=values))+
   xlab('Procrustes residuals')+
   ylab('Frequency')
 
+# Parafit run
+#PF_run <- parafit(h_dist, s_dist, t(coocur), nperm=99, test.links=TRUE, silent=TRUE)
+#write_rds(PF_run, "output/cophylogeny/parafit_trioza_microbe_filtered.rds")
+
+# Read in filtered
+PF_run <- readRDS("output/cophylogeny/parafit_trioza_microbe_filtered.rds")
+# Read in unfiltered
+#PF_run <- readRDS("output/cophylogeny/parafit_trioza_microbe_filtered.rds")
+
+PF_run$ParaFitGlobal
+PF_run$p.global
+
+
+PF_links <- as.data.frame(PF_run$link.table) %>%
+  left_join(as.data.frame(rownames(h_dist)) %>%
+              rownames_to_column("Host") %>%
+              mutate(Host = as.numeric(Host))) %>%
+  left_join(as.data.frame(rownames(s_dist)) %>%
+              rownames_to_column("Parasite") %>%
+              mutate(Parasite = as.numeric(Parasite))) %>%
+  dplyr::rename(psyllid_spp = `rownames(h_dist)`, OTU = `rownames(s_dist)`)
+
 # Cophyloplot
 coocur.lut <- which(coocur ==1, arr.ind=TRUE)
 assoc <- cbind(rownames(coocur)[coocur.lut[,1]], colnames(coocur)[coocur.lut[,2]])
 
 # Rotate the nodes using phytools
 library(phytools)
-obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=FALSE) 
+obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=TRUE) 
 
 # Extract the goods for ggtree
 # psyllid_tree
@@ -1976,7 +2084,13 @@ pdf(file="figs/trioza_microbe_tanglegram.pdf",  width = 8, height = 11, paper="a
 try(dev.off(), silent=TRUE)
   
  # Make plot ranking links, and nodes
-gg.hlinks <- d1_new %>%
+
+gg.para_hlinks <- PF_links %>%
+  dplyr::rename(label = psyllid_spp) %>%
+  mutate(signif = case_when(
+    p.F1 < 0.05 ~ 1,
+    p.F1 > 0.05 ~ 0
+  )) %>%
   drop_na() %>%
   group_by(label) %>%
   summarise(values = sum(signif)) %>%
@@ -1987,11 +2101,46 @@ gg.hlinks <- d1_new %>%
   geom_col(show.legend = FALSE) +  
   scale_fill_gradient(low="steelblue", high="darkorange1") +
   theme_classic()+ 
-  #theme(axis.text.x = element_text(angle=45, hjust=1)) +
-  labs(y = "# Signficant links", x=NULL, title ="Psyllid taxa") + 
+  labs(y = "# Signficant links", x=NULL, title ="ParaFit Psyllid taxa") + 
+  coord_flip()
+
+gg.paco_hlinks <- d1_new %>%
+  drop_na() %>%
+  group_by(label) %>%
+  summarise(values = sum(signif)) %>%
+  mutate(label = as.factor(label),
+         label=fct_reorder(label, values, sum ))%>%
+  arrange(-values) %>%
+  ggplot(aes(x=label, y=values, fill=values)) +
+  geom_col(show.legend = FALSE) +  
+  scale_fill_gradient(low="steelblue", high="darkorange1") +
+  theme_classic()+ 
+  labs(y = "# Signficant links", x=NULL, title ="PACo Psyllid taxa") + 
+  coord_flip()
+
+gg.para_slinks <- PF_links %>%
+  dplyr::rename(label = OTU) %>%
+  mutate(signif = case_when(
+    p.F1 < 0.05 ~ 1,
+    p.F1 > 0.05 ~ 0
+  )) %>%
+  left_join(tax_groups) %>%
+  drop_na() %>%
+  group_by(genus) %>%
+  summarise(values = sum(signif)) %>%
+  dplyr::rename(label = genus) %>%
+  mutate(label = as.factor(label),
+         label=fct_reorder(label, values, sum ))%>%
+  arrange(-values) %>%
+    top_frac(.5) %>%
+  ggplot(aes(x=label, y=values, fill=values)) +
+  geom_col(show.legend = FALSE) +  
+  scale_fill_gradient(low="steelblue", high="darkorange1") +
+  theme_classic()+ 
+  labs(y = "# Signficant links", x=NULL, title ="ParaFit Top 50% Bacterial genera") + 
   coord_flip()
   
-gg.slinks <- d2_new %>%
+gg.paco_slinks <- d2_new %>%
   left_join(tax_groups) %>%
   drop_na() %>%
   group_by(genus) %>%
@@ -2006,19 +2155,25 @@ gg.slinks <- d2_new %>%
   scale_fill_gradient(low="steelblue", high="darkorange1") +
   theme_classic()+ 
   #theme(axis.text.x = element_text(angle=45, hjust=1)) +
-  labs(y = "# Signficant links", x=NULL, title = "Top 50% Bacterial genera") + 
+  labs(y = "# Signficant links", x=NULL, title = "PACo Top 50% Bacterial genera") + 
   coord_flip()
 
-gg.hlinks + gg.slinks
+gg.trioza_hlinks <- gg.para_hlinks + gg.paco_hlinks 
 
-pdf(file="figs/trioza_microbiome_fit_summary.pdf",  width = 8, height = 11, paper="a4")
-  plot(gg.hlinks + gg.slinks)
+gg.trioza_slinks <- gg.para_slinks + gg.paco_slinks
+
+pdf(file="figs/trioza_microbiome_host_fit_summary.pdf",  width = 8, height = 11, paper="a4")
+  plot(gg.trioza_hlinks)
+try(dev.off(), silent=TRUE)
+  
+pdf(file="figs/trioza_microbiome_symbiont_fit_summary.pdf",  width = 8, height = 11, paper="a4")
+  plot(gg.trioza_slinks)
 try(dev.off(), silent=TRUE)
 ```
 
-## Trioza ~ carsonella
+## Trioza ~ Carsonella
 
-```{r Trioza carsonella cophylo}
+```{r Trioza carsonella}
 #Flag top abundance carsonella by sample
 top_carson <- ps2 %>%
   transform_sample_counts(function (x) x/sum(x)) %>%
@@ -2133,6 +2288,19 @@ ggplot(res, aes(x=values))+
   xlab('Procrustes residuals')+
   ylab('Frequency')
 
+# Parafit run
+PF_run <- parafit(h_dist, s_dist, t(coocur), nperm=999, test.links=TRUE, silent=FALSE)
+PF_run$ParaFitGlobal
+PF_run$p.global
+
+PF_links <- as.data.frame(PF_run$link.table) %>%
+  left_join(as.data.frame(rownames(h_dist)) %>%
+              rownames_to_column("Host") %>%
+              mutate(Host = as.numeric(Host))) %>%
+  left_join(as.data.frame(rownames(s_dist)) %>%
+              rownames_to_column("Parasite") %>%
+              mutate(Parasite = as.numeric(Parasite)))
+
 # Cophyloplot
 coocur.lut <- which(coocur ==1, arr.ind=TRUE)
 assoc <- cbind(rownames(coocur)[coocur.lut[,1]], colnames(coocur)[coocur.lut[,2]])
@@ -2155,7 +2323,11 @@ weights_p1 <- p1$data %>%
 weights_p1 <- weights_p1 %>%
   left_join(data.frame(node=weights_p1$node, links = weights_p1$node %>% purrr::map_dbl(average_descendants, tree=tree1, df=weights_p1)))
 
-p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=links)) +  scale_color_gradient(low="steelblue", high="darkorange1")
+p1 <- p1 %<+% weights_p1 + 
+  geom_tippoint(aes(colour=links)) +
+  scale_color_gradient(low="steelblue", high="darkorange1") +
+  theme(legend.position = "none")
+
 
 # OTU tree
 tree2 <- obj[["trees"]][[2]]
@@ -2171,7 +2343,11 @@ weights_p2 <- p2$data %>%
 weights_p2 <- weights_p2 %>%
   left_join(data.frame(node=weights_p2$node, links = weights_p2$node %>% purrr::map_dbl(average_descendants, tree=tree2, df=weights_p2)))
 
-p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=links)) +  scale_color_gradient(low="steelblue", high="darkorange1")
+p2 <- p2 %<+% weights_p2  + 
+  geom_tippoint(aes(colour=links)) +  
+  scale_color_gradient(low="steelblue", high="darkorange1")+
+  theme(legend.position = "none")
+
 
 # Tanglegram
 dd <- obj$assoc %>%
@@ -2332,6 +2508,19 @@ ggplot(res, aes(x=values))+
   xlab('Procrustes residuals')+
   ylab('Frequency')
 
+# Parafit run
+PF_run <- parafit(h_dist, s_dist, t(coocur), nperm=999, test.links=TRUE, silent=TRUE)
+PF_run$ParaFitGlobal
+PF_run$p.global
+
+PF_links <- as.data.frame(PF_run$link.table) %>%
+  left_join(as.data.frame(rownames(h_dist)) %>%
+              rownames_to_column("Host") %>%
+              mutate(Host = as.numeric(Host))) %>%
+  left_join(as.data.frame(rownames(s_dist)) %>%
+              rownames_to_column("Parasite") %>%
+              mutate(Parasite = as.numeric(Parasite)))
+
 # Cophyloplot
 coocur.lut <- which(coocur ==1, arr.ind=TRUE)
 assoc <- cbind(rownames(coocur)[coocur.lut[,1]], colnames(coocur)[coocur.lut[,2]])
@@ -2354,7 +2543,10 @@ weights_p1 <- p1$data %>%
 weights_p1 <- weights_p1 %>%
   left_join(data.frame(node=weights_p1$node, links = weights_p1$node %>% purrr::map_dbl(average_descendants, tree=tree1, df=weights_p1)))
 
-p1 <- p1 %<+% weights_p1  + geom_tippoint(aes(colour=links)) +  scale_color_gradient(low="steelblue", high="darkorange1")
+p1 <- p1 %<+% weights_p1  + 
+  geom_tippoint(aes(colour=links)) +
+  scale_color_gradient(low="steelblue", high="darkorange1") +
+  theme(legend.position = "none")
 
 # psyllid_tree
 tree2 <- obj[["trees"]][[2]]
@@ -2368,7 +2560,10 @@ weights_p2 <- p2$data %>%
 weights_p2 <- weights_p2 %>%
   left_join(data.frame(node=weights_p2$node, links = weights_p2$node %>% purrr::map_dbl(average_descendants, tree=tree2, df=weights_p2)))
 
-p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=links)) +  scale_color_gradient(low="steelblue", high="darkorange1")
+p2 <- p2 %<+% weights_p2  + 
+  geom_tippoint(aes(colour=links)) +  
+  scale_color_gradient(low="steelblue", high="darkorange1")+
+  theme(legend.position = "none")
 
 # Tanglegram
 dd <- obj$assoc %>%
