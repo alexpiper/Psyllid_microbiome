@@ -5,12 +5,13 @@ date: "`r Sys.Date()`"
 output:
   html_document:
     highlighter: null
+    number_sections: TRUE
     theme: "flatly"
-    code_download: true
-    toc: true
+    code_download: TRUE
+    toc: TRUE
     toc_float:
-      collapsed: false
-      smooth_scroll: true
+      collapsed: FALSE
+      smooth_scroll: TRUE
     df_print: paged
   pdf_document: default
 editor_options: 
@@ -1196,6 +1197,7 @@ ggplot(res, aes(x=values))+
 # Parafit run
 #PF_run <- parafit(h_dist, s_dist, t(coocur), nperm=99, test.links=TRUE, silent=TRUE)
 
+PF_run <- readRDS("output/cophylogeny/parafit_psyllid_microbe_filtered.rds")
 
 PF_run$ParaFitGlobal
 PF_run$p.global
@@ -1206,7 +1208,12 @@ PF_links <- as.data.frame(PF_run$link.table) %>%
               mutate(Host = as.numeric(Host))) %>%
   left_join(as.data.frame(rownames(s_dist)) %>%
               rownames_to_column("Parasite") %>%
-              mutate(Parasite = as.numeric(Parasite)))
+              mutate(Parasite = as.numeric(Parasite))) %>%
+  dplyr::rename(psyllid_spp = `rownames(h_dist)`, OTU = `rownames(s_dist)`) %>%
+  mutate(signif = case_when(
+    p.F1 < 0.05 ~ 1,
+    p.F1 > 0.05 ~ 0
+  )) 
 
 # Cophyloplot
 coocur.lut <- which(coocur ==1, arr.ind=TRUE)
@@ -1320,10 +1327,6 @@ try(dev.off(), silent=TRUE)
 
 gg.para_hlinks <- PF_links %>%
   dplyr::rename(label = psyllid_spp) %>%
-  mutate(signif = case_when(
-    p.F1 < 0.05 ~ 1,
-    p.F1 > 0.05 ~ 0
-  )) %>%
   drop_na() %>%
   group_by(label) %>%
   summarise(values = sum(signif)) %>%
@@ -1353,12 +1356,9 @@ gg.paco_hlinks <- d1_new %>%
 
 gg.para_slinks <- PF_links %>%
   dplyr::rename(label = OTU) %>%
-  mutate(signif = case_when(
-    p.F1 < 0.05 ~ 1,
-    p.F1 > 0.05 ~ 0
-  )) %>%
   left_join(tax_groups) %>%
   drop_na() %>%
+  mutate(genus = str_sub(genus, 1, 30)) %>%
   group_by(genus) %>%
   summarise(values = sum(signif)) %>%
   dplyr::rename(label = genus) %>%
@@ -1391,16 +1391,16 @@ gg.paco_slinks <- d2_new %>%
   labs(y = "# Signficant links", x=NULL, title = "PACo Top 50% Bacterial genera") + 
   coord_flip()
 
-gg.trioza_hlinks <- gg.para_hlinks + gg.paco_hlinks 
+gg.psyllid_hlinks <- gg.para_hlinks + gg.paco_hlinks 
 
-gg.trioza_slinks <- gg.para_slinks + gg.paco_slinks
+gg.psyllid_slinks <- gg.para_slinks + gg.paco_slinks
 
 pdf(file="figs/psyllid_microbiome_host_fit_summary.pdf",  width = 8, height = 11, paper="a4")
-  plot(gg.trioza_hlinks)
+  plot(gg.psyllid_hlinks)
 try(dev.off(), silent=TRUE)
   
 pdf(file="figs/psyllid_microbiome_symbiont_fit_summary.pdf",  width = 8, height = 11, paper="a4")
-  plot(gg.trioza_slinks)
+  plot(gg.psyllid_slinks)
 try(dev.off(), silent=TRUE)
   
 ```
@@ -1958,11 +1958,10 @@ ggplot(res, aes(x=values))+
 # Read in filtered
 PF_run <- readRDS("output/cophylogeny/parafit_trioza_microbe_filtered.rds")
 # Read in unfiltered
-#PF_run <- readRDS("output/cophylogeny/parafit_trioza_microbe_filtered.rds")
+#PF_run <- readRDS("output/cophylogeny/parafit_trioza_microbe_unfiltered.rds")
 
 PF_run$ParaFitGlobal
 PF_run$p.global
-
 
 PF_links <- as.data.frame(PF_run$link.table) %>%
   left_join(as.data.frame(rownames(h_dist)) %>%
@@ -1971,7 +1970,11 @@ PF_links <- as.data.frame(PF_run$link.table) %>%
   left_join(as.data.frame(rownames(s_dist)) %>%
               rownames_to_column("Parasite") %>%
               mutate(Parasite = as.numeric(Parasite))) %>%
-  dplyr::rename(psyllid_spp = `rownames(h_dist)`, OTU = `rownames(s_dist)`)
+  dplyr::rename(psyllid_spp = `rownames(h_dist)`, OTU = `rownames(s_dist)`) %>%
+  mutate(signif = case_when(
+    p.F1 < 0.05 ~ 1,
+    p.F1 > 0.05 ~ 0
+  )) 
 
 # Cophyloplot
 coocur.lut <- which(coocur ==1, arr.ind=TRUE)
@@ -2087,10 +2090,6 @@ try(dev.off(), silent=TRUE)
 
 gg.para_hlinks <- PF_links %>%
   dplyr::rename(label = psyllid_spp) %>%
-  mutate(signif = case_when(
-    p.F1 < 0.05 ~ 1,
-    p.F1 > 0.05 ~ 0
-  )) %>%
   drop_na() %>%
   group_by(label) %>%
   summarise(values = sum(signif)) %>%
@@ -2120,10 +2119,6 @@ gg.paco_hlinks <- d1_new %>%
 
 gg.para_slinks <- PF_links %>%
   dplyr::rename(label = OTU) %>%
-  mutate(signif = case_when(
-    p.F1 < 0.05 ~ 1,
-    p.F1 > 0.05 ~ 0
-  )) %>%
   left_join(tax_groups) %>%
   drop_na() %>%
   group_by(genus) %>%

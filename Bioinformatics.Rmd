@@ -5,6 +5,7 @@ date: "07/04/2020"
 output:
   html_document:
     highlighter: null
+    number_sections: TRUE
     theme: "flatly"
     code_download: true
     toc: true
