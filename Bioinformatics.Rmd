@@ -5,8 +5,9 @@ author: "Alexander Piper"
 date: "`r Sys.Date()`"
 output:
   html_document:
+    includes:
+      after_body: footer.html
     highlighter: null
-    number_sections: TRUE
     theme: "flatly"
     code_download: true
     toc: true
@@ -572,6 +573,26 @@ message(nsamples(ps1) - nsamples(ps2), " Samples and ", ntaxa(ps1) - ntaxa(ps2),
 ```
 
 
+## Merge technical replicates
+
+With only 16 samples replicated, and only on the first 2 sequencing runs i dont think there is a way to explicitly take into account replicate variability, therefore all replicates were merged
+
+This can be done with DADA2 - mergeSequenceTables(st1, st2, st3, repeats = "sum"
+
+```{r replicates}
+# Merge replicates
+ps.merged <- ps2 %>%
+    merge_samples(group = "Sample_Name", fun="sum")
+
+#This loses the sample metadata - Need to add it agian
+sample_data(ps.merged) <- sample_data(ps1) %>%
+  filter(!duplicated(Sample_Name)) %>%
+  magrittr::set_rownames(.$Sample_Name)
+
+ps2 <- ps.merged
+saveRDS(ps2, "output/rds/ps2.rds")
+```
+
 # Create phylogenetic tree
 
 ```{r phylogenetic tree}
@@ -598,27 +619,6 @@ res <- congruify.phylo(reference=ref_tree_pruned, target=tree, scale="PATHd8")
 tree2 <- drop.tip(res$phy, res$phy$tip.label[!res$phy$tip.label %in% names(refseq(ps2))])
 write.tree(tree2, "output/phytree.nwk")
 ```
-
-### Merge technical replicates
-
-With only 16 samples replicated, and only on the first 2 sequencing runs i dont think there is a way to explicitly take into account replicate variability, therefore all replicates were merged
-
-This can be done with DADA2 - mergeSequenceTables(st1, st2, st3, repeats = "sum"
-
-```{r replicates}
-# Merge replicates
-ps.merged <- ps2 %>%
-    merge_samples(group = "Sample_Name", fun="sum")
-
-#This loses the sample metadata - Need to add it agian
-sample_data(ps.merged) <- sample_data(ps1) %>%
-  filter(!duplicated(Sample_Name)) %>%
-  magrittr::set_rownames(.$Sample_Name)
-
-ps2 <- ps.merged
-saveRDS(ps2, "output/rds/ps2.rds")
-```
-
 
 # Sessioninfo
 
