@@ -1903,8 +1903,6 @@ try(dev.off(), silent=TRUE)
 #Prepare co-occurance matrix
 coocur <- ps3 %>%
     subset_samples(psyllid_genus == "Trioza") %>%
-  #Check how perfroms without these species
- #   subset_samples(!psyllid_spp %in% c("Trioza_MASSEY","Trioza_PRICES_VALLEY", "Trioza_adventicia", "Trioza_curta")) %>%
     filter_taxa(function(x) mean(x) > 0, TRUE) %>%
     otu_table %>%
     as.matrix() %>% 
