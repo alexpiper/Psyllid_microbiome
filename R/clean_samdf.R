@@ -41,7 +41,7 @@ samdf <- samdf %>%
   mutate_at(vars(starts_with("long")), .funs=as.numeric) %>%
   mutate(lat=-(lat_d + lat_m/60 + lat_s/60^2),
          long=long_d + long_m/60 + long_s/60^2) %>%
-  dplyr::select(c("SampleID", "Sample_Name", "seqrun", "psyllid_spp", "psyllid_genus", "psyllid_family", "hostplant_spp","Collection_Date","replicated", "lat", "long")) %>%
+  dplyr::select(-starts_with("lat_"),-starts_with("long_")) %>%
   as.data.frame(stringsAsFactors=FALSE) %>%
   magrittr::set_rownames(.$SampleID) #Collection
 
