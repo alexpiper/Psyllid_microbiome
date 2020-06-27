@@ -301,6 +301,7 @@ Now that the sequence tables are created for each run, they need to be merged in
 Looking at the length of the sequences, we see some off target amplification. There are 3 large peaks, the first one at 280, second at 402bp, and third at 427. The 427bp peak contains the majority of the sequences and is the expected size, while the 402bp peak contains wolbachia which have a 24bp deletion. We will cut the sequences to between 400 and 450, which should take into account any length variation, and remove the 280bp peak (which is the length of the forward read and most likely artefactual). Following this, chimeric sequences are identified and removed using removeBimeraDenovo
 
 ```{r merge runs and remove chimeras}
+set.seed(606)
 seqtabs <- list.files("output/rds/", pattern="seqtab.rds", full.names = TRUE)
 st.all <- mergeSequenceTables(tables=seqtabs)
 
@@ -317,7 +318,9 @@ hist(seqComplexity(seqtab.nochim), 100)
 plot(table(nchar(getSequences(seqtab.nochim))))
 
 #cut to expected size
-seqtab.nochim <- seqtab.nochim[,nchar(colnames(seqtab.nochim)) %in% 400:435]
+#seqtab.nochim <- seqtab.nochim[,nchar(colnames(seqtab.nochim)) %in% 400:435]
+seqtab_cut <- seqtab.nochim[,nchar(colnames(seqtab.nochim)) %in% 400:435]
+# Count hpw many this removed
 
 plot(table(nchar(getSequences(seqtab.nochim))))
 print(paste(sum(seqtab.nochim)/sum(st.all),"of the abundance remaining after cutting"))
@@ -330,7 +333,41 @@ rownames(seqtab.nochim) <- rownames(seqtab.nochim) %>%
   pull(SampleID)
 
 dir.create("output/rds/")
-saveRDS(seqtab.nochim, "output/rds/seqtab_final.rds")
+saveRDS(seqtab.nochim, "output/rds/seqtab_nocut.rds")
+
+# summarise cleanup
+cleanup <- st.all %>%
+  as.data.frame() %>%
+  pivot_longer( everything(),
+    names_to = "OTU",
+    values_to = "Abundance") %>%
+  group_by(OTU) %>%
+  summarise(Abundance = sum(Abundance)) %>%
+  mutate(length  = nchar(OTU)) %>%
+  mutate(type = case_when(
+    !OTU %in% getSequences(seqtab.nochim) ~ "Chimera",
+    !OTU %in% getSequences(seqtab_cut) ~ "Incorrect size",
+    TRUE ~ "Real"
+  )) 
+
+# Output length distribution plots
+gg.abundance <- ggplot(cleanup, aes(x=length, y=Abundance, fill=type))+
+              geom_bar(stat="identity") + 
+              ggtitle("Abundance of sequences") +
+              geom_vline(xintercept = 400, colour="red") +
+              geom_vline(xintercept = 435, colour="red") 
+
+gg.unique <- ggplot(cleanup, aes(x=length, fill=type))+
+            geom_histogram(binwidth = 1) + 
+            ggtitle("Number of unique sequences")+
+              geom_vline(xintercept = 400, colour="red") +
+              geom_vline(xintercept = 435, colour="red") 
+
+plot(gg.abundance / gg.unique)
+
+pdf(paste0("output/logs/seqtab_length_dist.pdf"), width = 11, height = 8 , paper="a4r")
+  plot(gg.abundance / gg.unique)
+try(dev.off(), silent=TRUE)
 ```
 
 # Assign taxonomy with IDTAXA
@@ -338,17 +375,21 @@ saveRDS(seqtab.nochim, "output/rds/seqtab_final.rds")
 We will use the IDTAXA algorithm of Murali et al 2018 - https://doi.org/10.1186/s40168-018-0521-5 Folllowing phylum to genus assignment with IDTAXA, we will also use exact matching with a reference database to assign to species level.
 
 ```{r IDTAXA}
-seqtab_final <- readRDS("output/rds/seqtab_final.rds")
+#seqtab_final <- readRDS("output/rds/seqtab_final.rds")
+seqtab_final <- readRDS("output/rds/seqtab_nocut.rds")
 
 # Load trainingset
 load("reference/SILVA_SSU_r138_2019.RData")
 
+seqtab_final <- test2
 # Create a DNAStringSet from the ASVs
 dna <- DNAStringSet(getSequences(seqtab_final)) 
 
 # Assign taxonomy
-ids <- IdTaxa(dna, trainingSet, processors=12, threshold = 60, verbose=TRUE)  
+library(DECIPHER)
+ids <- IdTaxa(dna, trainingSet, processors=2, threshold = 60, verbose=TRUE)  
 
+#saveRDS(ids, "ids_cut.rds")
 # Output plot of ids
 pdf(paste0("figs/idtaxa.pdf"), width = 11, height = 8 , paper="a4r")
   plot(ids)
@@ -363,17 +404,19 @@ tax <- t(sapply(ids, function(x) {
   })) %>%
   purrr::map(unlist) %>%
   stringi::stri_list2matrix(byrow=TRUE, fill=NA) %>%
-  magrittr::set_colnames(ranks) %>%
-  magrittr::set_rownames(getSequences(seqtab_final)) %>%
+  #magrittr::set_colnames(ranks) %>%
+  magrittr::set_rownames(getSequences(test2)) %>%
+  #magrittr::set_rownames(getSequences(seqtab_final)) %>%
   as.data.frame()  %T>%
   write.csv("output/idtaxa_results.csv") %>%  #Write out logfile with confidence levels
   mutate_all(str_replace,pattern="(?:.(?!_))+$", replacement="") %>%
   #taxreturn::propagate_tax(from="Phylum") %>% #Propagate high order ranks to unassigned ASV'
-  magrittr::set_rownames(getSequences(seqtab_final)) %>%
+  magrittr::set_rownames(getSequences(test2)) %>%
+  #magrittr::set_rownames(getSequences(seqtab_final)) %>%
   as.matrix()
 
 # Write taxonomy table to disk
-saveRDS(tax, "output/rds/tax_IdTaxa.rds") 
+saveRDS(tax, "output/rds/tax_IdTaxa_cut.rds") 
 
 #Add species using exact matching
 exact <- assignSpecies(seqtab_final, "reference/silva_species_assignment_v138.fa.gz", allowMultiple =TRUE, tryRC = TRUE, verbose = FALSE)
@@ -407,7 +450,7 @@ tax_exact <- tax %>%
 
 
 # Write taxonomy table to disk
-saveRDS(tax_exact, "output/rds/tax_IdTaxaExact.rds") 
+saveRDS(tax_exact, "output/rds/tax_IdTaxaExact_nocut.rds") 
 ```
 
 ## Curate with LULU
@@ -415,8 +458,8 @@ saveRDS(tax_exact, "output/rds/tax_IdTaxaExact.rds")
 LULU further identifies errors and redundant sequences by combining sequence similarity and co-occurrence patterns
 
 ```{r LULU}
-seqtab_final <- readRDS("output/rds/seqtab_final.rds")
-tax_exact <- readRDS("output/rds/tax_IdTaxaExact.rds") 
+seqtab_final <- readRDS("output/rds/seqtab_nocut.rds")
+tax_exact <- readRDS("output/rds/tax_IdTaxaExact_nocut.rds") 
 
 # Make blast database from the ASV's
 seqs <- insect::char2dna(colnames(seqtab_final))
@@ -435,7 +478,7 @@ curated_result <- lulu(otutab, matchlist)
 saveRDS(curated_result, "lulu_curated.rds")
 
 # get mapping
-curated_result <- readRDS("lulu_curated.rds")
+curated_result <- readRDS("output/lulu_curated.rds")
 mapping <- curated_result[["otu_map"]] %>% 
   rownames_to_column("otu") %>%
   left_join(tax_exact %>% as.data.frame %>% rownames_to_column("otu"), by="otu")
@@ -450,8 +493,10 @@ Following taxonomic assignment, the sequence table and taxonomic table are merge
 
 ```{r create PS, eval = FALSE}
 # Load data
-seqtab <- readRDS("output/rds/seqtab_curated.rds")
-tax <- readRDS("output/rds/tax_IdTaxaExact.rds") 
+seqtab <- t(readRDS("output/rds/seqtab_nocut.rds"))
+#seqtab <- t(readRDS("output/rds/seqtab_final.rds"))
+tax <- readRDS("output/rds/tax_IdTaxaExact_cut.rds")
+
 seqs <- DNAStringSet(rownames(seqtab))
 names(seqs) <- seqs
 samdf <- read_csv("sample_data/Sample_info2.csv") %>%
@@ -500,7 +545,7 @@ We also remove all taxa contained within the blank sample from other samples? - 
 ```{r taxon-cleaning}
 get_taxa_unique(ps, "domain")
 
-ps # Check the number of taxa prior to removal
+ntaxa(ps) # Check the number of taxa prior to removal
 ps0 <- ps %>%
   subset_taxa(
     domain == "Bacteria" & 
@@ -508,7 +553,9 @@ ps0 <- ps %>%
     order   != "Chloroplast" &
     phylum != "Cyanobacteria"
   )
-ps # Confirm that the taxa were removed
+
+#Check taxa were removed
+ntaxa(ps0)
 get_taxa_unique(ps0, "phylum")
 get_taxa_unique(ps0, "class")
 get_taxa_unique(ps0, "family")
@@ -546,7 +593,7 @@ rare <- map_dfr(rare, function(x){
   return(z)
 }, .id = "sample")
 
-# threshold for read removal
+# read threshold for sample removal
 threshold = 1000
 
 gg.rare <- ggplot(data = rare)+
@@ -586,6 +633,8 @@ ps.merged <- ps2 %>%
 
 #This loses the sample metadata - Need to add it agian
 sample_data(ps.merged) <- sample_data(ps1) %>%
+  as("matrix") %>%
+  as.data.frame() %>%
   filter(!duplicated(Sample_Name)) %>%
   magrittr::set_rownames(.$Sample_Name)
 

@@ -63,7 +63,6 @@ run_mantel <- function(x, dists, subsample, type="mantel"){
                                           as.dist(get(y$V1)[subsample, subsample]) +
                                           as.dist(get(y$V2)[subsample, subsample]) +
                                           as.dist(get(y$V3)[subsample, subsample])))) %>%
-          mutate(dist1 = y$dist1, type="mantel") %>%
           mutate(dist1 = y$V1, dist2=y$V2, dist3=y$V3, type="partial_mantel") 
       }) %>%
       bind_rows()

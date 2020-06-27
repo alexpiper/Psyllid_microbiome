@@ -15,20 +15,27 @@
 #
 # Contact: alexander.piper@agriculture.vic.gov.au
 
-# Cleaning sample data ----------------------------------------------------
+# Cleaning and recoding sample data -------------------------------------------------
 
 samdf <- read_csv("sample_data/Sample_info.csv")  %>%
   dplyr::rename_all(funs( stringr::str_replace_all(., '\\ ', '_')) ) %>%
   mutate(psyllid_spp = psyllid_spp %>% str_remove("\\.") %>%
            str_replace_all(" ", "_") %>%
-           str_replace_all("Casuarinicola_sp", "Triozid_sp")) %>%
+           str_replace_all("Casuarinicola_sp", "Triozid_sp") %>%
+           na_if("ND") %>%
+           na_if("MOCK") %>%
+           na_if("blank")) %>%
+  mutate(psyllid_genus = psyllid_genus %>%
+           na_if("ND") %>%
+           na_if("MOCK") %>%
+           na_if("blank")) %>%
   mutate(hostplant_spp = hostplant_spp %>% str_remove("\\.") %>%
            str_replace_all(" ", "_") %>%
            str_to_sentence() %>%
            str_replace_all("Kamahi", "Weinmannia_racemosa") %>%
            str_replace_all("Oleaeria_odorata", "Olearia_odorata"))
 
-# Flag replicated samples
+# Flag replicated samples 
 samdf <- samdf %>%
   dplyr::mutate(replicated = Sample_Name %in% (samdf %>% group_by(Sample_Name) %>% 
                                                  add_count() %>%
@@ -42,6 +49,23 @@ samdf <- samdf %>%
   mutate(lat=-(lat_d + lat_m/60 + lat_s/60^2),
          long=long_d + long_m/60 + long_s/60^2) %>%
   dplyr::select(-starts_with("lat_"),-starts_with("long_")) %>%
+  mutate(genus_geo = case_when(
+    psyllid_genus == "Ctenarytaina" & psyllid_spp %in% c(
+      "Ctenarytaina_eucalypti",
+      "Ctenarytaina_thysanura",
+      "Ctenarytaina_spatulata",
+      "Ctenarytaina_longicauda",
+      "Ctenarytaina_insularis" 
+      ) ~ "Ctenarytaina_AUS",
+    psyllid_genus == "Ctenarytaina" & !psyllid_spp %in% c(
+      "Ctenarytaina_eucalypti",
+      "Ctenarytaina_thysanura",
+      "Ctenarytaina_spatulata",
+      "Ctenarytaina_longicauda",
+      "Ctenarytaina_insularis" 
+    ) ~ "Ctenarytaina_NZ",
+    TRUE ~ psyllid_genus
+  )) %>%
   as.data.frame(stringsAsFactors=FALSE) %>%
   magrittr::set_rownames(.$SampleID) #Collection
 
