@@ -1146,7 +1146,7 @@ plot(p_host + p_para)
 #write_rds(paco_run, "output/cophylogeny/paco_psyllid_microbe_filtered.rds")
 
 # Read in filtered 
-paco_run <- readRDS("output/cophylogeny/paco_psyllid_microbe_filtered.rds")
+paco_run <- readRDS("output/cophylogeny/paco_psyllid_microbe_filtered_asym.rds")
 # Read in unfiltered 
 #paco_run <- readRDS("output/cophylogeny/paco_psyllid_microbe.rds")
 #print overall significance
@@ -1258,7 +1258,7 @@ tax_groups <- as.data.frame(tax_table(ps3)) %>%
   rownames_to_column("label") %>%
   dplyr::mutate(label = label %>% str_replace_all("-", "_") %>%
                   str_replace_all(" ", "_")) %>%
-  select(label, genus) %>%
+  dplyr::select(label, genus) %>%
   filter(label %in% tree2$tip.label) %>%
   group_by(genus) 
 
