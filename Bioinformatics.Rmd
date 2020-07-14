@@ -404,15 +404,13 @@ tax <- t(sapply(ids, function(x) {
   })) %>%
   purrr::map(unlist) %>%
   stringi::stri_list2matrix(byrow=TRUE, fill=NA) %>%
-  #magrittr::set_colnames(ranks) %>%
-  magrittr::set_rownames(getSequences(test2)) %>%
+  magrittr::set_colnames(ranks) %>%
   #magrittr::set_rownames(getSequences(seqtab_final)) %>%
   as.data.frame()  %T>%
   write.csv("output/idtaxa_results.csv") %>%  #Write out logfile with confidence levels
   mutate_all(str_replace,pattern="(?:.(?!_))+$", replacement="") %>%
   #taxreturn::propagate_tax(from="Phylum") %>% #Propagate high order ranks to unassigned ASV'
-  magrittr::set_rownames(getSequences(test2)) %>%
-  #magrittr::set_rownames(getSequences(seqtab_final)) %>%
+  magrittr::set_rownames(getSequences(seqtab_final)) %>%
   as.matrix()
 
 # Write taxonomy table to disk
@@ -493,9 +491,10 @@ Following taxonomic assignment, the sequence table and taxonomic table are merge
 
 ```{r create PS, eval = FALSE}
 # Load data
-seqtab <- t(readRDS("output/rds/seqtab_nocut.rds"))
-#seqtab <- t(readRDS("output/rds/seqtab_final.rds"))
+#seqtab <- t(readRDS("output/rds/seqtab_nocut.rds"))
+seqtab <- t(readRDS("output/rds/seqtab_final.rds"))
 tax <- readRDS("output/rds/tax_IdTaxaExact_cut.rds")
+
 
 seqs <- DNAStringSet(rownames(seqtab))
 names(seqs) <- seqs
@@ -523,12 +522,15 @@ dir.create("output/otu_tables/unfiltered/", recursive = TRUE)
 
 ##Export raw csv
 speedyseq::psmelt(ps) %>%
+  dplyr::filter(Abundance > 0) %>%
   write.csv(file = "output/otu_tables/rawdata.csv")
 
+# Export species level summary
 seqateurs::summarise_taxa(ps, "species", "SampleID") %>%
   spread(key="SampleID", value="totalRA") %>%
   write.csv(file = "output/otu_tables/unfiltered/spp_sum.csv")
 
+# Export genus level summary
 seqateurs::summarise_taxa(ps, "genus", "SampleID") %>%
   spread(key="SampleID", value="totalRA") %>%
   write.csv(file = "output/otu_tables/unfiltered/gen_sum.csv")
