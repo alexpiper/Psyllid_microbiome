@@ -650,6 +650,11 @@ distlist$WUnifrac <- as.matrix(phyloseq::UniFrac(ps2_dist, weighted=TRUE, parall
 ## Adonis & Betadisper
 
 ```{r Adonis}
+
+# Try heirarchial effects here, starting with the techical than moving down the phylogeny
+#seqrun, psyllid
+#this marginalises the effects of sample metadat variables first, before partitioning hte remaining variance into that accounted for by host phylogeny
+
 # Adonis test
 metadata <- sample_data(ps2) %>%
   as_data_frame()
