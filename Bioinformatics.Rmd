@@ -43,7 +43,8 @@ opts_chunk$set(dev = 'png')
                     "ape", 
                     "data.table",
                     "RColorBrewer",
-                    "vegan")
+                    "vegan",
+                    "geiger")
 .bioc_packages <- c("dada2",
                     "phyloseq", 
                     "DECIPHER",
@@ -628,6 +629,7 @@ message(nsamples(ps1) - nsamples(ps2), " Samples and ", ntaxa(ps1) - ntaxa(ps2),
 ## Compare distances pre and post filtering
 
 ```{r compare dists}
+seqtab_final <- readRDS("output/rds/seqtab_nocut.rds")
 #Get pre_filt distances
 pre_filt <- as.matrix(zCompositions::cmultRepl(seqtab_final, method="BL", output="p-counts"))
 pre_filt_dist <- as.matrix(vegdist(CoDaSeq::codaSeq.clr(pre_filt), method="euclidean"))
@@ -643,6 +645,32 @@ post_filt_dist <- as.matrix(vegdist(CoDaSeq::codaSeq.clr(post_filt), method="euc
 #Subset to only common samples
 subsample <- intersect(colnames(pre_filt_dist), colnames(post_filt_dist))
 as.data.frame(vegan::mantel(pre_filt_dist[subsample, subsample], post_filt_dist[subsample, subsample])[c("statistic","signif","permutations")])
+```
+
+# Create phylogenetic tree
+
+```{r phylogenetic tree}
+#Write out fasta and align with silva online
+seqs <- refseq(ps2)
+writeXStringSet(seqs, "output/curated_asv.fasta", width=1000)
+
+```
+
+## Date tree with PATHd8
+
+```{r PATHd8}
+# Date usign congruify
+tree <- read.tree("arb-silva.de_2020-07-28_id860849/arb-silva.de_2020-07-28_id860849.tree")
+ref_tree <- read.tree("bin/Dated trees/Bacteria_16S_SILVA_97sim_FastTree_PATHd8.tre")
+
+#923 congruent tips
+table(tree$tip.label %in% ref_tree$tip.label)
+
+ref_tree_pruned <- drop.tip(ref_tree, ref_tree$tip.label[!ref_tree$tip.label %in% tree$tip.label])
+res <- congruify.phylo(reference=ref_tree_pruned, target=tree, scale="PATHd8")
+
+tree2 <- drop.tip(res$phy, res$phy$tip.label[!res$phy$tip.label %in% names(refseq(ps2))])
+write.tree(tree2, "output/phytree.nwk")
 ```
 
 
@@ -666,33 +694,6 @@ sample_data(ps.merged) <- sample_data(ps1) %>%
 
 ps2 <- ps.merged
 saveRDS(ps2, "output/rds/ps2.rds")
-```
-
-# Create phylogenetic tree
-
-```{r phylogenetic tree}
-#Write out fasta and align with silva online
-seqs <- refseq(ps2)
-writeXStringSet(seqs, "output/curated_asv.fasta", width=1000)
-
-```
-
-## Date tree with PATHd8
-
-```{r PATHd8}
-# Date usign congruify
-tree <- read.tree("arb-silva.de_2020-07-28_id860849/arb-silva.de_2020-07-28_id860849.tree")
-ref_tree <- read.tree("bin/Dated trees/Bacteria_16S_SILVA_97sim_FastTree_PATHd8.tre")
-
-#839 congruent tips!
-table(tree$tip.label %in% ref_tree$tip.label)
-
-library(geiger)
-ref_tree_pruned <- drop.tip(ref_tree, ref_tree$tip.label[!ref_tree$tip.label %in% tree$tip.label])
-res <- congruify.phylo(reference=ref_tree_pruned, target=tree, scale="PATHd8")
-
-tree2 <- drop.tip(res$phy, res$phy$tip.label[!res$phy$tip.label %in% names(refseq(ps2))])
-write.tree(tree2, "output/phytree.nwk")
 ```
 
 # Sessioninfo
