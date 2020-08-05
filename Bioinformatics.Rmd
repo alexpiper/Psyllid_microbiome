@@ -399,7 +399,6 @@ pdf(paste0("figs/idtaxa.pdf"), width = 11, height = 8 , paper="a4r")
 try(dev.off(), silent=TRUE)
 
 #Convert the output object of class "Taxa" to a matrix analogous to the output from assignTaxonomy
-ranks <- ids[[1]]$rank # ranks of interest
 tax <- t(sapply(ids, function(x) {
     taxa <- paste0(x$taxon,"_", x$confidence)
     taxa[startsWith(taxa, "unclassified_")] <- NA
@@ -407,12 +406,11 @@ tax <- t(sapply(ids, function(x) {
   })) %>%
   purrr::map(unlist) %>%
   stringi::stri_list2matrix(byrow=TRUE, fill=NA) %>%
-  magrittr::set_colnames(ranks) %>%
-  #magrittr::set_rownames(getSequences(seqtab_final)) %>%
-  as.data.frame()  %T>%
-  write.csv("output/idtaxa_results.csv") %>%  #Write out logfile with confidence levels
+  magrittr::set_colnames(c("root", "domain", "phylum", "class", "order", "family", "genus")) %>%
+  magrittr::set_rownames(getSequences(seqtab_final)) %>%
+  as.data.frame()  %>%
   mutate_all(str_replace,pattern="(?:.(?!_))+$", replacement="") %>%
-  #taxreturn::propagate_tax(from="Phylum") %>% #Propagate high order ranks to unassigned ASV'
+  #seqateurs::na_to_unclassified() %>% #Propagate high order ranks to unassigned ASV'
   magrittr::set_rownames(getSequences(seqtab_final)) %>%
   as.matrix()
 
@@ -427,62 +425,134 @@ exact <- exact %>%
   rownames_to_column("otu") %>%
   mutate(species =  case_when(!is.na(Species) ~  paste0(Genus,"_",Species)))
 
-#merge together and propagate tax
-propagate_tax <- function(tax, colstart = 2) {
-  col.prefix <- substr(colnames(tax), 1, 1)
-  for (col in seq(colstart, ncol(tax))) {
-    prop <- is.na(tax[, col]) & !is.na(tax[, col - 1])
-    newtax <- tax[prop, col - 1]
-    needs.prefix <- !grepl("^[A-z]__", newtax)
-    newtax[needs.prefix] <- paste(col.prefix[col - 1], newtax[needs.prefix], sep = "__")
-    tax[prop, col] <- newtax
-  }
-  tax
-}
-
 tax_exact <- tax %>%
   as.data.frame(stringsAsFactors=FALSE) %>%
   rownames_to_column("otu") %>%
   left_join(exact %>% select(otu, species), by="otu") %>%
   magrittr::set_rownames(.$otu) %>%
   select(-otu) %>%
-  propagate_tax(colstart=3) %>% #Propagate high order ranks to unassigned ASV'
+  na_to_unclassified() %>% #Propagate high order ranks to unassigned ASV'
   as.matrix()
 
-
-# Write taxonomy table to disk
 saveRDS(tax_exact, "output/rds/tax_IdTaxaExact_nocut.rds") 
 ```
+
+
+# Compare assignment to blast top hit
+```{r Compare to blast top hit}
+seqtab_final <- readRDS("output/rds/seqtab_nocut.rds")
+tax <- readRDS("output/rds/tax_IdTaxaExact_nocut.rds")
+
+seqs <- insect::char2dna(colnames(seqtab_final))
+names(seqs) <- colnames(seqtab_final)
+
+out <- blast_top_hit(query=seqs, db="reference/silva_species_assignment_v138.fa.gz", threshold=60 )
+saveRDS(out, "output/rds/blast_top_hit.rds")
+
+# Blast counts only the aligned subsections when calculating % identity
+# Therefore we need to set a minimum and maximum alignment length allowed
+out <- readRDS("output/rds/blast_top_hit.rds")
+hist(out$length)
+allowed_lengths <- 220:500
+
+joint <- out %>% 
+  dplyr::select(OTU = qseqid, acc, blastspp = Species, pident, length, evalue) %>%
+  left_join(tax %>% 
+              seqateurs::unclassified_to_na(rownames=FALSE) %>%
+              mutate(lowest = seqateurs::lowest_classified(.)), by="OTU") %>%
+  dplyr::filter(length %in% allowed_lengths) 
+
+#Write out comparison between BLAST and Heiarchial assignment
+write_csv(joint, "output/csv/tax_assignment_comparison.csv")
+
+gg.tophit <- joint %>%
+  dplyr::select(pident, rank = lowest) %>%
+  mutate(rank = factor(rank, levels = c("root", "domain", "phylum", "class", "order", "family", "genus", "species"))) %>%
+  ggplot(aes(x=pident, fill=rank))+ 
+  geom_histogram(colour="black", binwidth = 1, position = "stack") + 
+  labs(title = "Top hit identity distribution",
+       x = "BLAST top hit % identity",
+       y = "OTUs") + 
+  scale_x_continuous(breaks=seq(60,100,2)) +
+  scale_fill_brewer(name = "Taxonomic \nAssignment", palette = "Spectral")
+
+gg.tophit
+
+pdf(paste0("output/figs/top_hit_tax_assignment.pdf"), width = 11, height = 8 , paper="a4r")
+  gg.tophit
+try(dev.off(), silent=TRUE)
+
+```
+
+## Taxon Filtering
+
+Remove all non-bacterial taxa, mitochondria, chloroplast and cyanobacteria.
+We also remove all taxa contained within the blank sample from other samples? - Check these
+```{r tax filter}
+seqtab_final <- readRDS("output/rds/seqtab_nocut.rds")
+tax <- readRDS("output/rds/tax_IdTaxaExact_nocut.rds")
+
+#Filter those that werent assigned to bacteria 
+tax_filt <- tax %>%
+  as.data.frame() %>%
+  filter(domain=="Bacteria",
+         !family== "Mitochondria",
+         !order == "Chloroplast",
+         !phylum== "Cyanobacteria")
+
+nrow(tax)
+nrow(tax_filt)
+
+table(str_detect(rownames(tax), "TGGGGAATATTGGACAATGAGCGCAAGCTTGATCCAGCTATATCGCGTGTGTGAAGAAGGCTTTAGAGTTGTAAAACACTTTCAATAAAAAAAGAAGAAATTAATAATTAAAAAATATTTTTTTTTGACGGTATTTATTAAAGAAGCACCGGCTAACTTCGTGCCAGCAGCCGCGGTAATACGAGGGGTGCTAGCGTTAATCAAAATTACTGGGCGTAAAGGGTACGTAGGCTGTATTTTTAAATTAAATGTAAAATATATTAAAATTAATTTAATATTGCTTTTAATAATAAAATTCTTGAGTATAAAAGAAGAAAATAGAATTCTAAGAGTAGCAGTGAAATGCTTAGATATTTAGAAGAATACTAGTGGCGAAGGCGTTTTTCTATTTTATACTGACGCTAATGTACGAAAGCATGGGGAGCAAACA"))
+
+seqtab_filt <- seqtab_final[,rownames(tax_filt)]
+
+# Write taxonomy table to disk
+saveRDS(tax_filt, "output/rds/tax_IdTaxaExact_filtered.rds") 
+saveRDS(seqtab_filt, "output/rds/seqtab_filtered.rds") 
+```
+
 
 ## Curate with LULU
 
 LULU further identifies errors and redundant sequences by combining sequence similarity and co-occurrence patterns
 
 ```{r LULU}
-seqtab_final <- readRDS("output/rds/seqtab_nocut.rds")
-tax_exact <- readRDS("output/rds/tax_IdTaxaExact_nocut.rds") 
+seqtab_final <- readRDS("output/rds/seqtab_filtered.rds")
+tax <- readRDS("output/rds/tax_IdTaxaExact_filtered.rds") 
 
 # Make blast database from the ASV's
 seqs <- insect::char2dna(colnames(seqtab_final))
 names(seqs) <- colnames(seqtab_final)
 insect::writeFASTA(seqs, "output/pre_lulu.fasta")
-taxreturn::blast_install(dest.dir = "bin")
+
+
 
 # Blast against themseleves
 matchlist <- taxreturn::blast(query=seqs, db="output/pre_lulu.fasta", output_format = "tabular") %>%
-  select(qseqid, sseqid, pident) %>%
+  dplyr::select(qseqid, sseqid, pident) %>%
   as.data.frame()
+
+#USING BLAST
+#First produce a blastdatabase with the OTUs
+#makeblastdb -in pre_lulu.fasta -dbtype nucl
+# Then blast the OTUs against the database
+#blastn -db pre_lulu.fasta -outfmt '6 qseqid sseqid pident' -out match_list.txt -qcov_hsp_perc 80 -perc_identity 84 -query pre_lulu.fasta
+###
+
+matchlist <- read_tsv("output/match_list.txt", col_names = c("qseqid", "sseqid", "pident"))
 
 # Run lulu
 otutab <- as.data.frame(t(seqtab_final))
-curated_result <- lulu(otutab, matchlist)
-saveRDS(curated_result, "lulu_curated.rds")
+curated_result <- lulu(otutab, matchlist, minimum_match=90)
+saveRDS(curated_result, "output/rds/lulu_curated_BLAST.rds")
 
 # get mapping
-curated_result <- readRDS("output/lulu_curated.rds")
+curated_result <- readRDS("output/rds/lulu_curated.rds")
 mapping <- curated_result[["otu_map"]] %>% 
   rownames_to_column("otu") %>%
-  left_join(tax_exact %>% as.data.frame %>% rownames_to_column("otu"), by="otu")
+  left_join(tax %>% as.data.frame %>% rownames_to_column("otu"), by="otu")
+
 
 table(mapping$curated)
 # Write out curated seqtab
@@ -495,10 +565,9 @@ Following taxonomic assignment, the sequence table and taxonomic table are merge
 
 ```{r create PS, eval = FALSE}
 # Load data
-#seqtab <- t(readRDS("output/rds/seqtab_nocut.rds"))
-seqtab <- readRDS("output/rds/seqtab_curated.rds")
+seqtab <- t(readRDS("output/rds/seqtab_nocut.rds"))
+#seqtab <- readRDS("output/rds/seqtab_curated.rds")
 tax <- readRDS("output/rds/tax_IdTaxaExact_nocut.rds")
-
 
 seqs <- DNAStringSet(rownames(seqtab))
 names(seqs) <- seqs
@@ -539,32 +608,15 @@ seqateurs::summarise_taxa(ps, "genus", "SampleID") %>%
   spread(key="SampleID", value="totalRA") %>%
   write.csv(file = "output/otu_tables/unfiltered/gen_sum.csv")
 
-```
+#Check carsonella presence
+cars <- speedyseq::psmelt(ps) %>%
+  filter(Abundance > 0) %>%
+  group_by(psyllid_spp) %>%
+  summarise(n = count(genus=="Candidatus Carsonella"))
 
-# Filtering
-
-## Taxon Filtering
-
-Remove all non-bacterial taxa, mitochondria, chloroplast and cyanobacteria.
-We also remove all taxa contained within the blank sample from other samples? - Check these
-
-```{r taxon-cleaning}
-get_taxa_unique(ps, "domain")
-
-ntaxa(ps) # Check the number of taxa prior to removal
-ps0 <- ps %>%
-  subset_taxa(
-    domain == "Bacteria" & 
-    family  != "Mitochondria" &
-    order   != "Chloroplast" &
-    phylum != "Cyanobacteria"
-  )
-
-#Check taxa were removed
-ntaxa(ps0)
-get_taxa_unique(ps0, "phylum")
-get_taxa_unique(ps0, "class")
-get_taxa_unique(ps0, "family")
+test <- speedyseq::psmelt(ps) %>%
+  filter(Abundance > 0) %>%
+  filter(genus=="Candidatus Carsonella")
 ```
 
 ## Remove outlier Samples
@@ -577,11 +629,11 @@ Rarefaction curves are useful	to	assess	sensitivity	of	sample	size	to	observed	a
 rm_mocks <- c("mockA_S51", "MockEven_S193", "Mock_S192", "PCRctrl_S191", "MockStaggered_S194", "PCRctrl_S191", "91_S167")
 
 #check mocks
-ps1 <- ps0 %>% 
-  subset_samples(!sample_names(ps0) %in% rm_mocks) %>% #Remove mocks
+ps1 <- ps %>% 
+  subset_samples(!sample_names(ps) %in% rm_mocks) %>% #Remove mocks
   filter_taxa(function(x) mean(x) > 0, TRUE) #Drop missing taxa from table 
 
-message((nsamples(ps0) - nsamples(ps1)), " outlier samples dropped")
+message((nsamples(ps) - nsamples(ps1)), " outlier samples dropped")
 
 #Plot rarefaction curve
 out <- rarecurve(otu_table(ps1), step=100)
@@ -647,21 +699,66 @@ subsample <- intersect(colnames(pre_filt_dist), colnames(post_filt_dist))
 as.data.frame(vegan::mantel(pre_filt_dist[subsample, subsample], post_filt_dist[subsample, subsample])[c("statistic","signif","permutations")])
 ```
 
-# Create phylogenetic tree
 
-```{r phylogenetic tree}
+### Output fastas
+
+```{r Save fastas}
 #Write out fasta and align with silva online
 seqs <- refseq(ps2)
 writeXStringSet(seqs, "output/curated_asv.fasta", width=1000)
+```
 
+## Align with SINA
+
+```{bash align}
+#Create a virtual environment
+module load Python/3.8.2-GCCcore-9.3.0 
+virtualenv ~/SINA
+source ~/SINA/bin/activate
+
+#Install sina
+wget https://github.com/epruesse/SINA/releases/download/v1.7.0/sina-1.7.0-linux.tar.gz
+tar xf sina-1.7.0-linux.tar.gz
+cd sina-1.7.0-linux
+
+#Get referenceDB
+wget https://www.arb-silva.de/fileadmin/silva_databases/release_138/ARB_files/SILVA_138_SSURef_NR99_05_01_20_opt.arb.gz
+
+
+#Run sina
+~/sina-1.7.0-linux/sina --search --add-relatives=5 --meta-fmt=header --fields=acc \
+-i /group/pathogens/Alexp/Metabarcoding/Psyllid_microbiome/output/curated_asv.fasta \
+-r /group/pathogens/Alexp/Metabarcoding/Psyllid_microbiome/reference/SILVA_138_SSURef_NR99_05_01_20_opt.arb \
+-o /group/pathogens/Alexp/Metabarcoding/Psyllid_microbiome/output/aligned_asv.fasta
+```
+
+## Create phylogenetic tree with fasttreee
+```{bash fastree}
+module load FastTree
+FastTree -gtr -cat 20 -quote -nt /group/pathogens/Alexp/Metabarcoding/Psyllid_microbiome/output/aligned_asv.fasta > /group/pathogens/Alexp/Metabarcoding/Psyllid_microbiome/output/sina_tree 
 ```
 
 ## Date tree with PATHd8
 
 ```{r PATHd8}
 # Date usign congruify
-tree <- read.tree("arb-silva.de_2020-07-28_id860849/arb-silva.de_2020-07-28_id860849.tree")
+#tree <- read.tree("arb-silva.de_2020-07-28_id860849/arb-silva.de_2020-07-28_id860849.tree")
+tree <- read.tree("output/sina_tree")
+tree$tip.label <- tree$tip.label %>%
+  str_split_fixed("\\[", n=Inf) %>%
+  as.data.frame() %>%
+  unite(V1, V2, col="name") %>%
+  mutate(name = name %>%
+           str_remove("_align.*$") %>%
+           str_remove("^.*_acc=") %>%
+           str_remove("\\]$")) %>%
+  pull(name)
+  
 ref_tree <- read.tree("bin/Dated trees/Bacteria_16S_SILVA_97sim_FastTree_PATHd8.tre")
+
+ref_tree$tip.label <- ref_tree$tip.label %>% 
+  str_extract("^(.*?)\\.") %>%
+  str_remove("\\.$")
 
 #923 congruent tips
 table(tree$tip.label %in% ref_tree$tip.label)
@@ -686,7 +783,7 @@ ps.merged <- ps2 %>%
     merge_samples(group = "Sample_Name", fun="sum")
 
 #This loses the sample metadata - Need to add it agian
-sample_data(ps.merged) <- sample_data(ps1) %>%
+sample_data(ps.merged) <- sample_data(ps2) %>%
   as("matrix") %>%
   as.data.frame() %>%
   filter(!duplicated(Sample_Name)) %>%

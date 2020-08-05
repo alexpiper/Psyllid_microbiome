@@ -107,6 +107,15 @@ seqateurs::summarise_taxa(ps2, "genus", "SampleID") %>%
 
 #Rename taxa - only keep first 30 characters
 taxa_names(ps2) <- substr(paste0("SV", seq(ntaxa(ps2)),"-",tax_table(ps2)[,7]), 1,30)
+
+
+#
+tax_table(ps2) %>%
+  as("matrix") %>%
+  as.data.frame() %>% 
+  rownames_to_column("OTU") %>%
+  dplyr::filter(genus == "Candidatus Carsonella") %>%
+  pull(OTU) %>% unique() %>% length()
 ```
 
 ## Create species merged table
@@ -326,6 +335,15 @@ speedyseq::tax_glom(ps2, taxrank="genus")  %>%
             min = min(Abundance),
             n_samples = n_distinct(Sample_Name),
             n_species = n_distinct(psyllid_spp))
+
+# Count number of carsonella OTUs per psyllid species
+cars <- speedyseq::psmelt(ps2) %>%
+  filter(Abundance > 0) %>%
+  group_by(psyllid_spp) %>%
+  summarise(n = count(genus=="Candidatus Carsonella"))
+
+hist(cars$n)
+
 ```
 
 ## Alpha diversity metrics
