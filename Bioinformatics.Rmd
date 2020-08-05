@@ -612,11 +612,34 @@ seqateurs::summarise_taxa(ps, "genus", "SampleID") %>%
 cars <- speedyseq::psmelt(ps) %>%
   filter(Abundance > 0) %>%
   group_by(psyllid_spp) %>%
-  summarise(n = count(genus=="Candidatus Carsonella"))
+  summarise(n = count(genus=="Candidatus Carsonella", na.rm = TRUE))
 
 test <- speedyseq::psmelt(ps) %>%
   filter(Abundance > 0) %>%
   filter(genus=="Candidatus Carsonella")
+```
+
+
+## Taxon Filtering
+
+Remove all non-bacterial taxa, mitochondria, chloroplast and cyanobacteria.
+We also remove all taxa contained within the blank sample from other samples? - Check these
+
+```{r taxon-cleaning}
+get_taxa_unique(ps, "domain")
+ntaxa(ps) # Check the number of taxa prior to removal
+ps0 <- ps %>%
+  subset_taxa(
+    domain == "Bacteria" & 
+    family  != "Mitochondria" &
+    order   != "Chloroplast" &
+    phylum != "Cyanobacteria"
+  )
+#Check taxa were removed
+ntaxa(ps0)
+get_taxa_unique(ps0, "phylum")
+get_taxa_unique(ps0, "class")
+get_taxa_unique(ps0, "family")
 ```
 
 ## Remove outlier Samples
@@ -629,11 +652,11 @@ Rarefaction curves are useful	to	assess	sensitivity	of	sample	size	to	observed	a
 rm_mocks <- c("mockA_S51", "MockEven_S193", "Mock_S192", "PCRctrl_S191", "MockStaggered_S194", "PCRctrl_S191", "91_S167")
 
 #check mocks
-ps1 <- ps %>% 
-  subset_samples(!sample_names(ps) %in% rm_mocks) %>% #Remove mocks
+ps1 <- ps0 %>% 
+  subset_samples(!sample_names(ps0) %in% rm_mocks) %>% #Remove mocks
   filter_taxa(function(x) mean(x) > 0, TRUE) #Drop missing taxa from table 
 
-message((nsamples(ps) - nsamples(ps1)), " outlier samples dropped")
+message((nsamples(ps0) - nsamples(ps1)), " outlier samples dropped")
 
 #Plot rarefaction curve
 out <- rarecurve(otu_table(ps1), step=100)
@@ -699,7 +722,6 @@ subsample <- intersect(colnames(pre_filt_dist), colnames(post_filt_dist))
 as.data.frame(vegan::mantel(pre_filt_dist[subsample, subsample], post_filt_dist[subsample, subsample])[c("statistic","signif","permutations")])
 ```
 
-
 ### Output fastas
 
 ```{r Save fastas}
@@ -753,7 +775,10 @@ tree$tip.label <- tree$tip.label %>%
            str_remove("^.*_acc=") %>%
            str_remove("\\]$")) %>%
   pull(name)
-  
+
+tree_pruned <- drop.tip(tree, tree$tip.label[duplicated(tree$tip.label)])
+
+#Reference tree
 ref_tree <- read.tree("bin/Dated trees/Bacteria_16S_SILVA_97sim_FastTree_PATHd8.tre")
 
 ref_tree$tip.label <- ref_tree$tip.label %>% 
@@ -763,8 +788,11 @@ ref_tree$tip.label <- ref_tree$tip.label %>%
 #923 congruent tips
 table(tree$tip.label %in% ref_tree$tip.label)
 
-ref_tree_pruned <- drop.tip(ref_tree, ref_tree$tip.label[!ref_tree$tip.label %in% tree$tip.label])
-res <- congruify.phylo(reference=ref_tree_pruned, target=tree, scale="PATHd8")
+ref_tree_pruned <- drop.tip(ref_tree, c(ref_tree$tip.label[!ref_tree$tip.label %in% tree$tip.label],ref_tree$tip.label[duplicated(ref_tree$tip.label)]))
+
+table(tree_pruned$tip.label %in% ref_tree_pruned$tip.label)
+
+res <- congruify.phylo(reference=ref_tree_pruned, target=tree_pruned, scale="PATHd8")
 
 tree2 <- drop.tip(res$phy, res$phy$tip.label[!res$phy$tip.label %in% names(refseq(ps2))])
 write.tree(tree2, "output/phytree.nwk")
