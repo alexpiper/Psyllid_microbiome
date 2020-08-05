@@ -27,6 +27,7 @@ BDTT <- function(ps, slices, metrics=c("Bray","Jaccard","Aitchison","Philr"), ze
   getBDTT <- function(resolution, ps, metrics=c("Bray","Jaccard","Aitchison","Philr"), zeroes="Impute", parallel=FALSE, quiet=FALSE){
     ps_new <- speedyseq::tree_glom(ps, resolution)
     phy_tree(ps_new) <- multi2di(phy_tree(ps_new))
+    phy_tree(ps_new) <- makeNodeLabel(phy_tree(ps_new), method="number", prefix='n')
     message(ntaxa(ps_new), " otus created from a phylogenetic slice at ", resolution)
     if(taxa_are_rows(ps_new)){
       otutab=t(otu_table(ps_new))
@@ -60,13 +61,13 @@ BDTT <- function(ps, slices, metrics=c("Bray","Jaccard","Aitchison","Philr"), ze
         message("Calculating PhilR distance")
         Philr <- as.matrix(vegdist(philr::philr(otutab_n0, phy_tree(ps_new),
                                                 part.weights='enorm.x.gm.counts',
-                                                ilr.weights='blw.sqrt'), method="euclidean"))
+                                                ilr.weights='blw.sqrt'), method="euclidean", na.rm=TRUE))
         message("PhilR distance complete")
       } else if(quiet){
         suppressMessages(
-          Philr <- as.matrix(vegdist(philr::philr(otutab_n0, newtree,
-                                                  part.weights='enorm.x.gm.counts',
-                                                  ilr.weights='blw.sqrt'), method="euclidean"))
+          Philr <- as.matrix(vegdist(philr::philr(otutab_n0, phy_tree(ps_new),
+                                                           part.weights='enorm.x.gm.counts',
+                                                           ilr.weights='blw.sqrt'), method="euclidean", na.rm=TRUE))
         )
       }
     }
