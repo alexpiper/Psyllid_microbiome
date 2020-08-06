@@ -17,7 +17,7 @@
 
 # Beta diversity through time ---------------------------------------------
 
-BDTT <- function(ps, slices, metrics=c("Bray","Jaccard","Aitchison","Philr"), zeroes="Impute",  cores = 1, quiet=FALSE){
+BDTT <- function(ps, slices, metrics=c("Bray","Jaccard","Aitchison","Philr"), zeroes="Impute",  multithread = FALSE, quiet=FALSE, progress=FALSE){
   #Check inputs:
   if (is.null(phy_tree(ps))) {stop("A phyloseq object with a phylogenetic tree in the phy_tree slot is required")}
   if(!all(metrics %in% c("Bray", "Jaccard", "Aitchison", "Philr", "Unifrac", "WUnifrac"))){
@@ -90,25 +90,32 @@ BDTT <- function(ps, slices, metrics=c("Bray","Jaccard","Aitchison","Philr"), ze
     return(out)
   }
   
-  if (cores == 1) {
-    Betas <- lapply(slices, getBDTT, ps=ps, metrics=metrics, zeroes=zeroes, parallel=FALSE, quiet=quiet)
-  } else {
-    navailcores <- parallel::detectCores()
-    if (identical(cores, "autodetect")) cores <- navailcores - 1
-    if (!(mode(cores) %in% c("numeric", "integer"))) stop("Invalid 'cores'")
-    if (cores > navailcores) stop("Number of cores is more than available")
-    
-    if (cores > 1) {
-      if (!quiet) cat("Multithreading with", cores, "cores\n")
-      cores <- parallel::makeCluster(cores)
-      junk <- parallel::clusterEvalQ(cores, sapply(c("phyloseq","stringr",
-                                                     "philr", "zCompositions",
-                                                     "CoDaSeq", "vegan", "ape"),
-                                                   require, character.only = TRUE)) # Discard result
-      Betas <- parallel::parLapply(cores, slices, getBDTT, ps=ps, metrics=metrics, zeroes=zeroes, parallel = FALSE, quiet=quiet)
-      parallel::stopCluster(cores)
+  # setup multithreading
+  ncores <- future::availableCores() -1
+  if(isTRUE(multithread)){
+    cores <- ncores
+    if(!quiet){message("Multithreading with ", cores, " cores")}
+    future::plan(future::multiprocess, workers=cores)
+  } else if (is.numeric(multithread) & multithread > 1){
+    cores <- multithread
+    if(cores > ncores){
+      cores <- ncores
+      message("Warning: the value provided to multithread is higher than the number of cores, using ", cores, " cores instead")
     }
-  }
+    if(!quiet){message("Multithreading with ", cores, " cores")}
+    future::plan(future::multiprocess, workers=cores)
+  } else if(isFALSE(multithread) | multithread==1){
+    future::plan(future::sequential)
+  } else (
+    stop("Multithread must be a logical or numeric vector of the numbers of cores to use")
+  )
+  
+  #Apply filt_phmm to all sequences
+  Betas <-  furrr::future_map(slices, getBDTT, ps=ps, metrics=metrics, zeroes=zeroes, parallel=FALSE, quiet=quiet, .progress = progress)
+  
+  #Close all worker threads
+  future::plan(future::sequential)
+
   names(Betas) <- slices
   out <- Betas
   return(out)
