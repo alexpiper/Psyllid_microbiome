@@ -117,8 +117,7 @@ BDTT <- function(ps, slices, metrics=c("Bray","Jaccard","Aitchison","Philr"), ze
   future::plan(future::sequential)
 
   names(Betas) <- slices
-  out <- Betas
-  return(out)
+  return(Betas)
 }
 
 

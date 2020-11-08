@@ -484,81 +484,6 @@ try(dev.off(), silent=TRUE)
 
 ```
 
-## Taxon Filtering
-
-Remove all non-bacterial taxa, mitochondria, chloroplast and cyanobacteria.
-We also remove all taxa contained within the blank sample from other samples? - Check these
-```{r tax filter}
-seqtab_final <- readRDS("output/rds/seqtab_nocut.rds")
-tax <- readRDS("output/rds/tax_IdTaxaExact_nocut.rds")
-
-#Filter those that werent assigned to bacteria 
-tax_filt <- tax %>%
-  as.data.frame() %>%
-  filter(domain=="Bacteria",
-         !family== "Mitochondria",
-         !order == "Chloroplast",
-         !phylum== "Cyanobacteria")
-
-nrow(tax)
-nrow(tax_filt)
-
-table(str_detect(rownames(tax), "TGGGGAATATTGGACAATGAGCGCAAGCTTGATCCAGCTATATCGCGTGTGTGAAGAAGGCTTTAGAGTTGTAAAACACTTTCAATAAAAAAAGAAGAAATTAATAATTAAAAAATATTTTTTTTTGACGGTATTTATTAAAGAAGCACCGGCTAACTTCGTGCCAGCAGCCGCGGTAATACGAGGGGTGCTAGCGTTAATCAAAATTACTGGGCGTAAAGGGTACGTAGGCTGTATTTTTAAATTAAATGTAAAATATATTAAAATTAATTTAATATTGCTTTTAATAATAAAATTCTTGAGTATAAAAGAAGAAAATAGAATTCTAAGAGTAGCAGTGAAATGCTTAGATATTTAGAAGAATACTAGTGGCGAAGGCGTTTTTCTATTTTATACTGACGCTAATGTACGAAAGCATGGGGAGCAAACA"))
-
-seqtab_filt <- seqtab_final[,rownames(tax_filt)]
-
-# Write taxonomy table to disk
-saveRDS(tax_filt, "output/rds/tax_IdTaxaExact_filtered.rds") 
-saveRDS(seqtab_filt, "output/rds/seqtab_filtered.rds") 
-```
-
-
-## Curate with LULU
-
-LULU further identifies errors and redundant sequences by combining sequence similarity and co-occurrence patterns
-
-```{r LULU}
-seqtab_final <- readRDS("output/rds/seqtab_filtered.rds")
-tax <- readRDS("output/rds/tax_IdTaxaExact_filtered.rds") 
-
-# Make blast database from the ASV's
-seqs <- insect::char2dna(colnames(seqtab_final))
-names(seqs) <- colnames(seqtab_final)
-insect::writeFASTA(seqs, "output/pre_lulu.fasta")
-
-
-
-# Blast against themseleves
-matchlist <- taxreturn::blast(query=seqs, db="output/pre_lulu.fasta", output_format = "tabular") %>%
-  dplyr::select(qseqid, sseqid, pident) %>%
-  as.data.frame()
-
-#USING BLAST
-#First produce a blastdatabase with the OTUs
-#makeblastdb -in pre_lulu.fasta -dbtype nucl
-# Then blast the OTUs against the database
-#blastn -db pre_lulu.fasta -outfmt '6 qseqid sseqid pident' -out match_list.txt -qcov_hsp_perc 80 -perc_identity 84 -query pre_lulu.fasta
-###
-
-matchlist <- read_tsv("output/match_list.txt", col_names = c("qseqid", "sseqid", "pident"))
-
-# Run lulu
-otutab <- as.data.frame(t(seqtab_final))
-curated_result <- lulu(otutab, matchlist, minimum_match=90)
-saveRDS(curated_result, "output/rds/lulu_curated_BLAST.rds")
-
-# get mapping
-curated_result <- readRDS("output/rds/lulu_curated.rds")
-mapping <- curated_result[["otu_map"]] %>% 
-  rownames_to_column("otu") %>%
-  left_join(tax %>% as.data.frame %>% rownames_to_column("otu"), by="otu")
-
-
-table(mapping$curated)
-# Write out curated seqtab
-saveRDS(curated_result[["curated_table"]], "output/rds/seqtab_curated.rds")
-```
-
 # Make Phyloseq object
 
 Following taxonomic assignment, the sequence table and taxonomic table are merged into a single phyloseq object alongside the sample info csv.
@@ -810,6 +735,7 @@ This can be done with DADA2 - mergeSequenceTables(st1, st2, st3, repeats = "sum"
 ps.merged <- ps2 %>%
     merge_samples(group = "Sample_Name", fun="sum")
 
+
 #This loses the sample metadata - Need to add it agian
 sample_data(ps.merged) <- sample_data(ps2) %>%
   as("matrix") %>%
@@ -817,7 +743,17 @@ sample_data(ps.merged) <- sample_data(ps2) %>%
   filter(!duplicated(Sample_Name)) %>%
   magrittr::set_rownames(.$Sample_Name)
 
-ps2 <- ps.merged
+seqs <- refseq(ps2)
+tree <- read.tree("output/phytree.nwk")
+
+#make new phyloseq object
+ps2 <- phyloseq(tax_table(ps.merged),
+               sample_data(ps.merged),
+               otu_table(otu_table(ps.merged), taxa_are_rows = FALSE),
+               refseq(seqs),
+               phy_tree(tree))
+
+
 saveRDS(ps2, "output/rds/ps2.rds")
 ```
 

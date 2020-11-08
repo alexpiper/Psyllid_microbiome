@@ -20,6 +20,8 @@ editor_options:
   chunk_output_type: console
 ---
 
+# Load packages
+
 ```{r setup, eval=TRUE, warning=FALSE, message=FALSE, error=FALSE}
 # Knitr global setup - change eval to true to run code
 library(knitr)
@@ -92,9 +94,6 @@ options(stringsAsFactors = FALSE)
 
 ```{r read in phyloseq}
 ps2 <- readRDS("output/rds/ps2.rds")
-tree <- read.tree("output/phytree.nwk")
-
-phy_tree(ps2) <- tree
 
 # export filtered
 dir.create("output/otu_tables/filtered")
@@ -131,7 +130,15 @@ sample_data(ps.sppmerged) <- sample_data(ps2) %>%
   filter(!duplicated(psyllid_spp)) %>%
   magrittr::set_rownames(.$psyllid_spp)
 
-ps3 <- ps.sppmerged
+seqs <- refseq(ps2)
+tree <- phy_tree(ps2)
+#make new phyloseq object
+ps3 <- phyloseq(tax_table(ps.sppmerged),
+               sample_data(ps.sppmerged),
+               otu_table(otu_table(ps.sppmerged), taxa_are_rows = FALSE),
+               refseq(seqs),
+               phy_tree(tree))
+
 ```
 
 ## Read in psyllid phylogeny
@@ -264,7 +271,7 @@ prevdf <- data.frame(Prevalence = prevdf,
                      tax_table(ps2))
 #Prevalence plot
 gg.prev <- subset(prevdf, phylum %in% get_taxa_unique(ps2, "phylum")) %>%
-  ggplot(aes(TotalAbundance, Prevalence / nsamples(ps.merged),color=order)) +
+  ggplot(aes(TotalAbundance, Prevalence / nsamples(ps2),color=order)) +
   geom_point(size = 3, alpha = 0.7) +
   scale_x_log10() +
   xlab("Total Abundance") + ylab("Prevalence [Frac. Samples]") +
@@ -308,6 +315,7 @@ prevdf_gen <- data.frame(Prevalence = prevdf_gen,
                      tax_table(ps.gen)) %>%
   dplyr::mutate(RA = TotalAbundance / sum(TotalAbundance)) %>%
   remove_rownames() %>%
+  mutate(genus = make.unique(genus)) %>%
   magrittr::set_rownames(.$genus) %>%
   dplyr::select(-rank_names(ps.gen))
 
@@ -319,16 +327,33 @@ prevdf_gen <- data.frame(Prevalence = prevdf_gen,
                      tax_table(ps.gen)) %>%
   dplyr::mutate(RA = TotalAbundance / sum(TotalAbundance)) %>%
   remove_rownames() %>%
+  mutate(genus = make.unique(genus)) %>%
   magrittr::set_rownames(.$genus) %>%
   dplyr::select(-rank_names(ps.gen))
 
-# Count number of carsonella OTUs per psyllid species
-cars <- speedyseq::psmelt(ps2) %>%
+# Prevalence of symbionts across psyllid species
+speedyseq::psmelt(ps2) %>%
+  mutate(total_spp  = n_distinct(psyllid_spp), total_specimen = n_distinct(Sample_Name)) %>%
   filter(Abundance > 0) %>%
-  group_by(psyllid_spp) %>%
-  summarise(n = count(genus=="Candidatus Carsonella"))
+  filter(genus %in% c("Candidatus Carsonella", "Arsenophonus", "Sodalis")) %>%
+  group_by(genus, total_spp, total_specimen)%>%
+  summarise(n_species = n_distinct(psyllid_spp), n_specimen = n_distinct(Sample_Name)) %>%
+  ungroup()%>%
+  mutate(prop_species = n_species / total_spp,
+         prop_specimen = n_specimen / total_specimen)
 
-hist(cars$n)
+# Number of symbiont OTUs per psyllid species
+speedyseq::psmelt(ps2) %>%
+  filter(Abundance > 0) %>%
+  filter(genus %in% c("Candidatus Carsonella", "Arsenophonus", "Sodalis")) %>%
+  group_by(psyllid_spp, genus) %>%
+  summarise(n = n_distinct(OTU)) %>%
+  ggplot(aes(x = psyllid_spp, y = n, fill=genus))+
+  geom_col(show.legend = FALSE)+
+  facet_grid(genus~.)+
+  theme(axis.text.x = element_text(angle=45, hjust=1)) +
+  labs(x = "Psyllid Species",
+       y = "Number of distinct ASVs")
 
 ```
 
@@ -382,7 +407,6 @@ report::report(aov(pd ~genus_geo, data=div_table))
 
 #Test heirarchail
 broom::tidy(aov(alpha ~psyllid_genus+psyllid_spp+psyllid_genus:psyllid_spp, data=div_table))
-
 
 ## Major genera only
 # Difference between all major genera for alpha diversity ANOVA
@@ -635,6 +659,7 @@ ps2_dist <- ps2
 otutab <- otu_table(ps2_dist)
 #Impute zeroes for compositional distances
 otutab_n0 <- as.matrix(zCompositions::cmultRepl(otutab, method="BL", output="p-counts"))
+
 #Root & label phylogenetic tree
 phy_tree(ps2_dist) <- multi2di(phy_tree(ps2_dist))
 phy_tree(ps2_dist) <- makeNodeLabel(phy_tree(ps2_dist), method="number", prefix='n')
@@ -738,7 +763,6 @@ purrr::map2(distlist, distlist_subset,~{
 ## Adonis & Betadisper
 
 ```{r Adonis}
-
 # Try heirarchial effects here, starting with the techical than moving down the phylogeny
 #seqrun, psyllid
 #this marginalises the effects of sample metadat variables first, before partitioning hte remaining variance into that accounted for by host phylogeny
@@ -754,18 +778,6 @@ adonis_results <- distlist %>%
     )
 })  %>%
   bind_rows(.id="dist")
-
-#Test heirarchial
-#AIC permanova https://github.com/kdyson/R_Scripts/blob/master/AICc_PERMANOVA.R
-
-#ACcountign for seqrun then phylogyn
-m1 <- adonis(distlist$Aitchison~seqrun+psyllid_family+psyllid_genus+psyllid_spp, method="euclidean", data=metadata, by="terms")
-
-AICc.PERMANOVA(m1)
-
-#Accountign for seqrun, hosptlant then species
-m2 <- adonis(distlist$Aitchison~seqrun+hostplant_spp+psyllid_spp, method="euclidean", data=metadata, by=NULL)
-AICc.PERMANOVA(m2)
 
 # Check homogeneity
 betadisper_results <- distlist %>%
@@ -993,8 +1005,6 @@ spat.dist <- spDists(as.matrix(envData), longlat=TRUE) %>%
 
 ### Whole dataset
 
-But also see how this paper has done it with PACO https://www.nature.com/articles/s41467-019-10191-3.pdf Using random subsampling? Then pull out the most associated also file:///C:/Users/ap0y/Dropbox/workprojects/Papers/10.1002_ecy.1955.pdf
-
 ```{r phylosymbiosis}
 #Test with filtered
 #distlist <- distlist_filt
@@ -1094,7 +1104,6 @@ write_csv(pmantel_results %>% dplyr::select(-pval1,-pval2), "output/phylosymbios
 ```
 
 ## BDTT
-
 ```{r timeslice}
 #Look at depth categories in tree
 hist(get_all_node_depths(phy_tree(ps2))) # PLOT THIS NEXT TO TREE
@@ -1327,20 +1336,38 @@ try(dev.off(), silent=TRUE)
 
 # Cophylogeny
 
-Due to the higher correlations with recent branches, we looked for patterns of cophylogeny
+Run the scripts in the R subdirectory
 
-## Psyllid ~ Microbe
+```{bash submit paco jobs}
+dos2unix batch_submit_paco.sh
+find $(/usr/bin/ls -d $PWD/*) -name 'paco_*' -type f > sequence_index.txt
+joblength=$(cat sequence_index.txt | wc -l)
+sbatch --array=1-$joblength batch_submit_paco.sh
+```
 
-```{r Psyllid microbe}
-#Prepare co-occurance matrix
-coocur <- ps3 %>%
+# Microbiome 3 genera heatmap
+
+```{r all microbe}
+filterfun1 <- function(x){
+  x[(x / sum(x)) < (1e-4)] <- 0 #1e-4 is 0.01% threshold
+  return(x)
+}
+ps3_filt  <- transform_sample_counts(ps3, fun = filterfun1)%>%
+  filter_taxa(function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
+
+print(paste0((ntaxa(ps3)-ntaxa(ps3_filt)), " taxa under threshold removed"))
+
+#Get co-occurance matrix
+coocur <- ps3_filt %>%
+    subset_samples(psyllid_genus %in% c("Trioza", "Ctenarytaina", "Psylla")) %>%
+    filter_taxa(function(x) mean(x) > 0, TRUE) %>%
     otu_table %>%
     as.matrix() %>% 
   apply(2, function(x) ifelse(x > 0, 1, 0))
 
 colnames(coocur) <- colnames(coocur) %>%
            str_replace_all(" |-", "_")
-rownames(coocur) <- rownames(coocur) %>%
+rownames(coocur) <- rownames(coocur) %>% 
            str_replace_all(" |-", "_")
 
 # H cophenetic distance
@@ -1348,54 +1375,48 @@ h_tree <- pruned.tree
 h_tree$tip.label <- h_tree$tip.label %>%
            str_replace_all(" |-", "_")
 h_tree <- drop.tip(h_tree, setdiff(h_tree$tip.label, rownames(coocur)))
-h_dist <- sqrt(cophenetic(h_tree))
 
 # P cophenetic distance
 s_tree <- phy_tree(ps3)
 s_tree$tip.label <- s_tree$tip.label %>%
            str_replace_all(" |-", "_")
 s_tree <- drop.tip(s_tree, setdiff(s_tree$tip.label, colnames(coocur)))
-s_dist <- sqrt(cophenetic(s_tree) /1e+6) #convert to Mya so integers are small enough for PACO
 
 coocur <- coocur[h_tree$tip.label, s_tree$tip.label]
 
-# prepare paco data
-D <- prepare_paco_data(H=h_dist, P=s_dist, HP=coocur)
-# Add pcord
-D <- add_pcoord(D, correction='none')
+# Read in Paco runs 
+paco_run_trioza <- readRDS("output/cophylogeny/paco_trioza_microbe_filtered_asym.rds")
+paco_run_cten <- readRDS("output/cophylogeny/paco_ctenarytaina_microbe_filtered_asym.rds")
+paco_run_psylla <- readRDS("output/cophylogeny/paco_psylla_microbe_filtered_asym.rds")
 
-p_host <- ggplot(D$H_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, Axis.2)) +
-    geom_point() +
-    theme_bw() +
-  ggtitle("H PCA")
+paco_run_trioza$gof
+paco_run_cten$gof
+paco_run_psylla$gof
 
-p_para <- ggplot(D$P_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, Axis.2))  +
-    geom_point() +
-    theme_bw()+
-  ggtitle("P PCA")
-    
-plot(p_host + p_para)
-
-# run paco
-#paco_run <- PACo(D, nperm=9, seed=909, method='quasiswap', symmetric=TRUE) 
-# Get interaction-specific cophylogenetic contributions using jacknifing
-##paco_run <- paco_links(paco_run)
-#write_rds(paco_run, "output/cophylogeny/paco_psyllid_microbe_filtered.rds")
-
-# Read in filtered 
-paco_run <- readRDS("output/cophylogeny/paco_psyllid_microbe_filtered_asym.rds")
-# Read in unfiltered 
-#paco_run <- readRDS("output/cophylogeny/paco_psyllid_microbe.rds")
-#print overall significance
-print(paco_run$gof)
-
-links <- data.frame(joint=names(paco_run$jackknife$mean), values=unname(paco_run$jackknife$mean), upper=unname(paco_run$jackknife$upper)) %>%
-  mutate(OTU = joint) %>%
- separate(OTU, into=c("Sample_Name", "OTU"), sep="-", extra="merge") %>%
+# Get link importance
+links <- do.call("list", mget(grep("paco_run_",names(.GlobalEnv),value=TRUE))) %>%
+  purrr::map(function(x){
+    genus_name <- rownames(x$H)[1] %>% str_remove("_.*$")
+    data.frame(
+      joint=names(x$jackknife$mean),
+      values=unname(x$jackknife$mean),
+      upper=unname(x$jackknife$upper),
+      genus = genus_name
+    )
+  }) %>%
+  bind_rows() %>%
+ separate(joint, into=c("Sample_Name", "OTU"), sep="-", extra="merge", remove=FALSE) %>%
+  group_by(genus) %>%
+  mutate(mean_val = mean(values)) %>%
   mutate(signif = case_when(
-    upper < mean(.$values) ~ 1,
-    upper > mean(.$values) ~ 0
+    upper < mean_val ~ 1,
+    upper > mean_val ~ 0
   ))
+
+test <- colnames(coocur) %>%
+  enframe(name=NULL, value="OTU")%>%
+  left_join(links)
+
 # Plot links
 links %>%
   dplyr::rename(label = joint) %>%
@@ -1404,69 +1425,77 @@ links %>%
   arrange(-values) %>%
   ggplot(aes(x=label, y=values, colour=as.factor(signif))) +
   geom_point(show.legend = FALSE) +
+  facet_wrap(~genus, scales = "free")+
   geom_errorbar(aes(ymin=values, ymax=upper)) +
-  geom_hline(yintercept = mean(links$values)) +
-  scale_color_manual(values=c("steelblue", "darkorange1")) +
+  geom_hline(aes(yintercept = mean_val), lty=3) +
+  scale_color_manual(values=c("steelblue", "darkorange1"), name = "Significant") +
   theme_classic()+ 
   theme(axis.text.x = element_blank())
 
-dir.create("output/cophylogeny/psyllid_microbiome")
-write_csv(links, "output/cophylogeny/psyllid_microbiome/psyllid_microbiome_links.csv")
-write_csv(links %>% 
-    group_by(OTU) %>%
-    summarise(values = mean(values)), "output/cophylogeny/psyllid_microbiome/microbe_weights.csv")
-write_csv(links %>% 
-    group_by(Sample_Name) %>%
-    summarise(values = mean(values)), "output/cophylogeny/psyllid_microbiome/psyllid_weights.csv")
-
-
 #Get observed residuals of Procrustean superimposition 
-paco_residuals <- residuals_paco(paco_run$proc, type = "interaction")
+paco_residuals <- do.call("list", mget(grep("paco_run_",names(.GlobalEnv),value=TRUE))) %>%
+  purrr::map(function(x){
+    res <- residuals_paco(x$proc, type = "interaction")
+    genus_name <- rownames(x$H)[1] %>% str_remove("_.*$")
+    data.frame(
+      OTU=names(res),
+      values=unname(res),
+      genus=genus_name
+    ) 
+  })%>%
+  bind_rows() 
 
-# Visualise residuals
-res <- data.frame(OTU=names(paco_residuals), values=unname(paco_residuals)) %>%
-  separate(OTU, into=c("Sample_Name", "OTU"), sep="-", extra="merge") 
-
-ggplot(res, aes(x=values))+
+# Plot residuals
+ggplot(paco_residuals, aes(x=values))+
   geom_density(fill='grey70')+
   theme_bw()+
+  facet_grid(genus~.) +
   xlab('Procrustes residuals')+
   ylab('Frequency')
 
 # Parafit run
-#PF_run <- parafit(h_dist, s_dist, t(coocur), nperm=99, test.links=TRUE, silent=TRUE)
+PF_run_trioza <- readRDS("output/cophylogeny/parafit_trioza_microbe_filtered.rds")
+PF_run_cten <- readRDS("output/cophylogeny/parafit_ctenarytaina_microbe_filtered.rds")
+PF_run_psylla <- readRDS("output/cophylogeny/parafit_psylla_microbe_filtered.rds")
 
-PF_run <- readRDS("output/cophylogeny/parafit_psyllid_microbe_filtered.rds")
+PF_run_trioza$ParaFitGlobal
+PF_run_trioza$p.global
 
-PF_run$ParaFitGlobal
-PF_run$p.global
+PF_run_cten$ParaFitGlobal
+PF_run_cten$p.global
 
-PF_links <- as.data.frame(PF_run$link.table) %>%
-  left_join(as.data.frame(rownames(h_dist)) %>%
-              rownames_to_column("Host") %>%
-              mutate(Host = as.numeric(Host))) %>%
-  left_join(as.data.frame(rownames(s_dist)) %>%
-              rownames_to_column("Parasite") %>%
-              mutate(Parasite = as.numeric(Parasite))) %>%
-  dplyr::rename(psyllid_spp = `rownames(h_dist)`, OTU = `rownames(s_dist)`) %>%
+PF_run_psylla$ParaFitGlobal
+PF_run_psylla$p.global
+
+# Joining isnt working here because they were made separately - so getting the rownames from cooccur no logner works
+
+PF_links <- do.call("list", mget(grep("PF_run_",names(.GlobalEnv),value=TRUE))) %>%
+  purrr::map(function(x){
+    genus_name <- x$para.per.host[1] %>% str_remove("_.*$")
+    as.data.frame(x$link.table) %>%
+      left_join(enframe(names(x$para.per.host), name = "Host", value="psyllid_spp") %>%
+                  mutate(Host = as.numeric(Host))) %>%
+      left_join(enframe(names(x$host.per.para), name = "Parasite", value="OTU") %>%
+                  mutate(Parasite = as.numeric(Parasite))) %>%
+      mutate(genus = genus_name)
+  }) %>%
+  bind_rows() %>%
   mutate(signif = case_when(
     p.F1 < 0.05 ~ 1,
     p.F1 > 0.05 ~ 0
   )) 
+
 
 # Cophyloplot
 coocur.lut <- which(coocur ==1, arr.ind=TRUE)
 assoc <- cbind(rownames(coocur)[coocur.lut[,1]], colnames(coocur)[coocur.lut[,2]])
 
 # Rotate the nodes using phytools
-obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=TRUE) 
+library(phytools)
+obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=FALSE) 
 
-# Extract the goods for ggtree
-# psyllid_tree
 tree1 <- obj[["trees"]][[1]]
-tree1 <- groupOTU(tree1, .node=73) # Make the atmeto dotted to indicate outgroup was rescaled
-
-p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links,linetype=group)) #+ geom_tiplab()
+p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links))
 weights_p1 <- p1$data %>%
   left_join(links %>%
   group_by(Sample_Name) %>%
@@ -1474,18 +1503,13 @@ weights_p1 <- p1$data %>%
     dplyr::rename(label = Sample_Name)
     )  
 
-#Scale the atmetocranium and root nodes to be shorter
-p1$data[p1$data$node %in% c(73), "x"] <- max(p1$data$x)
-p1$data[p1$data$node %in% c(74), "x"] <- 0.2 #root
-
 ## Get values for higher nodes
 weights_p1 <- weights_p1 %>%
   left_join(data.frame(node=weights_p1$node, links = weights_p1$node %>% purrr::map_dbl(average_descendants, tree=tree1, df=weights_p1)))
 
-
-p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=links)) +
+p1 <- p1 %<+% weights_p1 +
   scale_color_gradient(low="steelblue", high="darkorange1") +
-  theme(legend.position = "none")
+    theme(legend.position = "none")
 
 # OTU tree
 tree2 <- obj[["trees"]][[2]]
@@ -1508,7 +1532,7 @@ cls <- tax_groups %>%
   set_names(group_name$group_name)
 
 newtree <- groupOTU(tree2, cls)
-p2 <- ggtree(newtree, ladderize=FALSE, aes(colour=links))
+p2 <- ggtree(newtree, ladderize=TRUE, aes(colour=links)) 
 weights_p2 <- p2$data %>%
   left_join(links %>% 
     group_by(OTU) %>%
@@ -1516,183 +1540,186 @@ weights_p2 <- p2$data %>%
     dplyr::rename(label = OTU)
     ) 
 
+#Should be able to use castor to make this faster
 weights_p2 <- weights_p2 %>%
   left_join(data.frame(node=weights_p2$node, links = weights_p2$node %>% purrr::map_dbl(average_descendants, tree=tree2, df=weights_p2)))
 
-p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=links)) +  
+p2 <- p2 %<+% weights_p2  +  
   scale_color_gradient(low="steelblue", high="darkorange1") +
   theme(legend.position = "none")
 
-
-# Tanglegram
-dd <- obj$assoc %>%
+# Plot heatmaps
+heatmap_dat <- obj$assoc %>%
   as_data_frame() %>%
   magrittr::set_colnames(c("label.x", "label.y")) %>%
-  left_join(links  %>% 
-              dplyr::rename(label.x = Sample_Name, label.y = OTU)) %>%
+  mutate(genus = label.x %>% str_remove("_.*$")) %>%
+  left_join(links %>% 
+              dplyr::select(label.x = Sample_Name, label.y = OTU, signif_paco=signif)) %>%
+  left_join(PF_links %>% 
+              dplyr::select(label.x = psyllid_spp, label.y = OTU, signif_para=signif)) %>%
   left_join(p1$data %>% dplyr::select(label, y) %>% dplyr::rename(label.x = label), by="label.x") %>%
   left_join(p2$data %>% dplyr::select(label, y) %>% dplyr::rename(label.y = label), by="label.y") %>%
-  rownames_to_column("assoc")
-
-d1_new <- dd %>% 
-  dplyr::select(assoc, label.x, y.x, values, upper, signif) %>%
-  dplyr::rename(label = label.x, y = y.x)%>%
-  mutate(tree = "host") 
-  
-d2_new <- dd %>% 
-  dplyr::select(assoc, label.y, y.y, values, upper, signif) %>%
-  dplyr::rename(label = label.y, y = y.y) %>%
-  mutate(tree = "microbe")
-
-tangle <- bind_rows(d1_new, d2_new) %>%
-  filter(!is.na(label))%>% 
-  group_by(tree) %>%
-  mutate(y = y / max(y)) %>%
-  ungroup
-
-gg.tangle <- ggplot(tangle, aes(x=tree, y=y, colour=signif)) +
-    geom_line(aes(group=assoc),alpha=0.1) +  
-  geom_text(data = tangle %>% 
-              dplyr::filter(tree=="host") %>%
-              group_by(label, y, tree) %>%
-              summarise(signif = mean(signif)),
-            aes(label=label),stat = 'unique', hjust=1)+
-    scale_colour_gradient(low="steelblue", high="darkorange1") +
-    scale_x_discrete(expand = expansion(add=c(0.5,0))) + 
-    theme_void() +
-    theme(legend.position = "bottom")
-
-whole_tanglegram <- p1 + gg.tangle + (p2  + 
-  geom_text2(aes(subset=!isTip, label=group %>% na_if(0)), hjust=0, check_overlap=TRUE) + scale_x_reverse())
-whole_tanglegram
-
-pdf(file="figs/microbiome_tanglegram.pdf",  width = 8, height = 11, paper="a4")
-  plot(whole_tanglegram)
-try(dev.off(), silent=TRUE)
-  
- # Make plot ranking links, and nodes
-
-gg.para_hlinks <- PF_links %>%
-  dplyr::rename(label = psyllid_spp) %>%
-  drop_na() %>%
-  group_by(label) %>%
-  summarise(values = sum(signif)) %>%
-  mutate(label = as.factor(label),
-         label=fct_reorder(label, values, sum ))%>%
-  arrange(-values) %>%
-  ggplot(aes(x=label, y=values, fill=values)) +
-  geom_col(show.legend = FALSE) +  
-  scale_fill_gradient(low="steelblue", high="darkorange1") +
-  theme_classic()+ 
-  labs(y = "# Signficant links", x=NULL, title ="ParaFit Psyllid taxa") + 
-  coord_flip()
-
-gg.paco_hlinks <- d1_new %>%
-  drop_na() %>%
-  group_by(label) %>%
-  summarise(values = sum(signif)) %>%
-  mutate(label = as.factor(label),
-         label=fct_reorder(label, values, sum ))%>%
-  arrange(-values) %>%
-  ggplot(aes(x=label, y=values, fill=values)) +
-  geom_col(show.legend = FALSE) +  
-  scale_fill_gradient(low="steelblue", high="darkorange1") +
-  theme_classic()+ 
-  labs(y = "# Signficant links", x=NULL, title ="PACo Psyllid taxa") + 
-  coord_flip()
-
-gg.para_slinks <- PF_links %>%
-  dplyr::rename(label = OTU) %>%
-  left_join(tax_groups) %>%
-  drop_na() %>%
-  mutate(genus = str_sub(genus, 1, 30)) %>%
-  group_by(genus) %>%
-  summarise(values = sum(signif)) %>%
-  dplyr::rename(label = genus) %>%
-  mutate(label = as.factor(label),
-         label=fct_reorder(label, values, sum ))%>%
-  arrange(-values) %>%
-    top_frac(.5) %>%
-  ggplot(aes(x=label, y=values, fill=values)) +
-  geom_col(show.legend = FALSE) +  
-  scale_fill_gradient(low="steelblue", high="darkorange1") +
-  theme_classic()+ 
-  labs(y = "# Signficant links", x=NULL, title ="ParaFit Top 50% Bacterial genera") + 
-  coord_flip()
-  
-gg.paco_slinks <- d2_new %>%
-  left_join(tax_groups) %>%
-  drop_na() %>%
-  group_by(genus) %>%
-  summarise(values = sum(signif)) %>%
-  dplyr::rename(label = genus) %>%
-  mutate(label = as.factor(label),
-         label=fct_reorder(label, values, sum))%>%
-  arrange(-values) %>%
-  top_frac(.5) %>%
-  ggplot(aes(x=label, y=values, fill=values)) +
-  geom_col(show.legend = FALSE) +  
-  scale_fill_gradient(low="steelblue", high="darkorange1") +
-  theme_classic()+ 
-  #theme(axis.text.x = element_text(angle=45, hjust=1)) +
-  labs(y = "# Signficant links", x=NULL, title = "PACo Top 50% Bacterial genera") + 
-  coord_flip()
-
-gg.psyllid_hlinks <- gg.para_hlinks + gg.paco_hlinks 
-
-gg.psyllid_slinks <- gg.para_slinks + gg.paco_slinks
-
-pdf(file="figs/psyllid_microbiome_host_fit_summary.pdf",  width = 8, height = 11, paper="a4")
-  plot(gg.psyllid_hlinks)
-try(dev.off(), silent=TRUE)
-  
-pdf(file="figs/psyllid_microbiome_symbiont_fit_summary.pdf",  width = 8, height = 11, paper="a4")
-  plot(gg.psyllid_slinks)
-try(dev.off(), silent=TRUE)
-  
-```
-
-### Heatmap of coocurrance
-```{r psyllid microbiome heatmap}
-gg.heatmap <- dd %>%
+  rownames_to_column("assoc") %>%
   dplyr::rename(Sample_Name = label.x,
                 OTU = label.y,
                 pos_x = y.x,
                 pos_y = y.y) %>%
-  dplyr::select(Sample_Name, OTU, signif, pos_x, pos_y) %>%
+  mutate(signif_paco = replace_na(signif_paco, 0),
+         signif_para = replace_na(signif_para, 0)) %>%
+  mutate(highlight = case_when(
+    signif_paco==0 & signif_para==0  ~ "NS",
+    signif_paco==0 & signif_para==1 ~ "para",
+    signif_paco==1 & signif_para==0 ~ "paco",
+    signif_paco==1 & signif_para==1 ~ "both"
+  )) 
+
+gg.heatmap <- heatmap_dat %>%
+    mutate(OTU = OTU %>% str_replace_all("_", " "),
+         Sample_Name =  Sample_Name %>% str_replace_all("_"," ")) %>%
+  dplyr::select(Sample_Name, OTU, genus, highlight, pos_x, pos_y) %>%
   dplyr::mutate(Sample_Name = factor(Sample_Name),
-                Sample_Name = fct_reorder(Sample_Name, pos_x),
                 OTU = factor(OTU),
-                OTU = fct_reorder(OTU, pos_y)) %>%
-   ggplot(aes(x=Sample_Name, y=OTU, fill=as.factor(signif))) +
+                genus=factor(genus, levels=c("Psylla" ,"Trioza", "Ctenarytaina")))  %>%
+   ggplot(aes(x= fct_reorder(Sample_Name, pos_x), y=fct_reorder(OTU, pos_y), fill=highlight)) +
   geom_tile() +
   theme_bw() +
+  facet_grid(~genus, drop = TRUE, scales="free", space ="free")+
   theme(axis.text.x = element_text(angle=45, hjust=1),
         axis.title.x = element_blank(),
         axis.text.y = element_blank(),
         axis.ticks.y = element_blank(),
         axis.title.y = element_blank(),
-        legend.position = "none") +
-  scale_y_discrete(position = "right")+
-  scale_fill_manual(values=c("steelblue","darkorange1"), na.translate=FALSE) 
+        legend.position = "None") +
+  scale_y_discrete(expand=c(0,0))+
+  scale_y_discrete(expand=c(0,0))+
+  scale_fill_manual(values=c("NS"="steelblue","paco"="darkorange1","para"="#da2b91", "both"="#91da2b"), na.translate=FALSE) 
 
-#Adjusted trees - Sca
-p3 <- p2 + 
-  geom_text2(aes(subset=!isTip, label=group %>% na_if(0)), hjust=1, check_overlap=TRUE)
+gg.heatmap
+
+# Density plot of mismatch
+
+density_dat <-  heatmap_dat %>%
+  left_join(p2$data %>% dplyr::select(OTU = label, y)) %>%
+  group_by(OTU, y) %>%
+  summarise(sum_paco = sum(signif_paco, na.rm=TRUE), sum_para = sum(signif_para, na.rm=TRUE)) %>%
+  mutate(total_sum = sum(sum_paco, sum_para, na.rm=TRUE)) %>%
+  ungroup()
+
+density_labels <- density_dat %>%
+  left_join(tax_table(ps3) %>%
+              as("matrix") %>%
+              as_tibble(rownames="OTU") %>% 
+              mutate(OTU = OTU %>% str_replace_all(" |-", "_")))%>%
+  arrange(y) 
+  
+chunk = 50
+n <- nrow(density_labels)
+r  <- rep(1:ceiling(n/chunk),each=chunk)[1:n]
+density_labels_chunked <- split(density_labels,r)
+
+density_labels <- density_labels_chunked %>% 
+  purrr::map(function(x){
+    df <- x %>%
+      mutate(zscore = (total_sum - mean(total_sum, na.rm=TRUE))/sd(total_sum, na.rm=TRUE)) %>%
+      filter(zscore  > 3, total_sum > 3)
+    if(nrow(df) > 0){
+        out <- df %>%
+        summarise(y = mean(y), total_sum  = max(total_sum), annot =  case_when(
+        length(unique(genus)) == 1 ~ names(which.max(table(genus))),
+        length(unique(genus)) > 1~  names(which.max(table(family)))))
+        return(out)
+    }
+  }) %>%
+  bind_rows() 
 
 
-top <- wrap_elements(grid::textGrob('')) +(p1+ coord_flip() + scale_x_reverse(expand=c(0,0))+ scale_y_continuous(expand=c(0,0))) + plot_layout(widths=c(1,3)) 
+gg.density <- density_dat %>%
+  filter(total_sum > 0) %>%
+  ggplot(aes(x = y, y=total_sum, colour=total_sum)) +
+  geom_point(size=0.01, alpha=1)+
+  scale_color_gradient(low="steelblue", high="darkorange1") +
+    geom_text(data=density_labels, aes(label = annot), hjust=0) +
+  scale_x_continuous(expand=c(0,0)) +
+  scale_y_continuous(expand=c(0,0)) +
+  theme_void() +
+  theme(legend.position = "none")+
+  coord_flip()
 
-bottom <- p3+ scale_y_continuous(expand=c(0,0)) +gg.heatmap + plot_layout(widths=c(1,3))
+gg.density
 
-gg.treemap <- top / bottom + plot_layout(heights=c(1,3))                                                         
+
+top <- wrap_elements(grid::textGrob('')) +(p1+ coord_flip() + scale_x_reverse(expand=c(0,0))+ scale_y_continuous(expand=c(0,0))) + wrap_elements(grid::textGrob('')) +plot_layout(widths=c(0.5,3, 0.1)) 
+
+bottom <- p2+ scale_y_continuous(expand=c(0,0)) + gg.heatmap + gg.density + plot_layout(widths=c(0.5,3, 0.1))
+
+gg.treemap <- top / bottom + plot_layout(heights=c(0.5,3))  
 
 gg.treemap
-pdf(file="figs/psyllid_microbiome_heatmap.pdf",  width = 8, height = 11, paper="a4")
+
+pdf(file="figs/3genus_heatmaps.pdf",  width = 8, height = 11, paper="a4")
   plot(gg.treemap)
+try(dev.off(), silent=TRUE)
+  
+ # Make plot ranking links, and nodes
+
+gg.host_links <- heatmap_dat %>%
+  dplyr::rename(label = Sample_Name) %>%
+  drop_na() %>%
+  group_by(label) %>%
+  summarise(signif_paco = sum(signif_paco), signif_para= sum(signif_para)) %>%
+  pivot_longer(starts_with("signif_"),
+               names_to="type",
+               values_to="values") %>%
+  mutate(type = type %>% str_remove("signif_")) %>%
+    mutate(label = label %>% str_replace_all("_", " "))%>%
+  mutate(label = as.factor(label))%>%
+  filter(values > 0) %>%
+  arrange(-values) %>%
+  ggplot(aes(x=fct_reorder(label, values, sum ), y=values, fill=type)) +
+  geom_col() +  
+  scale_fill_manual(values=c("NS"="steelblue","paco"="darkorange1","para"="#da2b91", "both"="#91da2b"), na.translate=FALSE)+
+  theme_classic()+ 
+  theme(axis.text.y = element_text(face="italic"),
+        legend.position = "bottom")+
+  labs(y = "Number of Signficant links", x=NULL, title ="Psyllid taxa") + 
+  coord_flip()
+
+gg.sym_links <- heatmap_dat %>%
+  dplyr::rename(label = OTU) %>%
+  left_join(tax_groups %>% dplyr::rename(otu_genus = genus)) %>%
+  drop_na() %>%
+  group_by(otu_genus) %>%
+  summarise(signif_paco = sum(signif_paco), signif_para= sum(signif_para)) %>%
+  pivot_longer(starts_with("signif_"),
+               names_to="type",
+               values_to="values") %>%
+  dplyr::rename(label = otu_genus) %>%
+  mutate(type = type %>% str_remove("signif_")) %>%
+  mutate(label = as.factor(label),
+         label=fct_reorder(label, values, sum ))%>%
+  group_by(label) %>%
+  mutate(total = sum(values)) %>%
+  ungroup() %>%
+   filter(total > 0) %>%
+  top_n(80, total) %>%
+  arrange(-values) %>%
+  ggplot(aes(x=label, y=values, fill=type)) +
+  geom_col() +  
+  scale_fill_manual(values=c("NS"="steelblue","paco"="darkorange1","para"="#da2b91", "both"="#91da2b"), na.translate=FALSE)+
+  theme_classic()+ 
+  theme(axis.text.y = element_text(face="italic"),
+        legend.position = "bottom")+
+  labs(y = "Number of Signficant links", x=NULL, title ="Microbial genera") + 
+  coord_flip()
+
+gg.host_links + gg.sym_links
+
+pdf(file="figs/3genus_fit_summary.pdf",  width = 8, height = 11, paper="a4")
+  plot(gg.host_links + gg.sym_links)
 try(dev.off(), silent=TRUE)
 ```
 
+# Tanglegrams
 
 ## Psyllid ~ Carsonella 
 
@@ -1739,19 +1766,17 @@ s_tree$tip.label <- s_tree$tip.label %>%
 s_tree <- drop.tip(s_tree, setdiff(s_tree$tip.label, colnames(coocur)))
 s_dist <- sqrt(cophenetic(s_tree)/1e+6 ) ##convert to Mya so integers are small enough for PACO
 
-#alternatively - sqrt(cophenetic(s_tree))
 coocur <- coocur[h_tree$tip.label, s_tree$tip.label]
 
 # prepare paco data
 D <- prepare_paco_data(H=h_dist, P=s_dist, HP=coocur)
+
 # Add pcord
 D <- add_pcoord(D, correction='none') 
-
 p_host <- ggplot(D$H_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, Axis.2)) +
     geom_point() +
     theme_bw() +
   ggtitle("H PCA")
-
 p_para <- ggplot(D$P_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, Axis.2))  +
     geom_point() +
     theme_bw()+
@@ -1760,7 +1785,7 @@ p_para <- ggplot(D$P_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, 
 plot(p_host + p_para)
 
 # run paco
-paco_run <- PACo(D, nperm=99, seed=909, method='quasiswap', symmetric=TRUE)
+paco_run <- PACo(D, nperm=999, seed=909, method='quasiswap', symmetric=FALSE)
 
 #print overall significance
 print(paco_run$gof)
@@ -1776,6 +1801,7 @@ links <- data.frame(joint=names(paco_run$jackknife$mean), #losing sv50 here?
     upper < mean(.$values) ~ 1,
     upper > mean(.$values) ~ 0
   ))
+
 # Plot links
 links %>%
   dplyr::rename(label = joint) %>%
@@ -1801,10 +1827,10 @@ write_csv(links %>%
 
 #Get observed residuals of Procrustean superimposition 
 paco_residuals <- residuals_paco(paco_run$proc, type = "interaction")
+
 # Visualise residuals
 res <- data.frame(OTU=names(paco_residuals), values=unname(paco_residuals)) %>%
   separate(OTU, into=c("Sample_Name", "OTU"), sep="-", extra="merge") 
-
 ggplot(res, aes(x=values))+
   geom_density(fill='grey70')+
   theme_bw()+
@@ -1812,40 +1838,63 @@ ggplot(res, aes(x=values))+
   ylab('Frequency')
 
 # Parafit run
-PF_run <- parafit(h_dist, s_dist,coocur, nperm=99, test.links=TRUE)
+PF_run <- parafit(h_dist, s_dist,coocur, nperm=999, test.links=TRUE)
 PF_run$ParaFitGlobal
 PF_run$p.global
 
-PF_links <- as.data.frame(PF_run$link.table) %>%
-  left_join(as.data.frame(rownames(h_dist)) %>%
-              rownames_to_column("Host") %>%
-              mutate(Host = as.numeric(Host))) %>%
-  left_join(as.data.frame(rownames(s_dist)) %>%
-              rownames_to_column("Parasite") %>%
-              mutate(Parasite = as.numeric(Parasite)))
+PF_links <- as.data.frame(PF_run$link.table)  %>%
+      left_join(enframe(names(PF_run$para.per.host), name = "Host", value="psyllid_spp") %>%
+                  mutate(Host = as.numeric(Host))) %>%
+      left_join(enframe(names(PF_run$host.per.para), name = "Parasite", value="OTU") %>%
+                  mutate(Parasite = as.numeric(Parasite)))%>%
+  mutate(signif = case_when(
+    p.F1 < 0.05 ~ 1,
+    p.F1 > 0.05 ~ 0
+  )) 
 
 # Cophyloplot
 coocur.lut <- which(coocur ==1, arr.ind=TRUE)
 assoc <- cbind(rownames(coocur)[coocur.lut[,1]], colnames(coocur)[coocur.lut[,2]])
 
 # Rotate the nodes using phytools
-library(phytools)
-obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=FALSE) 
+obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=TRUE) 
 
 # psyllid_tree
 tree1 <- obj[["trees"]][[1]]
-p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links))
+
+p1 <- ggtree(tree1)
+atmeto_node <- p1$data %>% 
+  filter(str_detect(label, "Atmeto")) %>%
+  pull(node)
+root_node <- p1$data %>% 
+  filter(str_detect(label, "Atmeto")) %>%
+  pull(parent)
+
+tree1 <- groupOTU(tree1, .node=atmeto_node) # Make the atmeto dotted to indicate outgroup was rescaled
+
+p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links,linetype=group))
 weights_p1 <- p1$data %>%
-  left_join(links %>%
-  group_by(Sample_Name) %>%
-  summarise(values = mean(signif)) %>%
+  left_join(links %>% 
+    group_by(Sample_Name) %>%
+    summarise(PA_values = mean(signif)) %>%
     dplyr::rename(label = Sample_Name)
-    )  
+    )%>%
+  left_join(PF_links %>% 
+    group_by(psyllid_spp) %>%
+    summarise(PF_values = mean(signif)) %>%
+    dplyr::rename(label = psyllid_spp)
+    ) %>%
+  mutate(values = PA_values + PF_values)
+
+#Scale the atmetocranium and root nodes to be shorter
+p1$data[p1$data$node %in% atmeto_node, "x"] <- max(p1$data$x)
+p1$data[p1$data$node %in% root_node, "x"] <- 0.2 #root
+
+p1$data$node[p1$data$node]
 
 ## Get values for higher nodes
 weights_p1 <- weights_p1 %>%
   left_join(data.frame(node=weights_p1$node, links = weights_p1$node %>% purrr::map_dbl(average_descendants, tree=tree1, df=weights_p1)))
-
 p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=links)) +
   scale_color_gradient(low="steelblue", high="darkorange1")  +
   theme(legend.position = "none")
@@ -1853,14 +1902,19 @@ p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=links)) +
 # OTU tree
 tree2 <- obj[["trees"]][[2]]
 s_tree <- drop.tip(tree2, setdiff(tree2$tip.label, obj$assoc[,2]))
-
 p2 <- ggtree(tree2 , ladderize=TRUE, aes(colour=links)) 
 weights_p2 <- p2$data %>%
   left_join(links %>% 
     group_by(OTU) %>%
-    summarise(values = mean(signif)) %>%
+    summarise(PA_values = mean(signif)) %>%
     dplyr::rename(label = OTU)
-    ) 
+    )%>%
+  left_join(PF_links %>% 
+    group_by(OTU) %>%
+    summarise(PF_values = mean(signif)) %>%
+    dplyr::rename(label = OTU)
+    ) %>%
+  mutate(values = PA_values + PF_values)
 
 weights_p2 <- weights_p2 %>%
   left_join(data.frame(node=weights_p2$node, links = weights_p2$node %>% purrr::map_dbl(average_descendants, tree=tree2, df=weights_p2)))
@@ -1869,43 +1923,52 @@ p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=links)) +
   scale_color_gradient(low="steelblue", high="darkorange1") +
   theme(legend.position = "none")
 
-# Tanglegram
-dd <- obj$assoc %>%
+# Tanglegram 
+tangle <- obj$assoc %>%
   as_data_frame() %>%
   magrittr::set_colnames(c("label.x", "label.y")) %>%
-  left_join(links  %>% 
-              dplyr::rename(label.x = Sample_Name, label.y = OTU)) %>%
+  left_join(links %>% 
+              dplyr::select(label.x = Sample_Name, label.y = OTU, signif_paco=signif)) %>%
+  left_join(PF_links %>% 
+              dplyr::select(label.x = psyllid_spp, label.y = OTU, signif_para=signif)) %>%
   left_join(p1$data %>% dplyr::select(label, y) %>% dplyr::rename(label.x = label), by="label.x") %>%
   left_join(p2$data %>% dplyr::select(label, y) %>% dplyr::rename(label.y = label), by="label.y") %>%
-  rownames_to_column("assoc")
-
-d1_new <- dd %>% 
-  dplyr::select(assoc, label.x, y.x, values, upper, signif) %>%
-  dplyr::rename(label = label.x, y = y.x)%>%
-  mutate(tree = "host") 
-  
-d2_new <- dd %>% 
-  dplyr::select(assoc, label.y, y.y, values, upper, signif) %>%
-  dplyr::rename(label = label.y, y = y.y) %>%
-  mutate(tree = "microbe")
-
-tangle <- bind_rows(d1_new, d2_new) %>%
+  rownames_to_column("assoc") %>%
+  rename_all(~str_replace(.x,pattern="\\.", replacement="_")) %>%
+  pivot_longer(ends_with(c("_x", "_y")),
+               names_to=c(".value", "tree"), 
+               names_sep = "_"
+              )  %>%
+  mutate(signif_paco = replace_na(signif_paco, 0),
+         signif_para = replace_na(signif_para, 0)) %>%
+  mutate(signif = case_when(
+    signif_paco==0 & signif_para==0  ~ "NS",
+    signif_paco==0 & signif_para==1 ~ "para",
+    signif_paco==1 & signif_para==0 ~ "paco",
+    signif_paco==1 & signif_para==1 ~ "both"
+  )) %>%
+  mutate(tree = tree %>% 
+           str_replace("x", "host")%>%
+           str_replace("y", "microbe")) %>%
   filter(!is.na(label))%>% 
   group_by(tree) %>%
-  mutate(y = y / max(y)) %>%
-  ungroup
+  mutate(y = y / max(y))
+
+
 gg.tangle <- ggplot(tangle, aes(x=tree, y=y, group=assoc, colour=as.factor(signif))) +
     geom_line(alpha=0.8) +  
   geom_text(data = tangle %>% 
               filter(tree=="host"),
-            aes(label=label),stat = 'unique', hjust=1)+
+            aes(label=label),stat = 'unique', hjust=1, check_overlap = TRUE)+
   geom_text(data = tangle %>% 
               filter(tree=="microbe"),
-            aes(label=label),stat = 'unique', hjust=0)+
-    scale_color_manual(values=c("steelblue", "darkorange1")) +
+            aes(label=label),stat = 'unique', hjust=0, check_overlap = TRUE)+
+  scale_colour_manual(values=c("NS"="steelblue", "paco"="darkorange1", "para"="#da2b91", "both"="#91da2b"), na.translate=FALSE)+
     scale_x_discrete(expand = expansion(add=c(0.8,0.8))) + 
     theme_void() +
-    theme(legend.position = "bottom")
+    scale_y_continuous(expand=c(0.005,0.005))+
+    theme(legend.position = "bottom") +
+  labs(colour="Significance:")
 
 gg.carson_tangle <- p1 + gg.tangle + (p2 + scale_x_reverse()) #+ plot_layout(widths = c(2, 1, 2))
 gg.carson_tangle 
@@ -1915,14 +1978,24 @@ pdf(file="figs/carsonella_tanglegram.pdf",  width = 8, height = 11, paper="a4")
 try(dev.off(), silent=TRUE)
 ```
 
+## Psyllid ~ Sodalis
 
-## Psyllid ~ S-symbionts 
+```{r Sodalis cophylo}
+#Flag top abundance carsonella by sample
+top_sodalis <- ps2 %>%
+  transform_sample_counts(function (x) x/sum(x)) %>%
+  speedyseq::psmelt() %>%
+  filter(genus=="Sodalis") %>%
+  group_by(Sample) %>%  
+  filter(Abundance > 0) %>%
+  top_n(1, wt=Abundance) %>%
+  mutate(top = TRUE) 
 
-```{r S-symbiont cophylo}
 coocur <- ps2 %>%
   transform_sample_counts(function (x) x/sum(x)) %>%
   speedyseq::psmelt() %>%
-  filter(genus %in% c("Arsenophonus", "Sodalis")) %>%
+  left_join(top_sodalis) %>%
+  filter(genus=="Sodalis", top==TRUE) %>%
   dplyr::select(OTU, psyllid_spp, SampleID, Abundance) %>%
   mutate(OTU = OTU %>%
            str_replace_all(" |-", "_")) %>%
@@ -1936,6 +2009,25 @@ coocur <- ps2 %>%
     as.matrix() %>% 
   apply(2, function(x) ifelse(x > 0, 1, 0)) 
 
+
+
+#coocur <- ps2 %>%
+#  transform_sample_counts(function (x) x/sum(x)) %>%
+#  speedyseq::psmelt() %>%
+#  filter(genus %in% c("Sodalis")) %>%
+#  dplyr::select(OTU, psyllid_spp, SampleID, Abundance) %>%
+#  mutate(OTU = OTU %>%
+#           str_replace_all(" |-", "_")) %>%
+#  dplyr::group_by(OTU, psyllid_spp) %>%
+#    summarise(Abundance = sum(Abundance)) %>%
+#  pivot_wider(id_cols = psyllid_spp,
+#              names_from = OTU,
+#              values_from=Abundance,
+#              values_fill = list(Abundance = 0))  %>%
+#  column_to_rownames("psyllid_spp") %>%
+#    as.matrix() %>% 
+#  apply(2, function(x) ifelse(x > 0, 1, 0)) 
+#
 coocur <- coocur[ rowSums(coocur) > 0,colSums(coocur) > 0]
 
 # H cophenetic distance
@@ -2025,17 +2117,19 @@ ggplot(res, aes(x=values))+
   ylab('Frequency')
 
 # Parafit run
-PF_run <- parafit(h_dist, s_dist,coocur, nperm=99, test.links=TRUE)
+PF_run <- parafit(h_dist, s_dist,coocur, nperm=999, test.links=TRUE)
 PF_run$ParaFitGlobal
 PF_run$p.global
 
-PF_links <- as.data.frame(PF_run$link.table) %>%
-  left_join(as.data.frame(rownames(h_dist)) %>%
-              rownames_to_column("Host") %>%
-              mutate(Host = as.numeric(Host))) %>%
-  left_join(as.data.frame(rownames(s_dist)) %>%
-              rownames_to_column("Parasite") %>%
-              mutate(Parasite = as.numeric(Parasite)))
+PF_links <- as.data.frame(PF_run$link.table)  %>%
+      left_join(enframe(names(PF_run$para.per.host), name = "Host", value="psyllid_spp") %>%
+                  mutate(Host = as.numeric(Host))) %>%
+      left_join(enframe(names(PF_run$host.per.para), name = "Parasite", value="OTU") %>%
+                  mutate(Parasite = as.numeric(Parasite)))%>%
+  mutate(signif = case_when(
+    p.F1 < 0.05 ~ 1,
+    p.F1 > 0.05 ~ 0
+  )) 
 
 # Cophyloplot
 coocur.lut <- which(coocur ==1, arr.ind=TRUE)
@@ -2047,18 +2141,40 @@ obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=TRUE)
 
 # psyllid_tree
 tree1 <- obj[["trees"]][[1]]
-p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links))
+
+p1 <- ggtree(tree1)
+atmeto_node <- p1$data %>% 
+  filter(str_detect(label, "Atmeto")) %>%
+  pull(node)
+root_node <- p1$data %>% 
+  filter(str_detect(label, "Atmeto")) %>%
+  pull(parent)
+
+tree1 <- groupOTU(tree1, .node=atmeto_node) # Make the atmeto dotted to indicate outgroup was rescaled
+
+p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links,linetype=group))
 weights_p1 <- p1$data %>%
-  left_join(links %>%
-  group_by(Sample_Name) %>%
-  summarise(values = mean(signif)) %>%
+  left_join(links %>% 
+    group_by(Sample_Name) %>%
+    summarise(PA_values = mean(signif)) %>%
     dplyr::rename(label = Sample_Name)
-    )  
+    )%>%
+  left_join(PF_links %>% 
+    group_by(psyllid_spp) %>%
+    summarise(PF_values = mean(signif)) %>%
+    dplyr::rename(label = psyllid_spp)
+    ) %>%
+  mutate(values = PA_values + PF_values)
+
+#Scale the atmetocranium and root nodes to be shorter
+p1$data[p1$data$node %in% atmeto_node, "x"] <- max(p1$data$x)
+p1$data[p1$data$node %in% root_node, "x"] <- 0.2 #root
+
+p1$data$node[p1$data$node]
 
 ## Get values for higher nodes
 weights_p1 <- weights_p1 %>%
   left_join(data.frame(node=weights_p1$node, links = weights_p1$node %>% purrr::map_dbl(average_descendants, tree=tree1, df=weights_p1)))
-
 p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=links)) +
   scale_color_gradient(low="steelblue", high="darkorange1")  +
   theme(legend.position = "none")
@@ -2066,14 +2182,19 @@ p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=links)) +
 # OTU tree
 tree2 <- obj[["trees"]][[2]]
 s_tree <- drop.tip(tree2, setdiff(tree2$tip.label, obj$assoc[,2]))
-
 p2 <- ggtree(tree2 , ladderize=TRUE, aes(colour=links)) 
 weights_p2 <- p2$data %>%
   left_join(links %>% 
     group_by(OTU) %>%
-    summarise(values = mean(signif)) %>%
+    summarise(PA_values = mean(signif)) %>%
     dplyr::rename(label = OTU)
-    ) 
+    )%>%
+  left_join(PF_links %>% 
+    group_by(OTU) %>%
+    summarise(PF_values = mean(signif)) %>%
+    dplyr::rename(label = OTU)
+    ) %>%
+  mutate(values = PA_values + PF_values)
 
 weights_p2 <- weights_p2 %>%
   left_join(data.frame(node=weights_p2$node, links = weights_p2$node %>% purrr::map_dbl(average_descendants, tree=tree2, df=weights_p2)))
@@ -2082,52 +2203,339 @@ p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=links)) +
   scale_color_gradient(low="steelblue", high="darkorange1") +
   theme(legend.position = "none")
 
-# Tanglegram
-dd <- obj$assoc %>%
+# Tanglegram 
+tangle <- obj$assoc %>%
   as_data_frame() %>%
   magrittr::set_colnames(c("label.x", "label.y")) %>%
-  left_join(links  %>% 
-              dplyr::rename(label.x = Sample_Name, label.y = OTU)) %>%
+  left_join(links %>% 
+              dplyr::select(label.x = Sample_Name, label.y = OTU, signif_paco=signif)) %>%
+  left_join(PF_links %>% 
+              dplyr::select(label.x = psyllid_spp, label.y = OTU, signif_para=signif)) %>%
   left_join(p1$data %>% dplyr::select(label, y) %>% dplyr::rename(label.x = label), by="label.x") %>%
   left_join(p2$data %>% dplyr::select(label, y) %>% dplyr::rename(label.y = label), by="label.y") %>%
-  rownames_to_column("assoc")
-
-d1_new <- dd %>% 
-  dplyr::select(assoc, label.x, y.x, values, upper, signif) %>%
-  dplyr::rename(label = label.x, y = y.x)%>%
-  mutate(tree = "host") 
-  
-d2_new <- dd %>% 
-  dplyr::select(assoc, label.y, y.y, values, upper, signif) %>%
-  dplyr::rename(label = label.y, y = y.y) %>%
-  mutate(tree = "microbe")
-
-tangle <- bind_rows(d1_new, d2_new) %>%
+  rownames_to_column("assoc") %>%
+  rename_all(~str_replace(.x,pattern="\\.", replacement="_")) %>%
+  pivot_longer(ends_with(c("_x", "_y")),
+               names_to=c(".value", "tree"), 
+               names_sep = "_"
+              )  %>%
+  mutate(signif_paco = replace_na(signif_paco, 0),
+         signif_para = replace_na(signif_para, 0)) %>%
+  mutate(signif = case_when(
+    signif_paco==0 & signif_para==0  ~ "NS",
+    signif_paco==0 & signif_para==1 ~ "para",
+    signif_paco==1 & signif_para==0 ~ "paco",
+    signif_paco==1 & signif_para==1 ~ "both"
+  )) %>%
+  mutate(tree = tree %>% 
+           str_replace("x", "host")%>%
+           str_replace("y", "microbe")) %>%
   filter(!is.na(label))%>% 
   group_by(tree) %>%
-  mutate(y = y / max(y)) %>%
-  ungroup
+  mutate(y = y / max(y))
+
+
 gg.tangle <- ggplot(tangle, aes(x=tree, y=y, group=assoc, colour=as.factor(signif))) +
     geom_line(alpha=0.8) +  
   geom_text(data = tangle %>% 
               filter(tree=="host"),
-            aes(label=label),stat = 'unique', hjust=1)+
+            aes(label=label),stat = 'unique', hjust=1, check_overlap = TRUE)+
   geom_text(data = tangle %>% 
               filter(tree=="microbe"),
-            aes(label=label),stat = 'unique', hjust=0)+
-    scale_color_manual(values=c("steelblue", "darkorange1")) +
+            aes(label=label),stat = 'unique', hjust=0, check_overlap = TRUE)+
+  scale_colour_manual(values=c("NS"="steelblue", "paco"="darkorange1", "para"="#da2b91", "both"="#91da2b"), na.translate=FALSE)+
     scale_x_discrete(expand = expansion(add=c(0.8,0.8))) + 
     theme_void() +
-    theme(legend.position = "bottom")
+    scale_y_continuous(expand=c(0.01,0.01))+
+    theme(legend.position = "bottom") +
+  labs(colour="Significance:")
 
-gg.secondary_tangle <- p1 + gg.tangle + (p2 + scale_x_reverse()) #+ plot_layout(widths = c(2, 1, 2))
-gg.secondary_tangle
+gg.sodalis_tangle <- p1 + gg.tangle + (p2 + scale_x_reverse()) #+ plot_layout(widths = c(2, 1, 2))
+gg.sodalis_tangle
 
-pdf(file="figs/secondary_tanglegram.pdf",  width = 8, height = 11, paper="a4")
-  plot(gg.secondary_tangle)
+pdf(file="figs/sodalis_tanglegram.pdf",  width = 8, height = 11, paper="a4")
+  plot(gg.sodalis_tangle)
 try(dev.off(), silent=TRUE)
 ```
 
+
+## Psyllid ~ Arsenophonus
+
+```{r Arsenophonus cophylo}
+# Subset to top arsenophonus
+top_arse <- ps2 %>%
+  transform_sample_counts(function (x) x/sum(x)) %>%
+  speedyseq::psmelt() %>%
+  filter(genus=="Arsenophonus") %>%
+  group_by(Sample) %>%  
+  filter(Abundance > 0) %>%
+  top_n(1, wt=Abundance) %>%
+  mutate(top = TRUE) 
+
+coocur <- ps2 %>%
+  transform_sample_counts(function (x) x/sum(x)) %>%
+  speedyseq::psmelt() %>%
+  left_join(top_arse) %>%
+  filter(genus=="Arsenophonus", top==TRUE) %>%
+  dplyr::select(OTU, psyllid_spp, SampleID, Abundance) %>%
+  mutate(OTU = OTU %>%
+           str_replace_all(" |-", "_")) %>%
+  dplyr::group_by(OTU, psyllid_spp) %>%
+    summarise(Abundance = sum(Abundance)) %>%
+  pivot_wider(id_cols = psyllid_spp,
+              names_from = OTU,
+              values_from=Abundance,
+              values_fill = list(Abundance = 0))  %>%
+  column_to_rownames("psyllid_spp") %>%
+    as.matrix() %>% 
+  apply(2, function(x) ifelse(x > 0, 1, 0)) 
+
+
+#coocur <- ps2 %>%
+#  transform_sample_counts(function (x) x/sum(x)) %>%
+#  speedyseq::psmelt() %>%
+#  filter(genus %in% c("Arsenophonus")) %>%
+#  dplyr::select(OTU, psyllid_spp, SampleID, Abundance) %>%
+#  mutate(OTU = OTU %>%
+#           str_replace_all(" |-", "_")) %>%
+#  dplyr::group_by(OTU, psyllid_spp) %>%
+#    summarise(Abundance = sum(Abundance)) %>%
+#  pivot_wider(id_cols = psyllid_spp,
+#              names_from = OTU,
+#              values_from=Abundance,
+#              values_fill = list(Abundance = 0))  %>%
+#  column_to_rownames("psyllid_spp") %>%
+#    as.matrix() %>% 
+#  apply(2, function(x) ifelse(x > 0, 1, 0)) 
+#
+coocur <- coocur[ rowSums(coocur) > 0,colSums(coocur) > 0]
+
+# H cophenetic distance
+h_tree <- pruned.tree
+h_tree$tip.label <- h_tree$tip.label %>%
+           str_replace_all(" |-", "_")
+h_tree <- drop.tip(h_tree, setdiff(h_tree$tip.label, rownames(coocur)))
+h_dist <- sqrt(cophenetic(h_tree))
+
+# P cophenetic distance
+s_tree <- phy_tree(ps3)
+s_tree$tip.label <- s_tree$tip.label %>%
+           str_replace_all(" |-", "_")
+s_tree <- drop.tip(s_tree, setdiff(s_tree$tip.label, colnames(coocur)))
+s_dist <- sqrt(cophenetic(s_tree)/1e+6 ) ##convert to Mya so integers are small enough for PACO
+
+#alternatively - sqrt(cophenetic(s_tree))
+coocur <- coocur[h_tree$tip.label, s_tree$tip.label]
+
+# prepare paco data
+D <- prepare_paco_data(H=h_dist, P=s_dist, HP=coocur)
+# Add pcord
+D <- add_pcoord(D, correction='none') 
+
+p_host <- ggplot(D$H_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, Axis.2)) +
+    geom_point() +
+    theme_bw() +
+  ggtitle("H PCA")
+
+p_para <- ggplot(D$P_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, Axis.2))  +
+    geom_point() +
+    theme_bw()+
+  ggtitle("P PCA")
+    
+plot(p_host + p_para)
+
+# run paco
+paco_run <- PACo(D, nperm=999, seed=909, method='quasiswap', symmetric=FALSE)
+
+#print overall significance
+print(paco_run$gof)
+
+# Get interaction-specific cophylogenetic contributions using jacknifing
+paco_run <- paco_links(paco_run)
+links <- data.frame(joint=names(paco_run$jackknife$mean), #losing sv50 here?
+                    values=unname(paco_run$jackknife$mean),
+                    upper=unname(paco_run$jackknife$upper)) %>%
+  mutate(OTU = joint) %>%
+ separate(OTU, into=c("Sample_Name", "OTU"), sep="-", extra="merge") %>%
+  mutate(signif = case_when(
+    upper < mean(.$values) ~ 1,
+    upper > mean(.$values) ~ 0
+  ))
+# Plot links
+links %>%
+  dplyr::rename(label = joint) %>%
+  mutate(label = as.factor(label),
+         label=fct_reorder(label, values, sum))%>%
+  arrange(-values) %>%
+  ggplot(aes(x=label, y=values, colour=as.factor(signif))) +
+  geom_point(show.legend = FALSE) +
+  geom_errorbar(aes(ymin=values, ymax=upper)) +
+  geom_hline(yintercept = mean(links$values)) +
+  scale_color_manual(values=c("steelblue", "darkorange1")) +
+  theme_classic()+ 
+  theme(axis.text.x = element_blank())
+
+dir.create("output/cophylogeny/psyllid_secondary")
+write_csv(links, "output/cophylogeny/psyllid_secondary/psyllid_secondary_links.csv")
+write_csv(links %>% 
+    group_by(OTU) %>%
+    summarise(values = mean(values)), "output/cophylogeny/psyllid_secondary/secondary_symbiont_weights.csv")
+write_csv(links %>% 
+    group_by(Sample_Name) %>%
+    summarise(values = mean(values)), "output/cophylogeny/psyllid_secondary/psyllid_weights.csv")
+
+#Get observed residuals of Procrustean superimposition 
+paco_residuals <- residuals_paco(paco_run$proc, type = "interaction")
+# Visualise residuals
+res <- data.frame(OTU=names(paco_residuals), values=unname(paco_residuals)) %>%
+  separate(OTU, into=c("Sample_Name", "OTU"), sep="-", extra="merge") 
+
+ggplot(res, aes(x=values))+
+  geom_density(fill='grey70')+
+  theme_bw()+
+  xlab('Procrustes residuals')+
+  ylab('Frequency')
+
+# Parafit run
+PF_run <- parafit(h_dist, s_dist,coocur, nperm=999, test.links=TRUE)
+PF_run$ParaFitGlobal
+PF_run$p.global
+
+PF_links <- as.data.frame(PF_run$link.table)  %>%
+      left_join(enframe(names(PF_run$para.per.host), name = "Host", value="psyllid_spp") %>%
+                  mutate(Host = as.numeric(Host))) %>%
+      left_join(enframe(names(PF_run$host.per.para), name = "Parasite", value="OTU") %>%
+                  mutate(Parasite = as.numeric(Parasite)))%>%
+  mutate(signif = case_when(
+    p.F1 < 0.05 ~ 1,
+    p.F1 > 0.05 ~ 0
+  )) 
+
+# Cophyloplot
+coocur.lut <- which(coocur ==1, arr.ind=TRUE)
+assoc <- cbind(rownames(coocur)[coocur.lut[,1]], colnames(coocur)[coocur.lut[,2]])
+
+# Rotate the nodes using phytools
+library(phytools)
+obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=TRUE) 
+
+# psyllid_tree
+tree1 <- obj[["trees"]][[1]]
+
+p1 <- ggtree(tree1)
+atmeto_node <- p1$data %>% 
+  filter(str_detect(label, "Atmeto")) %>%
+  pull(node)
+root_node <- p1$data %>% 
+  filter(str_detect(label, "Atmeto")) %>%
+  pull(parent)
+
+tree1 <- groupOTU(tree1, .node=atmeto_node) # Make the atmeto dotted to indicate outgroup was rescaled
+
+p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links,linetype=group))
+weights_p1 <- p1$data %>%
+  left_join(links %>% 
+    group_by(Sample_Name) %>%
+    summarise(PA_values = mean(signif)) %>%
+    dplyr::rename(label = Sample_Name)
+    )%>%
+  left_join(PF_links %>% 
+    group_by(psyllid_spp) %>%
+    summarise(PF_values = mean(signif)) %>%
+    dplyr::rename(label = psyllid_spp)
+    ) %>%
+  mutate(values = PA_values + PF_values)
+
+#Scale the atmetocranium and root nodes to be shorter
+p1$data[p1$data$node %in% atmeto_node, "x"] <- max(p1$data$x)
+p1$data[p1$data$node %in% root_node, "x"] <- 0.2 #root
+
+p1$data$node[p1$data$node]
+
+## Get values for higher nodes
+weights_p1 <- weights_p1 %>%
+  left_join(data.frame(node=weights_p1$node, links = weights_p1$node %>% purrr::map_dbl(average_descendants, tree=tree1, df=weights_p1)))
+p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=links)) +
+  scale_color_gradient(low="steelblue", high="darkorange1")  +
+  theme(legend.position = "none")
+
+# OTU tree
+tree2 <- obj[["trees"]][[2]]
+s_tree <- drop.tip(tree2, setdiff(tree2$tip.label, obj$assoc[,2]))
+p2 <- ggtree(tree2 , ladderize=TRUE, aes(colour=links)) 
+weights_p2 <- p2$data %>%
+  left_join(links %>% 
+    group_by(OTU) %>%
+    summarise(PA_values = mean(signif)) %>%
+    dplyr::rename(label = OTU)
+    )%>%
+  left_join(PF_links %>% 
+    group_by(OTU) %>%
+    summarise(PF_values = mean(signif)) %>%
+    dplyr::rename(label = OTU)
+    ) %>%
+  mutate(values = PA_values + PF_values)
+
+weights_p2 <- weights_p2 %>%
+  left_join(data.frame(node=weights_p2$node, links = weights_p2$node %>% purrr::map_dbl(average_descendants, tree=tree2, df=weights_p2)))
+
+p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=links)) + 
+  scale_color_gradient(low="steelblue", high="darkorange1") +
+  theme(legend.position = "none")
+
+# Tanglegram 
+tangle <- obj$assoc %>%
+  as_data_frame() %>%
+  magrittr::set_colnames(c("label.x", "label.y")) %>%
+  left_join(links %>% 
+              dplyr::select(label.x = Sample_Name, label.y = OTU, signif_paco=signif)) %>%
+  left_join(PF_links %>% 
+              dplyr::select(label.x = psyllid_spp, label.y = OTU, signif_para=signif)) %>%
+  left_join(p1$data %>% dplyr::select(label, y) %>% dplyr::rename(label.x = label), by="label.x") %>%
+  left_join(p2$data %>% dplyr::select(label, y) %>% dplyr::rename(label.y = label), by="label.y") %>%
+  rownames_to_column("assoc") %>%
+  rename_all(~str_replace(.x,pattern="\\.", replacement="_")) %>%
+  pivot_longer(ends_with(c("_x", "_y")),
+               names_to=c(".value", "tree"), 
+               names_sep = "_"
+              )  %>%
+  mutate(signif_paco = replace_na(signif_paco, 0),
+         signif_para = replace_na(signif_para, 0)) %>%
+  mutate(signif = case_when(
+    signif_paco==0 & signif_para==0  ~ "NS",
+    signif_paco==0 & signif_para==1 ~ "para",
+    signif_paco==1 & signif_para==0 ~ "paco",
+    signif_paco==1 & signif_para==1 ~ "both"
+  )) %>%
+  mutate(tree = tree %>% 
+           str_replace("x", "host")%>%
+           str_replace("y", "microbe")) %>%
+  filter(!is.na(label))%>% 
+  group_by(tree) %>%
+  mutate(y = y / max(y))
+
+
+gg.tangle <- ggplot(tangle, aes(x=tree, y=y, group=assoc, colour=as.factor(signif))) +
+    geom_line(alpha=0.8) +  
+  geom_text(data = tangle %>% 
+              filter(tree=="host"),
+            aes(label=label),stat = 'unique', hjust=1, check_overlap = TRUE)+
+  geom_text(data = tangle %>% 
+              filter(tree=="microbe"),
+            aes(label=label),stat = 'unique', hjust=0, check_overlap = TRUE)+
+  scale_colour_manual(values=c("NS"="steelblue", "paco"="darkorange1", "para"="#da2b91", "both"="#91da2b"), na.translate=FALSE)+
+    scale_x_discrete(expand = expansion(add=c(0.8,0.8))) + 
+    theme_void() +
+    scale_y_continuous(expand=c(0.005,0.005))+
+    theme(legend.position = "bottom") +
+  labs(colour="Significance:")
+gg.arse_tangle <- p1 + gg.tangle + (p2 + scale_x_reverse()) #+ plot_layout(widths = c(2, 1, 2))
+gg.arse_tangle
+
+pdf(file="figs/arsenophonus_tanglegram.pdf",  width = 8, height = 11, paper="a4")
+  plot(gg.arse_tangle)
+try(dev.off(), silent=TRUE)
+```
 
 ## Psyllid ~  hostplant
 
@@ -2188,7 +2596,7 @@ p_para <- ggplot(D$P_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, 
 plot(p_host + p_para)
 
 # run paco
-paco_run <- PACo(D, nperm=99, seed=909, method='quasiswap', symmetric=TRUE)
+paco_run <- PACo(D, nperm=999, seed=909, method='quasiswap', symmetric=FALSE)
 
 #print overall significance
 print(paco_run$gof)
@@ -2246,96 +2654,134 @@ PF_run <- parafit(h_dist, s_dist, t(coocur), nperm=999, test.links=TRUE, silent=
 PF_run$ParaFitGlobal
 PF_run$p.global
 
-PF_links <- as.data.frame(PF_run$link.table) %>%
-  left_join(as.data.frame(rownames(h_dist)) %>%
-              rownames_to_column("Host") %>%
-              mutate(Host = as.numeric(Host))) %>%
-  left_join(as.data.frame(rownames(s_dist)) %>%
-              rownames_to_column("Parasite") %>%
-              mutate(Parasite = as.numeric(Parasite)))
+PF_links <- as.data.frame(PF_run$link.table)  %>%
+      left_join(enframe(names(PF_run$para.per.host), name = "Host", value="hostplant_spp") %>%
+                  mutate(Host = as.numeric(Host))) %>%
+      left_join(enframe(names(PF_run$host.per.para), name = "Parasite", value="psyllid_spp") %>%
+                  mutate(Parasite = as.numeric(Parasite)))%>%
+  mutate(signif = case_when(
+    p.F1 < 0.05 ~ 1,
+    p.F1 > 0.05 ~ 0
+  )) 
 
 # Cophyloplot
 coocur.lut <- which(coocur ==1, arr.ind=TRUE)
 assoc <- cbind(rownames(coocur)[coocur.lut[,1]], colnames(coocur)[coocur.lut[,2]])
 
 # Rotate the nodes using phytools
-library(phytools)
 obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=TRUE) 
 
 # Extract the goods for ggtree
 # plant tree
 tree1 <- obj[["trees"]][[1]]
-p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links)) 
-weights_p1 <- p1$data %>%
-  left_join(links %>%
-  group_by(hostplant_spp) %>%
-  summarise(values = mean(signif)) %>%
-    dplyr::rename(label = hostplant_spp)
-    )
 
+p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links))
+weights_p1 <- p1$data %>%
+  left_join(links %>% 
+    group_by(hostplant_spp) %>%
+    summarise(PA_values = mean(signif)) %>%
+    dplyr::rename(label = hostplant_spp)
+    )%>%
+  left_join(PF_links %>% 
+    group_by(hostplant_spp) %>%
+    summarise(PF_values = mean(signif)) %>%
+    dplyr::rename(label = hostplant_spp)
+    ) %>%
+  mutate(values = PA_values + PF_values)
+
+## Get values for higher nodes
 weights_p1 <- weights_p1 %>%
   left_join(data.frame(node=weights_p1$node, links = weights_p1$node %>% purrr::map_dbl(average_descendants, tree=tree1, df=weights_p1)))
-
-p1 <- p1 %<+% weights_p1  +
-  geom_tippoint(aes(colour=links)) + 
-  scale_color_gradient(low="steelblue", high="darkorange1") +
+p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=links)) +
+  scale_color_gradient(low="steelblue", high="darkorange1")  +
   theme(legend.position = "none")
 
 # psyllid_tree
 tree2 <- obj[["trees"]][[2]]
-p2 <- ggtree(tree2, ladderize=FALSE, aes(colour=links))
+s_tree <- drop.tip(tree2, setdiff(tree2$tip.label, obj$assoc[,2]))
+
+p2 <- ggtree(tree2)
+atmeto_node <- p2$data %>% 
+  filter(str_detect(label, "Atmeto")) %>%
+  pull(node)
+root_node <- p2$data %>% 
+  filter(str_detect(label, "Atmeto")) %>%
+  pull(parent)
+
+tree2 <- groupOTU(tree2, .node=atmeto_node) # Make the atmeto dotted to indicate outgroup was rescaled
+
+p2 <- ggtree(tree2 , ladderize=TRUE, aes(colour=links, linetype=group)) 
 weights_p2 <- p2$data %>%
   left_join(links %>% 
     group_by(psyllid_spp) %>%
-    summarise(values = mean(signif)) %>%
+    summarise(PA_values = mean(signif)) %>%
     dplyr::rename(label = psyllid_spp)
-    ) 
+    )%>%
+  left_join(PF_links %>% 
+    group_by(psyllid_spp) %>%
+    summarise(PF_values = mean(signif)) %>%
+    dplyr::rename(label = psyllid_spp)
+    ) %>%
+  mutate(values = PA_values + PF_values)
+
+#Scale the atmetocranium and root nodes to be shorter
+p2$data[p2$data$node %in% atmeto_node, "x"] <- max(p2$data$x)
+p2$data[p2$data$node %in% root_node, "x"] <- 0.2 #root
+
+p2$data$node[p2$data$node]
+
 weights_p2 <- weights_p2 %>%
   left_join(data.frame(node=weights_p2$node, links = weights_p2$node %>% purrr::map_dbl(average_descendants, tree=tree2, df=weights_p2)))
 
-p2 <- p2 %<+% weights_p2  +
-  geom_tippoint(aes(colour=links)) +
+p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=links)) + 
   scale_color_gradient(low="steelblue", high="darkorange1") +
   theme(legend.position = "none")
 
-# Tanglegram
-dd <- obj$assoc %>%
+# Tanglegram 
+tangle <- obj$assoc %>%
   as_data_frame() %>%
   magrittr::set_colnames(c("label.x", "label.y")) %>%
   left_join(links %>% 
-              dplyr::rename(label.x = hostplant_spp, label.y = psyllid_spp)) %>%
+              dplyr::select(label.x = hostplant_spp, label.y = psyllid_spp, signif_paco=signif)) %>%
+  left_join(PF_links %>% 
+              dplyr::select(label.x = hostplant_spp, label.y = psyllid_spp, signif_para=signif)) %>%
   left_join(p1$data %>% dplyr::select(label, y) %>% dplyr::rename(label.x = label), by="label.x") %>%
   left_join(p2$data %>% dplyr::select(label, y) %>% dplyr::rename(label.y = label), by="label.y") %>%
-  rownames_to_column("assoc")
-
-d1_new <- dd %>% 
-  dplyr::select(assoc, label.x, y.x, values,upper, signif) %>%
-  dplyr::rename(label = label.x, y = y.x)%>%
-  mutate(tree = "host") 
-  
-d2_new <- dd %>% 
-  dplyr::select(assoc, label.y, y.y, values,upper, signif) %>%
-  dplyr::rename(label = label.y, y = y.y) %>%
-  mutate(tree = "microbe")
-
-# Should be able to have y = labels, but arrange b y
-tangle <- bind_rows(d1_new, d2_new) %>%
+  rownames_to_column("assoc") %>%
+  rename_all(~str_replace(.x,pattern="\\.", replacement="_")) %>%
+  pivot_longer(ends_with(c("_x", "_y")),
+               names_to=c(".value", "tree"), 
+               names_sep = "_"
+              )  %>%
+  mutate(signif_paco = replace_na(signif_paco, 0),
+         signif_para = replace_na(signif_para, 0)) %>%
+  mutate(signif = case_when(
+    signif_paco==0 & signif_para==0  ~ "NS",
+    signif_paco==0 & signif_para==1 ~ "para",
+    signif_paco==1 & signif_para==0 ~ "paco",
+    signif_paco==1 & signif_para==1 ~ "both"
+  )) %>%
+  mutate(tree = tree %>% 
+           str_replace("x", "host")%>%
+           str_replace("y", "microbe")) %>%
   filter(!is.na(label))%>% 
   group_by(tree) %>%
-  mutate(y = y / max(y)) %>%
-  ungroup
+  mutate(y = y / max(y))
+
 gg.tangle <- ggplot(tangle, aes(x=factor(tree, levels=c("microbe", "host")), y=y, group=assoc, colour=as.factor(signif))) +
     geom_line(alpha=0.8) +  
   geom_text(data = tangle %>% 
               filter(tree=="host"),
-            aes(label=label),stat = 'unique', hjust=0)+
+            aes(label=label),stat = 'unique', hjust=0, check_overlap = TRUE)+
   geom_text(data = tangle %>% 
               filter(tree=="microbe"),
-            aes(label=label),stat = 'unique', hjust=1)+
-    scale_color_manual(values=c("steelblue", "darkorange1"), name = "Significant") +
+            aes(label=label),stat = 'unique', hjust=1, check_overlap = TRUE)+
+  scale_colour_manual(values=c("NS"="steelblue", "paco"="darkorange1", "para"="#da2b91", "both"="#91da2b"), na.translate=FALSE)+
     scale_x_discrete(expand = expansion(add=c(0.8,0.8))) + 
+    scale_y_continuous(expand=c(0.005,0.005))+
     theme_void() +
-    theme(legend.position = "bottom")
+    theme(legend.position = "bottom") +
+  labs(colour="Significance")
 
 gg.plant_tangle <- p2 + gg.tangle + (p1 + scale_x_reverse()) #+ plot_layout(widths = c(2, 1, 2))
 gg.plant_tangle
@@ -2347,369 +2793,6 @@ try(dev.off(), silent=TRUE)
 
 # Trioza
 
-## Trioza ~ Microbe
-
-```{r trioza microbe}
-#Prepare co-occurance matrix
-coocur <- ps3 %>%
-    subset_samples(psyllid_genus == "Trioza") %>%
-    filter_taxa(function(x) mean(x) > 0, TRUE) %>%
-    otu_table %>%
-    as.matrix() %>% 
-  apply(2, function(x) ifelse(x > 0, 1, 0))
-
-colnames(coocur) <- colnames(coocur) %>%
-           str_replace_all(" |-", "_")
-rownames(coocur) <- rownames(coocur) %>% 
-           str_replace_all(" |-", "_")
-
-# H cophenetic distance
-h_tree <- pruned.tree
-h_tree$tip.label <- h_tree$tip.label %>%
-           str_replace_all(" |-", "_")
-h_tree <- drop.tip(h_tree, setdiff(h_tree$tip.label, rownames(coocur)))
-h_dist <- sqrt(cophenetic(h_tree))
-
-# P cophenetic distance
-s_tree <- phy_tree(ps3)
-s_tree$tip.label <- s_tree$tip.label %>%
-           str_replace_all(" |-", "_")
-s_tree <- drop.tip(s_tree, setdiff(s_tree$tip.label, colnames(coocur)))
-s_dist <- sqrt(cophenetic(s_tree) /1e+6) #convert to Mya so integers are small enough for PACO
-
-coocur <- coocur[h_tree$tip.label, s_tree$tip.label]
-# prepare paco data
-D <- prepare_paco_data(H=h_dist, P=s_dist, HP=coocur)
-# Add pcord
-D <- add_pcoord(D, correction='none')
-
-p_host <- ggplot(D$H_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, Axis.2)) +
-    geom_point() +
-    theme_bw() +
-  ggtitle("H PCA")
-
-p_para <- ggplot(D$P_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, Axis.2))  +
-    geom_point() +
-    theme_bw()+
-  ggtitle("P PCA")
-    
-plot(p_host + p_para)
-
-# run paco
-#paco_run <- PACo(D, nperm=9, seed=909, method='quasiswap', symmetric=TRUE) 
-# Get interaction-specific cophylogenetic contributions using jacknifing
-##paco_run <- paco_links(paco_run)
-#write_rds(paco_run, "output/cophylogeny/paco_trioza_microbe_filtered.rds")
-
-# Read in filtered 
-paco_run <- readRDS("output/cophylogeny/paco_trioza_microbe_filtered.rds")
-# Read in unfiltered 
-#paco_run <- readRDS("output/cophylogeny/paco_trioza_microbe.rds")
-
-#print overall significance
-print(paco_run$gof)
-
-
-links <- data.frame(joint=names(paco_run$jackknife$mean), values=unname(paco_run$jackknife$mean), upper=unname(paco_run$jackknife$upper)) %>%
-  mutate(OTU = joint) %>%
- separate(OTU, into=c("Sample_Name", "OTU"), sep="-", extra="merge") %>%
-  mutate(signif = case_when(
-    upper < mean(.$values) ~ 1,
-    upper > mean(.$values) ~ 0
-  ))
-# Plot links
-links %>%
-  dplyr::rename(label = joint) %>%
-  mutate(label = as.factor(label),
-         label=fct_reorder(label, values, sum))%>%
-  arrange(-values) %>%
-  ggplot(aes(x=label, y=values, colour=as.factor(signif))) +
-  geom_point(show.legend = FALSE) +
-  geom_errorbar(aes(ymin=values, ymax=upper)) +
-  geom_hline(yintercept = mean(links$values)) +
-  scale_color_manual(values=c("steelblue", "darkorange1"), name = "Significant") +
-  theme_classic()+ 
-  theme(axis.text.x = element_blank())
-
-dir.create("output/cophylogeny/trioza_microbiome")
-write_csv(links, "output/cophylogeny/trioza_microbiome/psyllid_microbiome_links.csv")
-write_csv(links %>% 
-    group_by(OTU) %>%
-    summarise(values = mean(values)), "output/cophylogeny/trioza_microbiome/microbe_weights.csv")
-write_csv(links %>% 
-    group_by(Sample_Name) %>%
-    summarise(values = mean(values)), "output/cophylogeny/trioza_microbiome/psyllid_weights.csv")
-
-
-#Get observed residuals of Procrustean superimposition 
-paco_residuals <- residuals_paco(paco_run$proc, type = "interaction")
-
-# Visualise residuals
-res <- data.frame(OTU=names(paco_residuals), values=unname(paco_residuals)) %>%
-  separate(OTU, into=c("Sample_Name", "OTU"), sep="-", extra="merge") 
-
-ggplot(res, aes(x=values))+
-  geom_density(fill='grey70')+
-  theme_bw()+
-  xlab('Procrustes residuals')+
-  ylab('Frequency')
-
-# Parafit run
-#PF_run <- parafit(h_dist, s_dist, t(coocur), nperm=99, test.links=TRUE, silent=TRUE)
-#write_rds(PF_run, "output/cophylogeny/parafit_trioza_microbe_filtered.rds")
-
-# Read in filtered
-PF_run <- readRDS("output/cophylogeny/parafit_trioza_microbe_filtered.rds")
-# Read in unfiltered
-#PF_run <- readRDS("output/cophylogeny/parafit_trioza_microbe_unfiltered.rds")
-
-PF_run$ParaFitGlobal
-PF_run$p.global
-
-PF_links <- as.data.frame(PF_run$link.table) %>%
-  left_join(as.data.frame(rownames(h_dist)) %>%
-              rownames_to_column("Host") %>%
-              mutate(Host = as.numeric(Host))) %>%
-  left_join(as.data.frame(rownames(s_dist)) %>%
-              rownames_to_column("Parasite") %>%
-              mutate(Parasite = as.numeric(Parasite))) %>%
-  dplyr::rename(psyllid_spp = `rownames(h_dist)`, OTU = `rownames(s_dist)`) %>%
-  mutate(signif = case_when(
-    p.F1 < 0.05 ~ 1,
-    p.F1 > 0.05 ~ 0
-  )) 
-
-# Cophyloplot
-coocur.lut <- which(coocur ==1, arr.ind=TRUE)
-assoc <- cbind(rownames(coocur)[coocur.lut[,1]], colnames(coocur)[coocur.lut[,2]])
-
-# Rotate the nodes using phytools
-library(phytools)
-obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=TRUE) 
-
-# Extract the goods for ggtree
-# psyllid_tree
-tree1 <- obj[["trees"]][[1]]
-p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links))
-weights_p1 <- p1$data %>%
-  left_join(links %>%
-  group_by(Sample_Name) %>%
-  summarise(values = mean(signif)) %>%
-    dplyr::rename(label = Sample_Name)
-    )  
-
-## Get values for higher nodes
-weights_p1 <- weights_p1 %>%
-  left_join(data.frame(node=weights_p1$node, links = weights_p1$node %>% purrr::map_dbl(average_descendants, tree=tree1, df=weights_p1)))
-
-p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=links)) +
-  scale_color_gradient(low="steelblue", high="darkorange1") +
-    theme(legend.position = "none")
-
-# OTU tree
-tree2 <- obj[["trees"]][[2]]
-
-# make a clade label list
-tax_groups <- as.data.frame(tax_table(ps3)) %>%
-  rownames_to_column("label") %>%
-  dplyr::mutate(label = label %>% str_replace_all("-", "_") %>%
-                  str_replace_all(" ", "_")) %>%
-  select(label, genus) %>%
-  filter(label %in% tree2$tip.label) %>%
-  group_by(genus) 
-
-group_name <- group_keys(tax_groups)  %>%
-  mutate(group_name = genus %>% str_remove_all("\\[|\\]"))
-
-cls <- tax_groups %>% 
-  group_split() %>% 
-  purrr::map(pull, label) %>%
-  set_names(group_name$group_name)
-
-newtree <- groupOTU(tree2, cls)
-p2 <- ggtree(newtree, ladderize=TRUE, aes(colour=links)) 
-weights_p2 <- p2$data %>%
-  left_join(links %>% 
-    group_by(OTU) %>%
-    summarise(values = mean(signif)) %>%
-    dplyr::rename(label = OTU)
-    ) 
-
-weights_p2 <- weights_p2 %>%
-  left_join(data.frame(node=weights_p2$node, links = weights_p2$node %>% purrr::map_dbl(average_descendants, tree=tree2, df=weights_p2)))
-
-p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=links)) +  
-  scale_color_gradient(low="steelblue", high="darkorange1") +
-  theme(legend.position = "none")
-
-
-# Tanglegram
-dd <- obj$assoc %>%
-  as_data_frame() %>%
-  magrittr::set_colnames(c("label.x", "label.y")) %>%
-  left_join(links %>% 
-              dplyr::rename(label.x = Sample_Name, label.y = OTU)) %>%
-  left_join(p1$data %>% dplyr::select(label, y) %>% dplyr::rename(label.x = label), by="label.x") %>%
-  left_join(p2$data %>% dplyr::select(label, y) %>% dplyr::rename(label.y = label), by="label.y") %>%
-  rownames_to_column("assoc")
-
-d1_new <- dd %>% 
-  dplyr::select(assoc, label.x, y.x, values, upper, signif) %>%
-  dplyr::rename(label = label.x, y = y.x)%>%
-  mutate(tree = "host") 
-  
-d2_new <- dd %>% 
-  dplyr::select(assoc, label.y, y.y,  values, upper, signif) %>%
-  dplyr::rename(label = label.y, y = y.y) %>%
-  mutate(tree = "microbe")
-
-tangle <- bind_rows(d1_new, d2_new) %>%
-  filter(!is.na(label))%>% 
-  group_by(tree) %>%
-  mutate(y = y / max(y)) %>%
-  ungroup
-
-gg.tangle <- ggplot(tangle, aes(x=tree, y=y, colour=signif)) +
-    geom_line(aes(group=assoc),alpha=0.1) +  
-  geom_text(data = tangle %>% 
-              dplyr::filter(tree=="host") %>%
-              group_by(label, y, tree) %>%
-              summarise(signif = mean(signif)),
-            aes(label=label),stat = 'unique', hjust=1)+
-    scale_colour_gradient(low="steelblue", high="darkorange1") +
-    scale_x_discrete(expand = expansion(add=c(0.5,0))) + 
-    theme_void() +
-    theme(legend.position = "bottom")
-
-trioza_tanglegram <- p1 + gg.tangle + (p2 + scale_x_reverse() + 
-  geom_text2(aes(subset=!isTip, label=group %>% na_if(0)), hjust=0, check_overlap=TRUE))
-trioza_tanglegram
-
-pdf(file="figs/trioza_microbe_tanglegram.pdf",  width = 8, height = 11, paper="a4")
-  plot(trioza_tanglegram)
-try(dev.off(), silent=TRUE)
-  
- # Make plot ranking links, and nodes
-
-gg.para_hlinks <- PF_links %>%
-  dplyr::rename(label = psyllid_spp) %>%
-  drop_na() %>%
-  group_by(label) %>%
-  summarise(values = sum(signif)) %>%
-  mutate(label = as.factor(label),
-         label=fct_reorder(label, values, sum ))%>%
-  arrange(-values) %>%
-  ggplot(aes(x=label, y=values, fill=values)) +
-  geom_col(show.legend = FALSE) +  
-  scale_fill_gradient(low="steelblue", high="darkorange1") +
-  theme_classic()+ 
-  labs(y = "# Signficant links", x=NULL, title ="ParaFit Psyllid taxa") + 
-  coord_flip()
-
-gg.paco_hlinks <- d1_new %>%
-  drop_na() %>%
-  group_by(label) %>%
-  summarise(values = sum(signif)) %>%
-  mutate(label = as.factor(label),
-         label=fct_reorder(label, values, sum ))%>%
-  arrange(-values) %>%
-  ggplot(aes(x=label, y=values, fill=values)) +
-  geom_col(show.legend = FALSE) +  
-  scale_fill_gradient(low="steelblue", high="darkorange1") +
-  theme_classic()+ 
-  labs(y = "# Signficant links", x=NULL, title ="PACo Psyllid taxa") + 
-  coord_flip()
-
-gg.para_slinks <- PF_links %>%
-  dplyr::rename(label = OTU) %>%
-  left_join(tax_groups) %>%
-  drop_na() %>%
-  group_by(genus) %>%
-  summarise(values = sum(signif)) %>%
-  dplyr::rename(label = genus) %>%
-  mutate(label = as.factor(label),
-         label=fct_reorder(label, values, sum ))%>%
-  arrange(-values) %>%
-    top_frac(.5) %>%
-  ggplot(aes(x=label, y=values, fill=values)) +
-  geom_col(show.legend = FALSE) +  
-  scale_fill_gradient(low="steelblue", high="darkorange1") +
-  theme_classic()+ 
-  labs(y = "# Signficant links", x=NULL, title ="ParaFit Top 50% Bacterial genera") + 
-  coord_flip()
-  
-gg.paco_slinks <- d2_new %>%
-  left_join(tax_groups) %>%
-  drop_na() %>%
-  group_by(genus) %>%
-  summarise(values = sum(signif)) %>%
-  dplyr::rename(label = genus) %>%
-  mutate(label = as.factor(label),
-         label=fct_reorder(label, values, sum))%>%
-  arrange(-values) %>%
-  top_frac(.5) %>%
-  ggplot(aes(x=label, y=values, fill=values)) +
-  geom_col(show.legend = FALSE) +  
-  scale_fill_gradient(low="steelblue", high="darkorange1") +
-  theme_classic()+ 
-  #theme(axis.text.x = element_text(angle=45, hjust=1)) +
-  labs(y = "# Signficant links", x=NULL, title = "PACo Top 50% Bacterial genera") + 
-  coord_flip()
-
-gg.trioza_hlinks <- gg.para_hlinks + gg.paco_hlinks 
-
-gg.trioza_slinks <- gg.para_slinks + gg.paco_slinks
-
-pdf(file="figs/trioza_microbiome_host_fit_summary.pdf",  width = 8, height = 11, paper="a4")
-  plot(gg.trioza_hlinks)
-try(dev.off(), silent=TRUE)
-  
-pdf(file="figs/trioza_microbiome_symbiont_fit_summary.pdf",  width = 8, height = 11, paper="a4")
-  plot(gg.trioza_slinks)
-try(dev.off(), silent=TRUE)
-```
-
-
-### Heatmap of coocurrance
-```{r trioza microbiome heatmap}
-gg.heatmap <- dd %>%
-  dplyr::rename(Sample_Name = label.x,
-                OTU = label.y,
-                pos_x = y.x,
-                pos_y = y.y) %>%
-  dplyr::select(Sample_Name, OTU, signif, pos_x, pos_y) %>%
-  dplyr::mutate(Sample_Name = factor(Sample_Name),
-                Sample_Name = fct_reorder(Sample_Name, pos_x),
-                OTU = factor(OTU),
-                OTU = fct_reorder(OTU, pos_y)) %>%
-   ggplot(aes(x=Sample_Name, y=OTU, fill=as.factor(signif))) +
-  geom_tile() +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle=45, hjust=1),
-        axis.title.x = element_blank(),
-        axis.text.y = element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.title.y = element_blank(),
-        legend.position = "none") +
-  scale_y_discrete(position = "right")+
-  scale_fill_manual(values=c("steelblue","darkorange1"), na.translate=FALSE) 
-
-#Adjusted trees - Sca
-p3 <- p2 + 
-  geom_text2(aes(subset=!isTip, label=group %>% na_if(0)), hjust=1, check_overlap=TRUE)
-
-
-top <- wrap_elements(grid::textGrob('')) +(p1+ coord_flip() + scale_x_reverse(expand=c(0,0))+ scale_y_continuous(expand=c(0,0))) + plot_layout(widths=c(1,3)) 
-
-bottom <- p3+ scale_y_continuous(expand=c(0,0)) +gg.heatmap + plot_layout(widths=c(1,3))
-
-gg.treemap <- top / bottom + plot_layout(heights=c(1,3))                                                         
-
-gg.treemap
-pdf(file="figs/trioza_microbiome_heatmap.pdf",  width = 8, height = 11, paper="a4")
-  plot(gg.treemap)
-try(dev.off(), silent=TRUE)
-```
 ## Trioza ~ Carsonella
 
 ```{r Trioza carsonella}
@@ -2777,7 +2860,7 @@ p_para <- ggplot(D$P_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, 
 plot(p_host + p_para)
 
 # run paco
-paco_run <- PACo(D, nperm=99, seed=909, method='quasiswap', symmetric=TRUE)
+paco_run <- PACo(D, nperm=999, seed=909, method='quasiswap', symmetric=FALSE)
 
 #print overall significance
 print(paco_run$gof)
@@ -2832,99 +2915,134 @@ PF_run <- parafit(h_dist, s_dist, t(coocur), nperm=999, test.links=TRUE, silent=
 PF_run$ParaFitGlobal
 PF_run$p.global
 
-PF_links <- as.data.frame(PF_run$link.table) %>%
-  left_join(as.data.frame(rownames(h_dist)) %>%
-              rownames_to_column("Host") %>%
-              mutate(Host = as.numeric(Host))) %>%
-  left_join(as.data.frame(rownames(s_dist)) %>%
-              rownames_to_column("Parasite") %>%
-              mutate(Parasite = as.numeric(Parasite)))
+
+PF_links <- as.data.frame(PF_run$link.table)  %>%
+      left_join(enframe(names(PF_run$para.per.host), name = "Host", value="psyllid_spp") %>%
+                  mutate(Host = as.numeric(Host))) %>%
+      left_join(enframe(names(PF_run$host.per.para), name = "Parasite", value="OTU") %>%
+                  mutate(Parasite = as.numeric(Parasite)))%>%
+  mutate(signif = case_when(
+    p.F1 < 0.05 ~ 1,
+    p.F1 > 0.05 ~ 0
+  )) 
 
 # Cophyloplot
 coocur.lut <- which(coocur ==1, arr.ind=TRUE)
 assoc <- cbind(rownames(coocur)[coocur.lut[,1]], colnames(coocur)[coocur.lut[,2]])
 
 # Rotate the nodes using phytools
-library(phytools)
 obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=TRUE) 
 
 # psyllid_tree
 tree1 <- obj[["trees"]][[1]]
-p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links)) #+ geom_tiplab()
+
+p1 <- ggtree(tree1)
+atmeto_node <- p1$data %>% 
+  filter(str_detect(label, "Atmeto")) %>%
+  pull(node)
+root_node <- p1$data %>% 
+  filter(str_detect(label, "Atmeto")) %>%
+  pull(parent)
+
+tree1 <- groupOTU(tree1, .node=atmeto_node) # Make the atmeto dotted to indicate outgroup was rescaled
+
+p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links,linetype=group))
 weights_p1 <- p1$data %>%
-  left_join(links %>%
-  group_by(Sample_Name) %>%
-  summarise(values = mean(signif)) %>%
+  left_join(links %>% 
+    group_by(Sample_Name) %>%
+    summarise(PA_values = mean(signif)) %>%
     dplyr::rename(label = Sample_Name)
-    )  
+    )%>%
+  left_join(PF_links %>% 
+    group_by(psyllid_spp) %>%
+    summarise(PF_values = mean(signif)) %>%
+    dplyr::rename(label = psyllid_spp)
+    ) %>%
+  mutate(values = PA_values + PF_values)
+
+#Scale the atmetocranium and root nodes to be shorter
+p1$data[p1$data$node %in% atmeto_node, "x"] <- max(p1$data$x)
+p1$data[p1$data$node %in% root_node, "x"] <- 0.2 #root
+
+p1$data$node[p1$data$node]
 
 ## Get values for higher nodes
 weights_p1 <- weights_p1 %>%
   left_join(data.frame(node=weights_p1$node, links = weights_p1$node %>% purrr::map_dbl(average_descendants, tree=tree1, df=weights_p1)))
-
-p1 <- p1 %<+% weights_p1 + 
-  geom_tippoint(aes(colour=links)) +
-  scale_color_gradient(low="steelblue", high="darkorange1") +
+p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=links)) +
+  scale_color_gradient(low="steelblue", high="darkorange1")  +
   theme(legend.position = "none")
-
 
 # OTU tree
 tree2 <- obj[["trees"]][[2]]
-
-p2 <- ggtree(tree2 , ladderize=FALSE, aes(colour=links)) 
+s_tree <- drop.tip(tree2, setdiff(tree2$tip.label, obj$assoc[,2]))
+p2 <- ggtree(tree2 , ladderize=TRUE, aes(colour=links)) 
 weights_p2 <- p2$data %>%
   left_join(links %>% 
     group_by(OTU) %>%
-    summarise(values = mean(signif)) %>%
+    summarise(PA_values = mean(signif)) %>%
     dplyr::rename(label = OTU)
-    ) 
+    )%>%
+  left_join(PF_links %>% 
+    group_by(OTU) %>%
+    summarise(PF_values = mean(signif)) %>%
+    dplyr::rename(label = OTU)
+    ) %>%
+  mutate(values = PA_values + PF_values)
 
 weights_p2 <- weights_p2 %>%
   left_join(data.frame(node=weights_p2$node, links = weights_p2$node %>% purrr::map_dbl(average_descendants, tree=tree2, df=weights_p2)))
 
-p2 <- p2 %<+% weights_p2  + 
-  geom_tippoint(aes(colour=links)) +  
-  scale_color_gradient(low="steelblue", high="darkorange1")+
+p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=links)) + 
+  scale_color_gradient(low="steelblue", high="darkorange1") +
   theme(legend.position = "none")
 
-
-# Tanglegram
-dd <- obj$assoc %>%
+# Tanglegram 
+tangle <- obj$assoc %>%
   as_data_frame() %>%
   magrittr::set_colnames(c("label.x", "label.y")) %>%
-  left_join(links  %>% 
-              dplyr::rename(label.x = Sample_Name, label.y = OTU)) %>%
+  left_join(links %>% 
+              dplyr::select(label.x = Sample_Name, label.y = OTU, signif_paco=signif)) %>%
+  left_join(PF_links %>% 
+              dplyr::select(label.x = psyllid_spp, label.y = OTU, signif_para=signif)) %>%
   left_join(p1$data %>% dplyr::select(label, y) %>% dplyr::rename(label.x = label), by="label.x") %>%
   left_join(p2$data %>% dplyr::select(label, y) %>% dplyr::rename(label.y = label), by="label.y") %>%
-  rownames_to_column("assoc")
-
-d1_new <- dd %>% 
-  dplyr::select(assoc, label.x, y.x, values, upper, signif) %>%
-  dplyr::rename(label = label.x, y = y.x)%>%
-  mutate(tree = "host") 
-  
-d2_new <- dd %>% 
-  dplyr::select(assoc, label.y, y.y, values, upper, signif) %>%
-  dplyr::rename(label = label.y, y = y.y) %>%
-  mutate(tree = "microbe")
-
-tangle <- bind_rows(d1_new, d2_new) %>%
+  rownames_to_column("assoc") %>%
+  rename_all(~str_replace(.x,pattern="\\.", replacement="_")) %>%
+  pivot_longer(ends_with(c("_x", "_y")),
+               names_to=c(".value", "tree"), 
+               names_sep = "_"
+              )  %>%
+  mutate(signif_paco = replace_na(signif_paco, 0),
+         signif_para = replace_na(signif_para, 0)) %>%
+  mutate(signif = case_when(
+    signif_paco==0 & signif_para==0  ~ "NS",
+    signif_paco==0 & signif_para==1 ~ "para",
+    signif_paco==1 & signif_para==0 ~ "paco",
+    signif_paco==1 & signif_para==1 ~ "both"
+  )) %>%
+  mutate(tree = tree %>% 
+           str_replace("x", "host")%>%
+           str_replace("y", "microbe")) %>%
   filter(!is.na(label))%>% 
   group_by(tree) %>%
-  mutate(y = y / max(y)) %>%
-  ungroup
+  mutate(y = y / max(y))
+
+
 gg.tangle <- ggplot(tangle, aes(x=tree, y=y, group=assoc, colour=as.factor(signif))) +
     geom_line(alpha=0.8) +  
   geom_text(data = tangle %>% 
               filter(tree=="host"),
-            aes(label=label),stat = 'unique', hjust=1)+
+            aes(label=label),stat = 'unique', hjust=1, check_overlap = TRUE)+
   geom_text(data = tangle %>% 
               filter(tree=="microbe"),
-            aes(label=label),stat = 'unique', hjust=0)+
-    scale_color_manual(values=c("steelblue", "darkorange1")) +
+            aes(label=label),stat = 'unique', hjust=0, check_overlap = TRUE)+
+  scale_colour_manual(values=c("NS"="steelblue", "paco"="darkorange1", "para"="#da2b91", "both"="#91da2b"), na.translate=FALSE)+
     scale_x_discrete(expand = expansion(add=c(0.8,0.8))) + 
     theme_void() +
-    theme(legend.position = "bottom")
+    scale_y_continuous(expand=c(0.005,0.005))+
+    theme(legend.position = "bottom") +
+  labs(colour="Significance:")
 
 gg.trioza_carson_tangle <- p1 + gg.tangle + (p2 + scale_x_reverse()) 
 gg.trioza_carson_tangle
@@ -2992,7 +3110,7 @@ p_para <- ggplot(D$P_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, 
 plot(p_host + p_para)
 
 # run paco
-paco_run <- PACo(D, nperm=99, seed=909, method='quasiswap', symmetric=TRUE) #Symetric - is one meant to track the evolution of another?
+paco_run <- PACo(D, nperm=999, seed=909, method='quasiswap', symmetric=FALSE) #Symetric - is one meant to track the evolution of another?
 
 #print overall significance
 print(paco_run$gof)
@@ -3000,7 +3118,6 @@ print(paco_run$gof)
 # Procrustes diagnostic plots
 plot(paco_run$proc)
 plot(paco_run$proc, kind=2)
-
 
 # Get interaction-specific cophylogenetic contributions using jacknifing
 paco_run <- paco_links(paco_run)
@@ -3052,98 +3169,125 @@ PF_run <- parafit(h_dist, s_dist, t(coocur), nperm=999, test.links=TRUE, silent=
 PF_run$ParaFitGlobal
 PF_run$p.global
 
-PF_links <- as.data.frame(PF_run$link.table) %>%
-  left_join(as.data.frame(rownames(h_dist)) %>%
-              rownames_to_column("Host") %>%
-              mutate(Host = as.numeric(Host))) %>%
-  left_join(as.data.frame(rownames(s_dist)) %>%
-              rownames_to_column("Parasite") %>%
-              mutate(Parasite = as.numeric(Parasite)))
+
+PF_links <- as.data.frame(PF_run$link.table)  %>%
+      left_join(enframe(names(PF_run$para.per.host), name = "Host", value="hostplant_spp") %>%
+                  mutate(Host = as.numeric(Host))) %>%
+      left_join(enframe(names(PF_run$host.per.para), name = "Parasite", value="psyllid_spp") %>%
+                  mutate(Parasite = as.numeric(Parasite)))%>%
+  mutate(signif = case_when(
+    p.F1 < 0.05 ~ 1,
+    p.F1 > 0.05 ~ 0
+  )) 
 
 # Cophyloplot
 coocur.lut <- which(coocur ==1, arr.ind=TRUE)
 assoc <- cbind(rownames(coocur)[coocur.lut[,1]], colnames(coocur)[coocur.lut[,2]])
 
 # Rotate the nodes using phytools
-library(phytools)
 obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=TRUE) 
 
 # Extract the goods for ggtree
 # plant tree
 tree1 <- obj[["trees"]][[1]]
-p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links)) 
-weights_p1 <- p1$data %>%
-  left_join(links %>%
-  group_by(hostplant_spp) %>%
-  summarise(values = mean(signif)) %>%
-    dplyr::rename(label = hostplant_spp)
-    )
 
+p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links))
+weights_p1 <- p1$data %>%
+  left_join(links %>% 
+    group_by(hostplant_spp) %>%
+    summarise(PA_values = mean(signif)) %>%
+    dplyr::rename(label = hostplant_spp)
+    )%>%
+  left_join(PF_links %>% 
+    group_by(hostplant_spp) %>%
+    summarise(PF_values = mean(signif)) %>%
+    dplyr::rename(label = hostplant_spp)
+    ) %>%
+  mutate(values = PA_values + PF_values)
+
+## Get values for higher nodes
 weights_p1 <- weights_p1 %>%
   left_join(data.frame(node=weights_p1$node, links = weights_p1$node %>% purrr::map_dbl(average_descendants, tree=tree1, df=weights_p1)))
-
-p1 <- p1 %<+% weights_p1  + 
-  geom_tippoint(aes(colour=links)) +
-  scale_color_gradient(low="steelblue", high="darkorange1") +
+p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=links)) +
+  scale_color_gradient(low="steelblue", high="darkorange1")  +
   theme(legend.position = "none")
 
 # psyllid_tree
 tree2 <- obj[["trees"]][[2]]
-p2 <- ggtree(tree2, ladderize=FALSE, aes(colour=links))
+s_tree <- drop.tip(tree2, setdiff(tree2$tip.label, obj$assoc[,2]))
+
+p2 <- ggtree(tree2 , ladderize=TRUE, aes(colour=links)) 
 weights_p2 <- p2$data %>%
   left_join(links %>% 
     group_by(psyllid_spp) %>%
-    summarise(values = mean(signif)) %>%
+    summarise(PA_values = mean(signif)) %>%
     dplyr::rename(label = psyllid_spp)
-    ) 
+    )%>%
+  left_join(PF_links %>% 
+    group_by(psyllid_spp) %>%
+    summarise(PF_values = mean(signif)) %>%
+    dplyr::rename(label = psyllid_spp)
+    ) %>%
+  mutate(values = PA_values + PF_values)
+
+#Scale the atmetocranium and root nodes to be shorter
+p2$data[p2$data$node %in% atmeto_node, "x"] <- max(p2$data$x)
+p2$data[p2$data$node %in% root_node, "x"] <- 0.2 #root
+
+p2$data$node[p2$data$node]
+
 weights_p2 <- weights_p2 %>%
   left_join(data.frame(node=weights_p2$node, links = weights_p2$node %>% purrr::map_dbl(average_descendants, tree=tree2, df=weights_p2)))
 
-p2 <- p2 %<+% weights_p2  + 
-  geom_tippoint(aes(colour=links)) +  
-  scale_color_gradient(low="steelblue", high="darkorange1")+
+p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=links)) + 
+  scale_color_gradient(low="steelblue", high="darkorange1") +
   theme(legend.position = "none")
 
-# Tanglegram
-dd <- obj$assoc %>%
+# Tanglegram 
+tangle <- obj$assoc %>%
   as_data_frame() %>%
   magrittr::set_colnames(c("label.x", "label.y")) %>%
   left_join(links %>% 
-              dplyr::rename(label.x = hostplant_spp, label.y = psyllid_spp)) %>%
+              dplyr::select(label.x = hostplant_spp, label.y = psyllid_spp, signif_paco=signif)) %>%
+  left_join(PF_links %>% 
+              dplyr::select(label.x = hostplant_spp, label.y = psyllid_spp, signif_para=signif)) %>%
   left_join(p1$data %>% dplyr::select(label, y) %>% dplyr::rename(label.x = label), by="label.x") %>%
   left_join(p2$data %>% dplyr::select(label, y) %>% dplyr::rename(label.y = label), by="label.y") %>%
-  rownames_to_column("assoc")
-
-d1_new <- dd %>% 
-  dplyr::select(assoc, label.x, y.x, values, upper, signif) %>%
-  dplyr::rename(label = label.x, y = y.x)%>%
-  mutate(tree = "host") 
-  
-d2_new <- dd %>% 
-  dplyr::select(assoc, label.y, y.y, values, upper, signif) %>%
-  dplyr::rename(label = label.y, y = y.y) %>%
-  mutate(tree = "microbe")
-
-# Should be able to have y = labels, but arrange b y
-
-tangle <- bind_rows(d1_new, d2_new) %>%
+  rownames_to_column("assoc") %>%
+  rename_all(~str_replace(.x,pattern="\\.", replacement="_")) %>%
+  pivot_longer(ends_with(c("_x", "_y")),
+               names_to=c(".value", "tree"), 
+               names_sep = "_"
+              )  %>%
+  mutate(signif_paco = replace_na(signif_paco, 0),
+         signif_para = replace_na(signif_para, 0)) %>%
+  mutate(signif = case_when(
+    signif_paco==0 & signif_para==0  ~ "NS",
+    signif_paco==0 & signif_para==1 ~ "para",
+    signif_paco==1 & signif_para==0 ~ "paco",
+    signif_paco==1 & signif_para==1 ~ "both"
+  )) %>%
+  mutate(tree = tree %>% 
+           str_replace("x", "host")%>%
+           str_replace("y", "microbe")) %>%
   filter(!is.na(label))%>% 
   group_by(tree) %>%
-  mutate(y = y / max(y)) %>%
-  ungroup
+  mutate(y = y / max(y))
+
 gg.tangle <- ggplot(tangle, aes(x=factor(tree, levels=c("microbe", "host")), y=y, group=assoc, colour=as.factor(signif))) +
     geom_line(alpha=0.8) +  
   geom_text(data = tangle %>% 
               filter(tree=="host"),
-            aes(label=label),stat = 'unique', hjust=0)+
+            aes(label=label),stat = 'unique', hjust=0, check_overlap = TRUE)+
   geom_text(data = tangle %>% 
               filter(tree=="microbe"),
-            aes(label=label),stat = 'unique', hjust=1)+
-    scale_color_manual(values=c("steelblue", "darkorange1"), name = "Significant") +
+            aes(label=label),stat = 'unique', hjust=1, check_overlap = TRUE)+
+  scale_colour_manual(values=c("NS"="steelblue", "paco"="darkorange1", "para"="#da2b91", "both"="#91da2b"), na.translate=FALSE)+
     scale_x_discrete(expand = expansion(add=c(0.8,0.8))) + 
+    scale_y_continuous(expand=c(0.005,0.005))+
     theme_void() +
-    theme(legend.position = "bottom")
-
+    theme(legend.position = "bottom") +
+  labs(colour="Significance")
 gg.triozid_tangle <- p2 + gg.tangle + (p1 + scale_x_reverse()) 
 gg.triozid_tangle
 
@@ -3152,739 +3296,6 @@ pdf(file="figs/trioza_plant_tanglegram.pdf",  width = 8, height = 11, paper="a4"
 try(dev.off(), silent=TRUE)
 ```
 
-
-# Ctenarytaina
-
-## ctenarytaina ~ Microbe
-
-```{r ctenarytaina microbe}
-#Prepare co-occurance matrix
-coocur <- ps3 %>%
-    subset_samples(psyllid_genus == "Ctenarytaina") %>%
-    filter_taxa(function(x) mean(x) > 0, TRUE) %>%
-    otu_table %>%
-    as.matrix() %>% 
-  apply(2, function(x) ifelse(x > 0, 1, 0))
-
-colnames(coocur) <- colnames(coocur) %>%
-           str_replace_all(" |-", "_")
-rownames(coocur) <- rownames(coocur) %>% 
-           str_replace_all(" |-", "_")
-
-# H cophenetic distance
-h_tree <- pruned.tree
-h_tree$tip.label <- h_tree$tip.label %>%
-           str_replace_all(" |-", "_")
-h_tree <- drop.tip(h_tree, setdiff(h_tree$tip.label, rownames(coocur)))
-h_dist <- sqrt(cophenetic(h_tree))
-
-# P cophenetic distance
-s_tree <- phy_tree(ps3)
-s_tree$tip.label <- s_tree$tip.label %>%
-           str_replace_all(" |-", "_")
-s_tree <- drop.tip(s_tree, setdiff(s_tree$tip.label, colnames(coocur)))
-s_dist <- sqrt(cophenetic(s_tree) /1e+6) #convert to Mya so integers are small enough for PACO
-
-coocur <- coocur[h_tree$tip.label, s_tree$tip.label]
-# prepare paco data
-D <- prepare_paco_data(H=h_dist, P=s_dist, HP=coocur)
-# Add pcord
-D <- add_pcoord(D, correction='none')
-
-p_host <- ggplot(D$H_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, Axis.2)) +
-    geom_point() +
-    theme_bw() +
-  ggtitle("H PCA")
-
-p_para <- ggplot(D$P_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, Axis.2))  +
-    geom_point() +
-    theme_bw()+
-  ggtitle("P PCA")
-    
-plot(p_host + p_para)
-
-# run paco
-#paco_run <- PACo(D, nperm=9, seed=909, method='quasiswap', symmetric=TRUE) 
-# Get interaction-specific cophylogenetic contributions using jacknifing
-##paco_run <- paco_links(paco_run)
-#write_rds(paco_run, "output/cophylogeny/paco_ctenarytaina_microbe_filtered.rds")
-
-# Read in filtered 
-paco_run <- readRDS("output/cophylogeny/paco_ctenarytaina_microbe_filtered.rds")
-# Read in unfiltered 
-#paco_run <- readRDS("output/cophylogeny/paco_ctenarytaina_microbe.rds")
-
-#print overall significance
-print(paco_run$gof)
-
-
-links <- data.frame(joint=names(paco_run$jackknife$mean), values=unname(paco_run$jackknife$mean), upper=unname(paco_run$jackknife$upper)) %>%
-  mutate(OTU = joint) %>%
- separate(OTU, into=c("Sample_Name", "OTU"), sep="-", extra="merge") %>%
-  mutate(signif = case_when(
-    upper < mean(.$values) ~ 1,
-    upper > mean(.$values) ~ 0
-  ))
-# Plot links
-links %>%
-  dplyr::rename(label = joint) %>%
-  mutate(label = as.factor(label),
-         label=fct_reorder(label, values, sum))%>%
-  arrange(-values) %>%
-  ggplot(aes(x=label, y=values, colour=as.factor(signif))) +
-  geom_point(show.legend = FALSE) +
-  geom_errorbar(aes(ymin=values, ymax=upper)) +
-  geom_hline(yintercept = mean(links$values)) +
-  scale_color_manual(values=c("steelblue", "darkorange1"), name = "Significant") +
-  theme_classic()+ 
-  theme(axis.text.x = element_blank())
-
-dir.create("output/cophylogeny/ctenarytaina_microbiome")
-write_csv(links, "output/cophylogeny/ctenarytaina_microbiome/psyllid_microbiome_links.csv")
-write_csv(links %>% 
-    group_by(OTU) %>%
-    summarise(values = mean(values)), "output/cophylogeny/ctenarytaina_microbiome/microbe_weights.csv")
-write_csv(links %>% 
-    group_by(Sample_Name) %>%
-    summarise(values = mean(values)), "output/cophylogeny/ctenarytaina_microbiome/psyllid_weights.csv")
-
-
-#Get observed residuals of Procrustean superimposition 
-paco_residuals <- residuals_paco(paco_run$proc, type = "interaction")
-
-# Visualise residuals
-res <- data.frame(OTU=names(paco_residuals), values=unname(paco_residuals)) %>%
-  separate(OTU, into=c("Sample_Name", "OTU"), sep="-", extra="merge") 
-
-ggplot(res, aes(x=values))+
-  geom_density(fill='grey70')+
-  theme_bw()+
-  xlab('Procrustes residuals')+
-  ylab('Frequency')
-
-# Parafit run
-#PF_run <- parafit(h_dist, s_dist, t(coocur), nperm=99, test.links=TRUE, silent=TRUE)
-#write_rds(PF_run, "output/cophylogeny/parafit_ctenarytaina_microbe_filtered.rds")
-
-# Read in filtered
-PF_run <- readRDS("output/cophylogeny/parafit_ctenarytaina_microbe_filtered.rds")
-# Read in unfiltered
-#PF_run <- readRDS("output/cophylogeny/parafit_ctenarytaina_microbe_unfiltered.rds")
-
-PF_run$ParaFitGlobal
-PF_run$p.global
-
-PF_links <- as.data.frame(PF_run$link.table) %>%
-  left_join(as.data.frame(rownames(h_dist)) %>%
-              rownames_to_column("Host") %>%
-              mutate(Host = as.numeric(Host))) %>%
-  left_join(as.data.frame(rownames(s_dist)) %>%
-              rownames_to_column("Parasite") %>%
-              mutate(Parasite = as.numeric(Parasite))) %>%
-  dplyr::rename(psyllid_spp = `rownames(h_dist)`, OTU = `rownames(s_dist)`) %>%
-  mutate(signif = case_when(
-    p.F1 < 0.05 ~ 1,
-    p.F1 > 0.05 ~ 0
-  )) 
-
-# Cophyloplot
-coocur.lut <- which(coocur ==1, arr.ind=TRUE)
-assoc <- cbind(rownames(coocur)[coocur.lut[,1]], colnames(coocur)[coocur.lut[,2]])
-
-# Rotate the nodes using phytools
-library(phytools)
-obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=TRUE) 
-
-# Extract the goods for ggtree
-# psyllid_tree
-tree1 <- obj[["trees"]][[1]]
-p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links))
-weights_p1 <- p1$data %>%
-  left_join(links %>%
-  group_by(Sample_Name) %>%
-  summarise(values = mean(signif)) %>%
-    dplyr::rename(label = Sample_Name)
-    )  
-
-## Get values for higher nodes
-weights_p1 <- weights_p1 %>%
-  left_join(data.frame(node=weights_p1$node, links = weights_p1$node %>% purrr::map_dbl(average_descendants, tree=tree1, df=weights_p1)))
-
-p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=links)) +
-  scale_color_gradient(low="steelblue", high="darkorange1") +
-    theme(legend.position = "none")
-
-# OTU tree
-tree2 <- obj[["trees"]][[2]]
-
-# make a clade label list
-tax_groups <- as.data.frame(tax_table(ps3)) %>%
-  rownames_to_column("label") %>%
-  dplyr::mutate(label = label %>% str_replace_all("-", "_") %>%
-                  str_replace_all(" ", "_")) %>%
-  select(label, genus) %>%
-  filter(label %in% tree2$tip.label) %>%
-  group_by(genus) 
-
-group_name <- group_keys(tax_groups)  %>%
-  mutate(group_name = genus %>% str_remove_all("\\[|\\]"))
-
-cls <- tax_groups %>% 
-  group_split() %>% 
-  purrr::map(pull, label) %>%
-  set_names(group_name$group_name)
-
-newtree <- groupOTU(tree2, cls)
-p2 <- ggtree(newtree, ladderize=TRUE, aes(colour=links)) 
-weights_p2 <- p2$data %>%
-  left_join(links %>% 
-    group_by(OTU) %>%
-    summarise(values = mean(signif)) %>%
-    dplyr::rename(label = OTU)
-    ) 
-
-weights_p2 <- weights_p2 %>%
-  left_join(data.frame(node=weights_p2$node, links = weights_p2$node %>% purrr::map_dbl(average_descendants, tree=tree2, df=weights_p2)))
-
-p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=links)) +  
-  scale_color_gradient(low="steelblue", high="darkorange1") +
-  theme(legend.position = "none")
-
-
-# Tanglegram
-dd <- obj$assoc %>%
-  as_data_frame() %>%
-  magrittr::set_colnames(c("label.x", "label.y")) %>%
-  left_join(links %>% 
-              dplyr::rename(label.x = Sample_Name, label.y = OTU)) %>%
-  left_join(p1$data %>% dplyr::select(label, y) %>% dplyr::rename(label.x = label), by="label.x") %>%
-  left_join(p2$data %>% dplyr::select(label, y) %>% dplyr::rename(label.y = label), by="label.y") %>%
-  rownames_to_column("assoc")
-
-d1_new <- dd %>% 
-  dplyr::select(assoc, label.x, y.x, values, upper, signif) %>%
-  dplyr::rename(label = label.x, y = y.x)%>%
-  mutate(tree = "host") 
-  
-d2_new <- dd %>% 
-  dplyr::select(assoc, label.y, y.y,  values, upper, signif) %>%
-  dplyr::rename(label = label.y, y = y.y) %>%
-  mutate(tree = "microbe")
-
-tangle <- bind_rows(d1_new, d2_new) %>%
-  filter(!is.na(label))%>% 
-  group_by(tree) %>%
-  mutate(y = y / max(y)) %>%
-  ungroup
-
-gg.tangle <- ggplot(tangle, aes(x=tree, y=y, colour=signif)) +
-    geom_line(aes(group=assoc),alpha=0.1) +  
-  geom_text(data = tangle %>% 
-              dplyr::filter(tree=="host") %>%
-              group_by(label, y, tree) %>%
-              summarise(signif = mean(signif)),
-            aes(label=label),stat = 'unique', hjust=1)+
-    scale_colour_gradient(low="steelblue", high="darkorange1") +
-    scale_x_discrete(expand = expansion(add=c(0.5,0))) + 
-    theme_void() +
-    theme(legend.position = "bottom")
-
-ctenarytaina_tanglegram <- p1 + gg.tangle + (p2 + scale_x_reverse() + 
-  geom_text2(aes(subset=!isTip, label=group %>% na_if(0)), hjust=0, check_overlap=TRUE))
-ctenarytaina_tanglegram
-
-pdf(file="figs/ctenarytaina_microbe_tanglegram.pdf",  width = 8, height = 11, paper="a4")
-  plot(ctenarytaina_tanglegram)
-try(dev.off(), silent=TRUE)
-  
- # Make plot ranking links, and nodes
-
-gg.para_hlinks <- PF_links %>%
-  dplyr::rename(label = psyllid_spp) %>%
-  drop_na() %>%
-  group_by(label) %>%
-  summarise(values = sum(signif)) %>%
-  mutate(label = as.factor(label),
-         label=fct_reorder(label, values, sum ))%>%
-  arrange(-values) %>%
-  ggplot(aes(x=label, y=values, fill=values)) +
-  geom_col(show.legend = FALSE) +  
-  scale_fill_gradient(low="steelblue", high="darkorange1") +
-  theme_classic()+ 
-  labs(y = "# Signficant links", x=NULL, title ="ParaFit Psyllid taxa") + 
-  coord_flip()
-
-gg.paco_hlinks <- d1_new %>%
-  drop_na() %>%
-  group_by(label) %>%
-  summarise(values = sum(signif)) %>%
-  mutate(label = as.factor(label),
-         label=fct_reorder(label, values, sum ))%>%
-  arrange(-values) %>%
-  ggplot(aes(x=label, y=values, fill=values)) +
-  geom_col(show.legend = FALSE) +  
-  scale_fill_gradient(low="steelblue", high="darkorange1") +
-  theme_classic()+ 
-  labs(y = "# Signficant links", x=NULL, title ="PACo Psyllid taxa") + 
-  coord_flip()
-
-gg.para_slinks <- PF_links %>%
-  dplyr::rename(label = OTU) %>%
-  left_join(tax_groups) %>%
-  drop_na() %>%
-  group_by(genus) %>%
-  summarise(values = sum(signif)) %>%
-  dplyr::rename(label = genus) %>%
-  mutate(label = as.factor(label),
-         label=fct_reorder(label, values, sum ))%>%
-  arrange(-values) %>%
-    top_frac(.5) %>%
-  ggplot(aes(x=label, y=values, fill=values)) +
-  geom_col(show.legend = FALSE) +  
-  scale_fill_gradient(low="steelblue", high="darkorange1") +
-  theme_classic()+ 
-  labs(y = "# Signficant links", x=NULL, title ="ParaFit Top 50% Bacterial genera") + 
-  coord_flip()
-  
-gg.paco_slinks <- d2_new %>%
-  left_join(tax_groups) %>%
-  drop_na() %>%
-  group_by(genus) %>%
-  summarise(values = sum(signif)) %>%
-  dplyr::rename(label = genus) %>%
-  mutate(label = as.factor(label),
-         label=fct_reorder(label, values, sum))%>%
-  arrange(-values) %>%
-  top_frac(.5) %>%
-  ggplot(aes(x=label, y=values, fill=values)) +
-  geom_col(show.legend = FALSE) +  
-  scale_fill_gradient(low="steelblue", high="darkorange1") +
-  theme_classic()+ 
-  #theme(axis.text.x = element_text(angle=45, hjust=1)) +
-  labs(y = "# Signficant links", x=NULL, title = "PACo Top 50% Bacterial genera") + 
-  coord_flip()
-
-gg.ctenarytaina_hlinks <- gg.para_hlinks + gg.paco_hlinks 
-
-gg.ctenarytaina_slinks <- gg.para_slinks + gg.paco_slinks
-
-pdf(file="figs/ctenarytaina_microbiome_host_fit_summary.pdf",  width = 8, height = 11, paper="a4")
-  plot(gg.ctenarytaina_hlinks)
-try(dev.off(), silent=TRUE)
-  
-pdf(file="figs/ctenarytaina_microbiome_symbiont_fit_summary.pdf",  width = 8, height = 11, paper="a4")
-  plot(gg.ctenarytaina_slinks)
-try(dev.off(), silent=TRUE)
-```
-
-
-### Heatmap of coocurrance
-```{r ctenarytaina microbiome heatmap}
-gg.heatmap <- dd %>%
-  dplyr::rename(Sample_Name = label.x,
-                OTU = label.y,
-                pos_x = y.x,
-                pos_y = y.y) %>%
-  dplyr::select(Sample_Name, OTU, signif, pos_x, pos_y) %>%
-  dplyr::mutate(Sample_Name = factor(Sample_Name),
-                Sample_Name = fct_reorder(Sample_Name, pos_x),
-                OTU = factor(OTU),
-                OTU = fct_reorder(OTU, pos_y)) %>%
-   ggplot(aes(x=Sample_Name, y=OTU, fill=as.factor(signif))) +
-  geom_tile() +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle=45, hjust=1),
-        axis.title.x = element_blank(),
-        axis.text.y = element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.title.y = element_blank(),
-        legend.position = "none") +
-  scale_y_discrete(position = "right")+
-  scale_fill_manual(values=c("steelblue","darkorange1"), na.translate=FALSE) 
-
-#Adjusted trees - Sca
-p3 <- p2 + 
-  geom_text2(aes(subset=!isTip, label=group %>% na_if(0)), hjust=1, check_overlap=TRUE)
-
-
-top <- wrap_elements(grid::textGrob('')) +(p1+ coord_flip() + scale_x_reverse(expand=c(0,0))+ scale_y_continuous(expand=c(0,0))) + plot_layout(widths=c(1,3)) 
-
-bottom <- p3+ scale_y_continuous(expand=c(0,0)) +gg.heatmap + plot_layout(widths=c(1,3))
-
-gg.treemap <- top / bottom + plot_layout(heights=c(1,3))                                                         
-
-gg.treemap
-pdf(file="figs/ctenarytaina_microbiome_heatmap.pdf",  width = 8, height = 11, paper="a4")
-  plot(gg.treemap)
-try(dev.off(), silent=TRUE)
-```
-
-
-# Psylla
-
-## Psylla ~ Microbe
-
-```{r psylla microbe}
-#Prepare co-occurance matrix
-coocur <- ps3 %>%
-    subset_samples(psyllid_genus == "Psylla") %>%
-    filter_taxa(function(x) mean(x) > 0, TRUE) %>%
-    otu_table %>%
-    as.matrix() %>% 
-  apply(2, function(x) ifelse(x > 0, 1, 0))
-
-colnames(coocur) <- colnames(coocur) %>%
-           str_replace_all(" |-", "_")
-rownames(coocur) <- rownames(coocur) %>% 
-           str_replace_all(" |-", "_")
-
-# H cophenetic distance
-h_tree <- pruned.tree
-h_tree$tip.label <- h_tree$tip.label %>%
-           str_replace_all(" |-", "_")
-h_tree <- drop.tip(h_tree, setdiff(h_tree$tip.label, rownames(coocur)))
-h_dist <- sqrt(cophenetic(h_tree))
-
-# P cophenetic distance
-s_tree <- phy_tree(ps3)
-s_tree$tip.label <- s_tree$tip.label %>%
-           str_replace_all(" |-", "_")
-s_tree <- drop.tip(s_tree, setdiff(s_tree$tip.label, colnames(coocur)))
-s_dist <- sqrt(cophenetic(s_tree) /1e+6) #convert to Mya so integers are small enough for PACO
-
-coocur <- coocur[h_tree$tip.label, s_tree$tip.label]
-# prepare paco data
-D <- prepare_paco_data(H=h_dist, P=s_dist, HP=coocur)
-# Add pcord
-D <- add_pcoord(D, correction='none')
-
-p_host <- ggplot(D$H_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, Axis.2)) +
-    geom_point() +
-    theme_bw() +
-  ggtitle("H PCA")
-
-p_para <- ggplot(D$P_PCo[,c('Axis.1', 'Axis.2')] %>% as.data.frame, aes(Axis.1, Axis.2))  +
-    geom_point() +
-    theme_bw()+
-  ggtitle("P PCA")
-    
-plot(p_host + p_para)
-
-# run paco
-#paco_run <- PACo(D, nperm=9, seed=909, method='quasiswap', symmetric=TRUE) 
-# Get interaction-specific cophylogenetic contributions using jacknifing
-##paco_run <- paco_links(paco_run)
-#write_rds(paco_run, "output/cophylogeny/paco_psylla_microbe_filtered.rds")
-
-# Read in filtered 
-paco_run <- readRDS("output/cophylogeny/paco_psylla_microbe_filtered.rds")
-# Read in unfiltered 
-#paco_run <- readRDS("output/cophylogeny/paco_psylla_microbe.rds")
-
-#print overall significance
-print(paco_run$gof)
-
-
-links <- data.frame(joint=names(paco_run$jackknife$mean), values=unname(paco_run$jackknife$mean), upper=unname(paco_run$jackknife$upper)) %>%
-  mutate(OTU = joint) %>%
- separate(OTU, into=c("Sample_Name", "OTU"), sep="-", extra="merge") %>%
-  mutate(signif = case_when(
-    upper < mean(.$values) ~ 1,
-    upper > mean(.$values) ~ 0
-  ))
-# Plot links
-links %>%
-  dplyr::rename(label = joint) %>%
-  mutate(label = as.factor(label),
-         label=fct_reorder(label, values, sum))%>%
-  arrange(-values) %>%
-  ggplot(aes(x=label, y=values, colour=as.factor(signif))) +
-  geom_point(show.legend = FALSE) +
-  geom_errorbar(aes(ymin=values, ymax=upper)) +
-  geom_hline(yintercept = mean(links$values)) +
-  scale_color_manual(values=c("steelblue", "darkorange1"), name = "Significant") +
-  theme_classic()+ 
-  theme(axis.text.x = element_blank())
-
-dir.create("output/cophylogeny/psylla_microbiome")
-write_csv(links, "output/cophylogeny/psylla_microbiome/psyllid_microbiome_links.csv")
-write_csv(links %>% 
-    group_by(OTU) %>%
-    summarise(values = mean(values)), "output/cophylogeny/psylla_microbiome/microbe_weights.csv")
-write_csv(links %>% 
-    group_by(Sample_Name) %>%
-    summarise(values = mean(values)), "output/cophylogeny/psylla_microbiome/psyllid_weights.csv")
-
-
-#Get observed residuals of Procrustean superimposition 
-paco_residuals <- residuals_paco(paco_run$proc, type = "interaction")
-
-# Visualise residuals
-res <- data.frame(OTU=names(paco_residuals), values=unname(paco_residuals)) %>%
-  separate(OTU, into=c("Sample_Name", "OTU"), sep="-", extra="merge") 
-
-ggplot(res, aes(x=values))+
-  geom_density(fill='grey70')+
-  theme_bw()+
-  xlab('Procrustes residuals')+
-  ylab('Frequency')
-
-# Parafit run
-#PF_run <- parafit(h_dist, s_dist, t(coocur), nperm=99, test.links=TRUE, silent=TRUE)
-#write_rds(PF_run, "output/cophylogeny/parafit_psylla_microbe_filtered.rds")
-
-# Read in filtered
-PF_run <- readRDS("output/cophylogeny/parafit_psylla_microbe_filtered.rds")
-# Read in unfiltered
-#PF_run <- readRDS("output/cophylogeny/parafit_psylla_microbe_unfiltered.rds")
-
-PF_run$ParaFitGlobal
-PF_run$p.global
-
-PF_links <- as.data.frame(PF_run$link.table) %>%
-  left_join(as.data.frame(rownames(h_dist)) %>%
-              rownames_to_column("Host") %>%
-              mutate(Host = as.numeric(Host))) %>%
-  left_join(as.data.frame(rownames(s_dist)) %>%
-              rownames_to_column("Parasite") %>%
-              mutate(Parasite = as.numeric(Parasite))) %>%
-  dplyr::rename(psyllid_spp = `rownames(h_dist)`, OTU = `rownames(s_dist)`) %>%
-  mutate(signif = case_when(
-    p.F1 < 0.05 ~ 1,
-    p.F1 > 0.05 ~ 0
-  )) 
-
-# Cophyloplot
-coocur.lut <- which(coocur ==1, arr.ind=TRUE)
-assoc <- cbind(rownames(coocur)[coocur.lut[,1]], colnames(coocur)[coocur.lut[,2]])
-
-# Rotate the nodes using phytools
-library(phytools)
-obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=TRUE) 
-
-# Extract the goods for ggtree
-# psyllid_tree
-tree1 <- obj[["trees"]][[1]]
-p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links))
-weights_p1 <- p1$data %>%
-  left_join(links %>%
-  group_by(Sample_Name) %>%
-  summarise(values = mean(signif)) %>%
-    dplyr::rename(label = Sample_Name)
-    )  
-
-## Get values for higher nodes
-weights_p1 <- weights_p1 %>%
-  left_join(data.frame(node=weights_p1$node, links = weights_p1$node %>% purrr::map_dbl(average_descendants, tree=tree1, df=weights_p1)))
-
-p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=links)) +
-  scale_color_gradient(low="steelblue", high="darkorange1") +
-    theme(legend.position = "none")
-
-# OTU tree
-tree2 <- obj[["trees"]][[2]]
-
-# make a clade label list
-tax_groups <- as.data.frame(tax_table(ps3)) %>%
-  rownames_to_column("label") %>%
-  dplyr::mutate(label = label %>% str_replace_all("-", "_") %>%
-                  str_replace_all(" ", "_")) %>%
-  select(label, genus) %>%
-  filter(label %in% tree2$tip.label) %>%
-  group_by(genus) 
-
-group_name <- group_keys(tax_groups)  %>%
-  mutate(group_name = genus %>% str_remove_all("\\[|\\]"))
-
-cls <- tax_groups %>% 
-  group_split() %>% 
-  purrr::map(pull, label) %>%
-  set_names(group_name$group_name)
-
-newtree <- groupOTU(tree2, cls)
-p2 <- ggtree(newtree, ladderize=TRUE, aes(colour=links)) 
-weights_p2 <- p2$data %>%
-  left_join(links %>% 
-    group_by(OTU) %>%
-    summarise(values = mean(signif)) %>%
-    dplyr::rename(label = OTU)
-    ) 
-
-weights_p2 <- weights_p2 %>%
-  left_join(data.frame(node=weights_p2$node, links = weights_p2$node %>% purrr::map_dbl(average_descendants, tree=tree2, df=weights_p2)))
-
-p2 <- p2 %<+% weights_p2  + geom_tippoint(aes(colour=links)) +  
-  scale_color_gradient(low="steelblue", high="darkorange1") +
-  theme(legend.position = "none")
-
-
-# Tanglegram
-dd <- obj$assoc %>%
-  as_data_frame() %>%
-  magrittr::set_colnames(c("label.x", "label.y")) %>%
-  left_join(links %>% 
-              dplyr::rename(label.x = Sample_Name, label.y = OTU)) %>%
-  left_join(p1$data %>% dplyr::select(label, y) %>% dplyr::rename(label.x = label), by="label.x") %>%
-  left_join(p2$data %>% dplyr::select(label, y) %>% dplyr::rename(label.y = label), by="label.y") %>%
-  rownames_to_column("assoc")
-
-d1_new <- dd %>% 
-  dplyr::select(assoc, label.x, y.x, values, upper, signif) %>%
-  dplyr::rename(label = label.x, y = y.x)%>%
-  mutate(tree = "host") 
-  
-d2_new <- dd %>% 
-  dplyr::select(assoc, label.y, y.y,  values, upper, signif) %>%
-  dplyr::rename(label = label.y, y = y.y) %>%
-  mutate(tree = "microbe")
-
-tangle <- bind_rows(d1_new, d2_new) %>%
-  filter(!is.na(label))%>% 
-  group_by(tree) %>%
-  mutate(y = y / max(y)) %>%
-  ungroup
-
-gg.tangle <- ggplot(tangle, aes(x=tree, y=y, colour=signif)) +
-    geom_line(aes(group=assoc),alpha=0.1) +  
-  geom_text(data = tangle %>% 
-              dplyr::filter(tree=="host") %>%
-              group_by(label, y, tree) %>%
-              summarise(signif = mean(signif)),
-            aes(label=label),stat = 'unique', hjust=1)+
-    scale_colour_gradient(low="steelblue", high="darkorange1") +
-    scale_x_discrete(expand = expansion(add=c(0.5,0))) + 
-    theme_void() +
-    theme(legend.position = "bottom")
-
-psylla_tanglegram <- p1 + gg.tangle + (p2 + scale_x_reverse() + 
-  geom_text2(aes(subset=!isTip, label=group %>% na_if(0)), hjust=0, check_overlap=TRUE))
-psylla_tanglegram
-
-pdf(file="figs/psylla_microbe_tanglegram.pdf",  width = 8, height = 11, paper="a4")
-  plot(psylla_tanglegram)
-try(dev.off(), silent=TRUE)
-  
- # Make plot ranking links, and nodes
-
-gg.para_hlinks <- PF_links %>%
-  dplyr::rename(label = psyllid_spp) %>%
-  drop_na() %>%
-  group_by(label) %>%
-  summarise(values = sum(signif)) %>%
-  mutate(label = as.factor(label),
-         label=fct_reorder(label, values, sum ))%>%
-  arrange(-values) %>%
-  ggplot(aes(x=label, y=values, fill=values)) +
-  geom_col(show.legend = FALSE) +  
-  scale_fill_gradient(low="steelblue", high="darkorange1") +
-  theme_classic()+ 
-  labs(y = "# Signficant links", x=NULL, title ="ParaFit Psyllid taxa") + 
-  coord_flip()
-
-gg.paco_hlinks <- d1_new %>%
-  drop_na() %>%
-  group_by(label) %>%
-  summarise(values = sum(signif)) %>%
-  mutate(label = as.factor(label),
-         label=fct_reorder(label, values, sum ))%>%
-  arrange(-values) %>%
-  ggplot(aes(x=label, y=values, fill=values)) +
-  geom_col(show.legend = FALSE) +  
-  scale_fill_gradient(low="steelblue", high="darkorange1") +
-  theme_classic()+ 
-  labs(y = "# Signficant links", x=NULL, title ="PACo Psyllid taxa") + 
-  coord_flip()
-
-gg.para_slinks <- PF_links %>%
-  dplyr::rename(label = OTU) %>%
-  left_join(tax_groups) %>%
-  drop_na() %>%
-  group_by(genus) %>%
-  summarise(values = sum(signif)) %>%
-  dplyr::rename(label = genus) %>%
-  mutate(label = as.factor(label),
-         label=fct_reorder(label, values, sum ))%>%
-  arrange(-values) %>%
-    top_frac(.5) %>%
-  ggplot(aes(x=label, y=values, fill=values)) +
-  geom_col(show.legend = FALSE) +  
-  scale_fill_gradient(low="steelblue", high="darkorange1") +
-  theme_classic()+ 
-  labs(y = "# Signficant links", x=NULL, title ="ParaFit Top 50% Bacterial genera") + 
-  coord_flip()
-  
-gg.paco_slinks <- d2_new %>%
-  left_join(tax_groups) %>%
-  drop_na() %>%
-  group_by(genus) %>%
-  summarise(values = sum(signif)) %>%
-  dplyr::rename(label = genus) %>%
-  mutate(label = as.factor(label),
-         label=fct_reorder(label, values, sum))%>%
-  arrange(-values) %>%
-  top_frac(.5) %>%
-  ggplot(aes(x=label, y=values, fill=values)) +
-  geom_col(show.legend = FALSE) +  
-  scale_fill_gradient(low="steelblue", high="darkorange1") +
-  theme_classic()+ 
-  #theme(axis.text.x = element_text(angle=45, hjust=1)) +
-  labs(y = "# Signficant links", x=NULL, title = "PACo Top 50% Bacterial genera") + 
-  coord_flip()
-
-gg.psylla_hlinks <- gg.para_hlinks + gg.paco_hlinks 
-
-gg.psylla_slinks <- gg.para_slinks + gg.paco_slinks
-
-pdf(file="figs/psylla_microbiome_host_fit_summary.pdf",  width = 8, height = 11, paper="a4")
-  plot(gg.psylla_hlinks)
-try(dev.off(), silent=TRUE)
-  
-pdf(file="figs/psylla_microbiome_symbiont_fit_summary.pdf",  width = 8, height = 11, paper="a4")
-  plot(gg.psylla_slinks)
-try(dev.off(), silent=TRUE)
-```
-
-
-### Heatmap of coocurrance
-```{r psylla microbiome heatmap}
-gg.heatmap <- dd %>%
-  dplyr::rename(Sample_Name = label.x,
-                OTU = label.y,
-                pos_x = y.x,
-                pos_y = y.y) %>%
-  dplyr::select(Sample_Name, OTU, signif, pos_x, pos_y) %>%
-  dplyr::mutate(Sample_Name = factor(Sample_Name),
-                Sample_Name = fct_reorder(Sample_Name, pos_x),
-                OTU = factor(OTU),
-                OTU = fct_reorder(OTU, pos_y)) %>%
-   ggplot(aes(x=Sample_Name, y=OTU, fill=as.factor(signif))) +
-  geom_tile() +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle=45, hjust=1),
-        axis.title.x = element_blank(),
-        axis.text.y = element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.title.y = element_blank(),
-        legend.position = "none") +
-  scale_y_discrete(position = "right")+
-  scale_fill_manual(values=c("steelblue","darkorange1"), na.translate=FALSE) 
-
-#Adjusted trees - Sca
-p3 <- p2 + 
-  geom_text2(aes(subset=!isTip, label=group %>% na_if(0)), hjust=1, check_overlap=TRUE)
-
-
-top <- wrap_elements(grid::textGrob('')) +(p1+ coord_flip() + scale_x_reverse(expand=c(0,0))+ scale_y_continuous(expand=c(0,0))) + plot_layout(widths=c(1,3)) 
-
-bottom <- p3+ scale_y_continuous(expand=c(0,0)) +gg.heatmap + plot_layout(widths=c(1,3))
-
-gg.treemap <- top / bottom + plot_layout(heights=c(1,3))                                                         
-
-gg.treemap
-pdf(file="figs/psylla_microbiome_heatmap.pdf",  width = 8, height = 11, paper="a4")
-  plot(gg.treemap)
-try(dev.off(), silent=TRUE)
-```
 
 # Map of colleciton locations
 
