@@ -496,7 +496,7 @@ tax <- readRDS("output/rds/tax_IdTaxaExact_nocut.rds")
 
 seqs <- DNAStringSet(rownames(seqtab))
 names(seqs) <- seqs
-samdf <- read_csv("sample_data/Sample_info2.csv") %>%
+samdf <- read_csv("sample_data/Sample_info3.csv") %>%
   as.data.frame(stringsAsFactors=FALSE) %>%
   magrittr::set_rownames(.$SampleID) 
 
@@ -755,10 +755,4 @@ ps2 <- phyloseq(tax_table(ps.merged),
 
 
 saveRDS(ps2, "output/rds/ps2.rds")
-```
-
-# Sessioninfo
-
-```{r sessioninfo, eval=TRUE}
-devtools::session_info()
 ```

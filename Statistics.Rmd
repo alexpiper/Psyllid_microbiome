@@ -82,6 +82,9 @@ library(CoDaSeq)
 devtools::install_github("easystats/report")
 library(report)
 
+devtools::install_github("pmartinezarbizu/pairwiseAdonis/pairwiseAdonis")
+library(pairwiseAdonis)
+
 #Source internal functions
 source('R/BDTT.R')
 source('R/phylosymbiosis.R')
@@ -145,7 +148,7 @@ ps3 <- phyloseq(tax_table(ps.sppmerged),
 ```{R psyllid phylogeny}
 psyllid_tree <- read.tree(text=readLines("sample_data/psyllid_beast_tree.nwk"))
 
-# Match names with alpha diversity
+# Match names with sample sheet
 psyllid_tree$tip.label <- psyllid_tree$tip.label %>%
   str_squish() %>%
   str_replace_all(pattern="\\.", replacement=" ") %>%
@@ -169,8 +172,13 @@ psyllid_tree$tip.label <- psyllid_tree$tip.label %>%
   str_replace_all(pattern="BRENDAMAY", replacement="BRENDA MAY") %>%
   str_replace_all(pattern="PRICES", replacement="PRICES VALLEY") %>%  
   str_replace_all(pattern="Acizzia sp", replacement="Acizzia errabunda") %>% 
+  str_replace_all(pattern="Trioza ", replacement="Powellia ") %>%
+  str_replace_all(pattern="Triozid sp", replacement="Casuarinicola sp") %>%
+  str_replace_all(pattern="Powellia adventicia", replacement="Trioza adventicia") %>%
+  str_replace_all(pattern="Powellia curta", replacement="Trioza curta") %>%
   str_replace_all(pattern=" ", replacement="_") %>%
   trimws(which="right")
+
 
 # Subset to only those in sample data
 setdiff(psyllid_tree$tip.label,sample_data(ps2)$psyllid_spp)
@@ -383,7 +391,7 @@ div_table <- pd %>%
               as("matrix") %>%
               as.data.frame() %>%
               filter(!duplicated(Sample_Name)) %>%
-              dplyr::select(Sample_Name, psyllid_spp, psyllid_genus,psyllid_family, hostplant_spp, seqrun, genus_geo),
+              dplyr::select(Sample_Name, psyllid_spp, psyllid_genus, psyllid_family, hostplant_spp, seqrun, genus_geo),
             by = "Sample_Name") 
 
 # Summarise means
@@ -411,7 +419,7 @@ broom::tidy(aov(alpha ~psyllid_genus+psyllid_spp+psyllid_genus:psyllid_spp, data
 ## Major genera only
 # Difference between all major genera for alpha diversity ANOVA
 div_table2 <- div_table %>%
-  dplyr::filter(psyllid_genus %in% c("Trioza", "Ctenarytaina", "Psylla"))
+  dplyr::filter(psyllid_genus %in% c("Powellia", "Ctenarytaina", "Psylla"))
 
 mg_div <- bind_rows(broom::tidy(TukeyHSD(aov(alpha ~psyllid_genus, data=div_table2))) %>% mutate(type="Richness"),
           broom::tidy(TukeyHSD(aov(Shannon ~psyllid_genus, data=div_table2))) %>% mutate(type="Shannon"),
@@ -436,7 +444,7 @@ report::report(aov(alpha ~genus_geo, data=div_table2))
 dat <- div_table  %>%
   filter(psyllid_spp %in% pruned.tree$tip.label) %>% #Subset to common 
   group_by(psyllid_spp) %>%
-  dplyr::select(-Sample_Name) %>%
+  dplyr::select(-where(is.character)) %>%
   summarise_all(mean) %>%
   arrange(match(psyllid_spp, pruned.tree$tip.label)) %>%
   as.data.frame() %>%
@@ -516,7 +524,7 @@ div_table_rare %>%
 
 # Difference between all major genera for alpha diversity ANOVA
 div_table_rare2 <- div_table_rare %>%
-  dplyr::filter(psyllid_genus %in% c("Trioza", "Ctenarytaina", "Psylla"))
+  dplyr::filter(psyllid_genus %in% c("Powellia", "Ctenarytaina", "Psylla"))
 
 mg_div_rare <- bind_rows(
   broom::tidy(TukeyHSD(aov(alpha ~psyllid_genus, data=div_table_rare2))) %>% mutate(type="Richness"),
@@ -542,7 +550,7 @@ report::report(aov(alpha ~genus_geo, data=div_table_rare2))
 dat <- div_table_rare  %>%
   filter(psyllid_spp %in% pruned.tree$tip.label) %>% #Subset to common 
   group_by(psyllid_spp) %>%
-  dplyr::select(-Sample_Name) %>%
+  dplyr::select(-where(is.character)) %>%
   summarise_all(mean) %>%
   arrange(match(psyllid_spp, pruned.tree$tip.label)) %>%
   as.data.frame() %>%
@@ -590,7 +598,6 @@ ps2_subset <- ps2 %>%
 ps2_subset <- prune_samples(sample_sums(ps2_subset) >0 , ps2_subset)
 message(nsamples(ps2) - nsamples(ps2_subset), " Samples and ", ntaxa(ps2) - ntaxa(ps2_subset), " taxa Dropped")
 
-
 # Get richness measures
 richness_subset <- phyloseq::estimate_richness(ps2_subset, measures=c("Shannon")) %>%
   rownames_to_column("Sample_Name") %>%
@@ -601,7 +608,6 @@ richness_subset <- phyloseq::estimate_richness(ps2_subset, measures=c("Shannon")
 #Set number of randomisations for calculating significance
 # Calculate Faith's PD-index & Species richness - with Standard errors
 #sespd_subset <- picante::ses.pd(as(phyloseq::otu_table(ps2_subset), "matrix"),  phyloseq::phy_tree(ps2_subset), null.model = "taxa.labels", include.root = F, runs = 99)
-
 
 pd_subset <- picante::pd(as(phyloseq::otu_table(ps2_subset), "matrix"),  phyloseq::phy_tree(ps2_subset), include.root = FALSE)
 
@@ -623,7 +629,7 @@ div_table_subset %>%
 
 # Difference between all major genera for alpha diversity ANOVA
 div_table_subset2 <- div_table_subset %>%
-  dplyr::filter(psyllid_genus %in% c("Trioza", "Ctenarytaina", "Psylla"))
+  dplyr::filter(psyllid_genus %in% c("Powellia", "Ctenarytaina", "Psylla"))
 
 mg_div_subset <- bind_rows(
   broom::tidy(TukeyHSD(aov(alpha ~psyllid_genus, data=div_table_subset2))) %>% mutate(type="Richness"),
@@ -763,18 +769,24 @@ purrr::map2(distlist, distlist_subset,~{
 ## Adonis & Betadisper
 
 ```{r Adonis}
-# Try heirarchial effects here, starting with the techical than moving down the phylogeny
-#seqrun, psyllid
-#this marginalises the effects of sample metadat variables first, before partitioning hte remaining variance into that accounted for by host phylogeny
+# ADONIS is constructed heirarchially to marginalise techical variance then moving down the taxonomic ranks 
 
 # Adonis test
 metadata <- sample_data(ps2) %>%
-  as_data_frame()
+  as("data.frame")
 adonis_results <- distlist %>%
   purrr::map(function(x) {
+    y <- as.dist(x[metadata$Sample_Name, metadata$Sample_Name])
     bind_rows(
-    broom::tidy(adonis(x~psyllid_genus+psyllid_spp, method="euclidean", data=metadata)$aov.tab) %>% dplyr::slice(1),
-    broom::tidy(adonis(x~hostplant_spp, method="euclidean", data=metadata)$aov.tab) %>% dplyr::slice(1)
+    broom::tidy(adonis2(y~seqrun+psyllid_family+psyllid_genus+psyllid_spp, method="euclidean", data=metadata, 
+                       permutations=999, by="terms")) %>% 
+      mutate(test = paste(term[!term %in% c("Residual", "Total")], collapse="-")),
+    #broom::tidy(adonis2(y~seqrun+hostplant_spp+psyllid_spp, method="euclidean", data=metadata, 
+     #                  permutations=999, by="margin")) %>% 
+    #  mutate(test = paste(term[!term %in% c("Residual", "Total")], collapse="-")),
+    broom::tidy(adonis2(y~seqrun+hostplant_spp, method="euclidean", data=metadata,
+                       permutations=999, by="terms")) %>% 
+      mutate(test = paste(term[!term %in% c("Residual", "Total")], collapse="-"))
     )
 })  %>%
   bind_rows(.id="dist")
@@ -784,27 +796,22 @@ betadisper_results <- distlist %>%
   purrr::map(function(x) {
     y <- as.dist(x[metadata$Sample_Name, metadata$Sample_Name])
   bind_rows(
-    as.data.frame(permutest(vegan::betadisper(y, metadata$psyllid_spp))$tab) %>%
-      dplyr::slice(1) %>% 
-      mutate(term="psyllid_spp"),
-    as.data.frame(permutest(vegan::betadisper(y, metadata$hostplant_spp))$tab) %>%
-      dplyr::slice(1) %>% 
-      mutate(term="hostplant_spp"),
+    as_tibble(permutest(vegan::betadisper(y, metadata$psyllid_spp))$tab, rownames="term") %>%
+      mutate(test="psyllid_spp"),
+    as_tibble(permutest(vegan::betadisper(y, metadata$hostplant_spp))$tab, rownames="term")  %>%
+      mutate(test="hostplant_spp"),
   )
 })  %>%
   bind_rows(.id="dist")
 
-y <- as.dist(distlist[["Aitchison"]][metadata$Sample_Name, metadata$Sample_Name])
-
-test <- permutest(vegan::betadisper(y, metadata$psyllid_spp))
-
 dir.create("output/beta")
 write_csv(adonis_results, "output/beta/adonis_fulldata.csv")
-write_csv(betadisper_results, "output/beta/adonis_fulldata.csv")
+write_csv(betadisper_results, "output/beta/betadisper_fulldata.csv")
 ```
 
 ## Same tree dissimilarities
 
+Look at the similarities in the microbiome of the psyllid specimens collected from the same host plant
 ```{r Avg Dissimiarity}
 hostplant_metadata <- metadata %>% mutate(ingroup = case_when(
   Sample_Name %in% c("94","107", "113","93","106", "112") ~ "fraxini-fraxinicola",
@@ -812,8 +819,8 @@ hostplant_metadata <- metadata %>% mutate(ingroup = case_when(
   TRUE ~ "other"
   ))
 
-broom::tidy(adonis(distlist$Aitchison~ingroup + psyllid_spp, method="euclidean",
-                   data=hostplant_metadata)$aov.tab)
+broom::tidy(adonis2(distlist$Aitchison~ingroup + psyllid_spp, method="euclidean",
+                   data=hostplant_metadata))
 
 pairwise.adonis2(distlist$Aitchison~ingroup + psyllid_spp, method="euclidean",
                    data=hostplant_metadata)
@@ -919,8 +926,12 @@ gg.spp <- sample_data(ps2) %>%
   scale_y_continuous(expand=c(0,0))+
   scale_x_continuous(expand=c(0,0))
 
+# Make tree with no underscores in name
+p2 <- p
+p2$data$label <- str_replace(p2$data$label, "_", " ")
+
 #Arrange
-Fig1 <- p + gg.spp + gg.bar + gg.rich + plot_layout(nrow=1, widths=c(1,0.08,2,0.6))  
+Fig1 <- p2 + gg.spp + gg.bar + gg.rich + plot_layout(nrow=1, widths=c(1,0.08,2,0.6))  
 
 pdf(file="figs/Beta.pdf", width = 8, height = 11 , paper="a4")
   plot(Fig1)
@@ -987,10 +998,9 @@ plant.dist <- cophenetic(plant.tree) %>%
 envData <- sample_data(ps2) %>%
   as("matrix") %>%
   as.data.frame() %>%
-  dplyr::select(Sample_Name, long, lat) %>%
+  dplyr::select(long, lat) %>%
   mutate(long = as.numeric(long), lat=as.numeric(lat))%>%
-  drop_na() %>%
-  column_to_rownames("Sample_Name")
+  drop_na() 
   
 spat.dist <- spDists(as.matrix(envData), longlat=TRUE) %>%
   as.data.frame() %>%
@@ -1006,9 +1016,6 @@ spat.dist <- spDists(as.matrix(envData), longlat=TRUE) %>%
 ### Whole dataset
 
 ```{r phylosymbiosis}
-#Test with filtered
-#distlist <- distlist_filt
-
 set.seed(909)
 dir.create("output/phylosymbiosis")
 
@@ -1025,7 +1032,9 @@ mantel_results <- distlist %>%
   bind_rows(.id="dist")
 
 write_csv(mantel_results %>%
-            dplyr::select(-pval1,-pval2),  "output/phylosymbiosis/mantel_fulldata.csv")#only keep two sided P values
+            dplyr::select(-one_of("pval1","pval2")),#only keep two sided P values
+          "output/phylosymbiosis/mantel_fulldata.csv")
+
 
 # Partial Mantel Test
 pmantel_results <- distlist %>%
@@ -1035,7 +1044,8 @@ pmantel_results <- distlist %>%
   }) %>%
   bind_rows(.id="dist") 
 
-write_csv(pmantel_results %>% dplyr::select(-pval1,-pval2), "output/phylosymbiosis/pmantel_fulldata.csv")
+write_csv(pmantel_results %>% dplyr::select(-one_of("pval1","pval2")),
+          "output/phylosymbiosis/pmantel_fulldata.csv")
 
 ## Plot mantels
 gg.mantels <- bind_rows(mantel_results, pmantel_results) %>%
@@ -1063,21 +1073,27 @@ gg.mantels
 
 ### Without Gammaproteobacteria
 
-Probably dont need this bit if we are lookign at contribution to cophylogeny through paco
 ```{r phylosymbiosis no entero}
 # Adonis test
 metadata <- sample_data(ps2_subset) %>%
-  as_data_frame()
+  as("data.frame")
+
 adonis_results <- distlist_subset %>%
   purrr::map(function(x) {
+    y <- as.dist(x[metadata$Sample_Name, metadata$Sample_Name])
     bind_rows(
-    broom::tidy(adonis(x~psyllid_spp, method="euclidean", data=metadata)$aov.tab) %>% dplyr::slice(1),
-    broom::tidy(adonis(x~hostplant_spp, method="euclidean", data=metadata)$aov.tab)%>% dplyr::slice(1)
+    broom::tidy(adonis2(y~seqrun+psyllid_family+psyllid_genus+psyllid_spp, method="euclidean", data=metadata, 
+                       permutations=999)) %>% 
+      mutate(test = paste(term[!term %in% c("Residual", "Total")], collapse="-")),
+    broom::tidy(adonis2(y~seqrun+hostplant_spp, method="euclidean", data=metadata,
+                       permutations=999)) %>% 
+      mutate(test = paste(term[!term %in% c("Residual", "Total")], collapse="-"))
     )
 })  %>%
   bind_rows(.id="dist")
 
 write_csv(adonis_results, "output/beta/adonis_subset.csv")
+
 # Matrix correlations
 #only use samples present in all
 subsample <- Reduce(intersect, list(rownames(otu_table(ps2_subset)), colnames(phylo.dist), colnames(plant.dist), colnames(spat.dist)))
@@ -1339,8 +1355,9 @@ try(dev.off(), silent=TRUE)
 Run the scripts in the R subdirectory
 
 ```{bash submit paco jobs}
+cd /group/pathogens/Alexp/Metabarcoding/Psyllid_microbiome/paco_para
 dos2unix batch_submit_paco.sh
-find $(/usr/bin/ls -d $PWD/*) -name 'paco_*' -type f > sequence_index.txt
+find $(/usr/bin/ls -d $PWD/*) -name 'paco_*' -type f | grep -v '.rds' > sequence_index.txt
 joblength=$(cat sequence_index.txt | wc -l)
 sbatch --array=1-$joblength batch_submit_paco.sh
 ```
@@ -1359,7 +1376,7 @@ print(paste0((ntaxa(ps3)-ntaxa(ps3_filt)), " taxa under threshold removed"))
 
 #Get co-occurance matrix
 coocur <- ps3_filt %>%
-    subset_samples(psyllid_genus %in% c("Trioza", "Ctenarytaina", "Psylla")) %>%
+    subset_samples(psyllid_genus %in% c("Powellia", "Ctenarytaina", "Psylla")) %>%
     filter_taxa(function(x) mean(x) > 0, TRUE) %>%
     otu_table %>%
     as.matrix() %>% 
@@ -1579,7 +1596,7 @@ gg.heatmap <- heatmap_dat %>%
   dplyr::select(Sample_Name, OTU, genus, highlight, pos_x, pos_y) %>%
   dplyr::mutate(Sample_Name = factor(Sample_Name),
                 OTU = factor(OTU),
-                genus=factor(genus, levels=c("Psylla" ,"Trioza", "Ctenarytaina")))  %>%
+                genus=factor(genus, levels=c("Psylla" ,"Powellia", "Ctenarytaina")))  %>%
    ggplot(aes(x= fct_reorder(Sample_Name, pos_x), y=fct_reorder(OTU, pos_y), fill=highlight)) +
   geom_tile() +
   theme_bw() +
@@ -2791,11 +2808,11 @@ pdf(file="figs/plant_tanglegram.pdf",  width = 8, height = 11, paper="a4")
 try(dev.off(), silent=TRUE)
 ```
 
-# Trioza
+# Powellia
 
-## Trioza ~ Carsonella
+## Powellia ~ Carsonella
 
-```{r Trioza carsonella}
+```{r Powellia carsonella}
 #Flag top abundance carsonella by sample
 top_carson <- ps2 %>%
   transform_sample_counts(function (x) x/sum(x)) %>%
@@ -2807,7 +2824,7 @@ top_carson <- ps2 %>%
   mutate(top = TRUE) 
 
 coocur <- ps2 %>%
-  subset_samples(psyllid_genus == "Trioza") %>%
+  subset_samples(psyllid_genus == "Powellia") %>%
   filter_taxa(function(x) mean(x) > 0, TRUE) %>%
   transform_sample_counts(function (x) x/sum(x)) %>%
   speedyseq::psmelt() %>%
@@ -3052,7 +3069,7 @@ pdf(file="figs/trioza_carsonella_tanglegram.pdf",  width = 8, height = 11, paper
 try(dev.off(), silent=TRUE)
 ```
 
-## Trioza ~ hostplant
+## Powellia ~ hostplant
 
 ```{r trioza hostplant psyllid}
 plant.tree <- read.tree("sample_data/plant_tree.nwk")
@@ -3061,7 +3078,7 @@ plant.tree  <- drop.tip(plant.tree , "Sophora_microphylla_-kowhai" )
 #Prepare co-occurance matrix
 coocur <- sample_data(ps2) %>%
   as_tibble() %>%
-  filter(psyllid_genus == "Trioza") %>%
+  filter(psyllid_genus == "Powellia") %>%
   dplyr::select(psyllid_spp, hostplant_spp) %>%
   filter(!is.na(psyllid_spp)) %>%
   unique() %>%
