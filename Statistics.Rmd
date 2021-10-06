@@ -20,13 +20,17 @@ editor_options:
   chunk_output_type: console
 ---
 
-# Load packages
 
 ```{r setup, eval=TRUE, warning=FALSE, message=FALSE, error=FALSE}
 # Knitr global setup - change eval to true to run code
 library(knitr)
 knitr::opts_chunk$set(echo = TRUE, eval=FALSE, message=FALSE, error=FALSE,fig.show = "hold", fig.keep = "all")
 opts_chunk$set(dev = 'png')
+```
+
+
+```{r load packages}
+# Load packages
 
 #Set required packages
 .cran_packages <- c("tidyverse", 
@@ -35,6 +39,8 @@ opts_chunk$set(dev = 'png')
                     "seqinr",
                     "ape", 
                     "sp",
+                    "maptools",
+                    "rgeos",
                     "data.table", 
                     "RColorBrewer",
                     "ggtree", 
@@ -44,6 +50,7 @@ opts_chunk$set(dev = 'png')
                     "adephylo",
                     "dendextend",
                     "paco",
+                    "tidytext",
                     "phytools",
                     "ecodist")
 .bioc_packages <- c("dada2",
@@ -398,47 +405,52 @@ div_table <- pd %>%
 div_table %>%
   summarise_if(is.numeric, mean)
 
+
+
 # Difference between species for alpha diversity ANOVA
-report::report(aov(alpha ~psyllid_spp, data=div_table))
-report::report(aov(Shannon ~psyllid_spp, data=div_table))
-report::report(aov(pd ~psyllid_spp, data=div_table))
+report::report(aov(alpha ~seqrun+psyllid_family+psyllid_genus+psyllid_spp, data=div_table))
+report::report(aov(Shannon ~seqrun+psyllid_family+psyllid_genus+psyllid_spp, data=div_table))
+report::report(aov(pd ~seqrun+psyllid_family+psyllid_genus+psyllid_spp, data=div_table))
 
 # Difference between all genera for alpha diversity ANOVA
-report::report(aov(alpha ~psyllid_genus, data=div_table))
-report::report(aov(Shannon ~psyllid_genus, data=div_table))
-report::report(aov(pd ~psyllid_genus, data=div_table))
+report::report(aov(alpha ~seqrun+psyllid_family+psyllid_genus, data=div_table))
+report::report(aov(Shannon ~seqrun+psyllid_family+psyllid_genus, data=div_table))
+report::report(aov(pd ~seqrun+psyllid_family+psyllid_genus, data=div_table))
 
 # Difference between genus/geography factors ANOVA
-report::report(aov(alpha ~genus_geo, data=div_table))
-report::report(aov(Shannon ~genus_geo, data=div_table))
-report::report(aov(pd ~genus_geo, data=div_table))
-
-#Test heirarchail
-broom::tidy(aov(alpha ~psyllid_genus+psyllid_spp+psyllid_genus:psyllid_spp, data=div_table))
+report::report(aov(alpha ~seqrun+psyllid_family+genus_geo, data=div_table))
+report::report(aov(Shannon ~seqrun+psyllid_family+genus_geo, data=div_table))
+report::report(aov(pd ~seqrun+psyllid_family+genus_geo, data=div_table))
 
 ## Major genera only
 # Difference between all major genera for alpha diversity ANOVA
 div_table2 <- div_table %>%
   dplyr::filter(psyllid_genus %in% c("Powellia", "Ctenarytaina", "Psylla"))
 
-mg_div <- bind_rows(broom::tidy(TukeyHSD(aov(alpha ~psyllid_genus, data=div_table2))) %>% mutate(type="Richness"),
-          broom::tidy(TukeyHSD(aov(Shannon ~psyllid_genus, data=div_table2))) %>% mutate(type="Shannon"),
-          broom::tidy(TukeyHSD(aov(pd ~psyllid_genus, data=div_table2))) %>% mutate(type="Phylogenetic"),
-          broom::tidy(TukeyHSD(aov(alpha ~genus_geo, data=div_table2))) %>% mutate(type="Richness"),
-          broom::tidy(TukeyHSD(aov(alpha ~genus_geo, data=div_table2))) %>% mutate(type="Shannon"),
-          broom::tidy(TukeyHSD(aov(pd ~genus_geo, data=div_table2))) %>% mutate(type="Phylogenetic")
+mg_div <- bind_rows(broom::tidy(TukeyHSD(aov(alpha ~seqrun+psyllid_family+psyllid_genus, 
+                                   data=div_table2))) %>% mutate(type="Richness"),
+          broom::tidy(TukeyHSD(aov(Shannon ~seqrun+psyllid_family+psyllid_genus,
+                                   data=div_table2))) %>% mutate(type="Shannon"),
+          broom::tidy(TukeyHSD(aov(pd ~seqrun+psyllid_family+psyllid_genus,
+                                   data=div_table2))) %>% mutate(type="Phylogenetic"),
+          broom::tidy(TukeyHSD(aov(alpha ~seqrun+psyllid_family+genus_geo,
+                                   data=div_table2))) %>% mutate(type="Richness"),
+          broom::tidy(TukeyHSD(aov(alpha ~seqrun+psyllid_family+genus_geo,
+                                   data=div_table2))) %>% mutate(type="Shannon"),
+          broom::tidy(TukeyHSD(aov(pd ~seqrun+psyllid_family+genus_geo,
+                                   data=div_table2))) %>% mutate(type="Phylogenetic")
           )
 write_csv(mg_div, "output/alpha/major_genera_alpha.csv")
 
-# Difference between genus ANOVA
-report::report(aov(alpha ~psyllid_genus, data=div_table2))
-report::report(aov(Shannon ~psyllid_genus, data=div_table2))
-report::report(aov(pd ~psyllid_genus, data=div_table2))
+# Difference between major genera only ANOVA
+report::report(aov(alpha ~seqrun+psyllid_family+psyllid_genus, data=div_table2))
+report::report(aov(Shannon ~seqrun+psyllid_family+psyllid_genus, data=div_table2))
+report::report(aov(pd ~seqrun+psyllid_family+psyllid_genus, data=div_table2))
 
-# Difference between genus/geography factors ANOVA
-report::report(aov(alpha ~genus_geo, data=div_table2))
-report::report(aov(Shannon ~genus_geo, data=div_table2))
-report::report(aov(alpha ~genus_geo, data=div_table2))
+# Difference between between major genera/geography factors ANOVA
+report::report(aov(alpha ~seqrun+psyllid_family+genus_geo, data=div_table2))
+report::report(aov(Shannon ~seqrun+psyllid_family+genus_geo, data=div_table2))
+report::report(aov(alpha ~seqrun+psyllid_family+genus_geo, data=div_table2))
 
 # Association with phylogeny
 dat <- div_table  %>%
@@ -479,8 +491,7 @@ lipa_out <- cbind(lipa$lipa %>%
                     rename_all(funs(paste0(., "_pval")))
                                )%>%
   rownames_to_column("psyllid_spp")
-write_csv(lipa_out, "output/alpha/lipa.csv")                  
-                  
+write_csv(lipa_out, "output/alpha/lipa.csv")
 ```
 
 ## Rarefied
@@ -502,7 +513,6 @@ richness_rare <- phyloseq::estimate_richness(ps2_rare, measures=c("Shannon")) %>
 #Set number of randomisations for calculating significance
 # Calculate Faith's PD-index & Species richness - with Standard errors
 #sespd_rare <- picante::ses.pd(as(phyloseq::otu_table(ps2_rare), "matrix"),  phyloseq::phy_tree(ps2_rare), null.model = #"taxa.labels", include.root = F, runs = 99)
-
 
 pd_rare <- picante::pd(as(phyloseq::otu_table(ps2_rare), "matrix"),  phyloseq::phy_tree(ps2_rare), include.root = FALSE)
 
@@ -527,24 +537,30 @@ div_table_rare2 <- div_table_rare %>%
   dplyr::filter(psyllid_genus %in% c("Powellia", "Ctenarytaina", "Psylla"))
 
 mg_div_rare <- bind_rows(
-  broom::tidy(TukeyHSD(aov(alpha ~psyllid_genus, data=div_table_rare2))) %>% mutate(type="Richness"),
-  broom::tidy(TukeyHSD(aov(Shannon ~psyllid_genus, data=div_table_rare2))) %>% mutate(type="Shannon"),
-  broom::tidy(TukeyHSD(aov(pd ~psyllid_genus, data=div_table_rare2))) %>% mutate(type="Phylogenetic"),
-  broom::tidy(TukeyHSD(aov(alpha ~genus_geo, data=div_table_rare2))) %>% mutate(type="Richness"),
-  broom::tidy(TukeyHSD(aov(alpha ~genus_geo, data=div_table_rare2))) %>% mutate(type="Shannon"),
-  broom::tidy(TukeyHSD(aov(pd ~genus_geo, data=div_table_rare2))) %>% mutate(type="Phylogenetic")
+  broom::tidy(TukeyHSD(aov(alpha ~seqrun+psyllid_family+psyllid_genus,
+                           data=div_table_rare2))) %>% mutate(type="Richness"),
+  broom::tidy(TukeyHSD(aov(Shannon ~seqrun+psyllid_family+psyllid_genus,
+                           data=div_table_rare2))) %>% mutate(type="Shannon"),
+  broom::tidy(TukeyHSD(aov(pd ~seqrun+psyllid_family+psyllid_genus,
+                           data=div_table_rare2))) %>% mutate(type="Phylogenetic"),
+  broom::tidy(TukeyHSD(aov(alpha ~seqrun+psyllid_family+genus_geo,
+                           data=div_table_rare2))) %>% mutate(type="Richness"),
+  broom::tidy(TukeyHSD(aov(alpha ~seqrun+psyllid_family+genus_geo,
+                           data=div_table_rare2))) %>% mutate(type="Shannon"),
+  broom::tidy(TukeyHSD(aov(pd ~seqrun+psyllid_family+genus_geo,
+                           data=div_table_rare2))) %>% mutate(type="Phylogenetic")
           )
 write_csv(mg_div_rare, "output/alpha/major_genera_alpha_rarefied.csv")
 
 # Difference between genus factors ANOVA
-report::report(aov(alpha ~psyllid_genus, data=div_table_rare2))
-report::report(aov(Shannon ~psyllid_genus, data=div_table_rare2))
-report::report(aov(pd ~psyllid_genus, data=div_table_rare2))
+report::report(aov(alpha ~seqrun+psyllid_family+psyllid_genus, data=div_table_rare2))
+report::report(aov(Shannon ~seqrun+psyllid_family+psyllid_genus, data=div_table_rare2))
+report::report(aov(pd ~seqrun+psyllid_family+psyllid_genus, data=div_table_rare2))
 
 # Difference between genus/geography factors ANOVA
-report::report(aov(alpha ~genus_geo, data=div_table_rare2))
-report::report(aov(Shannon ~genus_geo, data=div_table_rare2))
-report::report(aov(alpha ~genus_geo, data=div_table_rare2))
+report::report(aov(alpha ~seqrun+psyllid_family+genus_geo, data=div_table_rare2))
+report::report(aov(Shannon ~seqrun+psyllid_family+genus_geo, data=div_table_rare2))
+report::report(aov(alpha ~seqrun+psyllid_family+genus_geo, data=div_table_rare2))
 
 
 dat <- div_table_rare  %>%
@@ -1327,11 +1343,11 @@ s_tree <- drop.tip(s_tree, setdiff(s_tree$tip.label, colnames(coocur)))
 coocur <- coocur[h_tree$tip.label, s_tree$tip.label]
 
 # Read in Paco runs 
-paco_run_trioza <- readRDS("output/cophylogeny/paco_trioza_microbe_filtered_asym.rds")
+paco_run_powellia <- readRDS("output/cophylogeny/paco_powellia_microbe_filtered_asym.rds")
 paco_run_cten <- readRDS("output/cophylogeny/paco_ctenarytaina_microbe_filtered_asym.rds")
 paco_run_psylla <- readRDS("output/cophylogeny/paco_psylla_microbe_filtered_asym.rds")
 
-paco_run_trioza$gof
+paco_run_powellia$gof
 paco_run_cten$gof
 paco_run_psylla$gof
 
@@ -1340,9 +1356,9 @@ links <- do.call("list", mget(grep("paco_run_",names(.GlobalEnv),value=TRUE))) %
   purrr::map(function(x){
     genus_name <- rownames(x$H)[1] %>% str_remove("_.*$")
     data.frame(
-      joint=names(x$jackknife$mean),
-      values=unname(x$jackknife$mean),
-      upper=unname(x$jackknife$upper),
+      joint=names(x$jackknife),
+      values=unname(x$jackknife),
+      #upper=unname(x$jackknife$upper),
       genus = genus_name
     )
   }) %>%
@@ -1351,8 +1367,8 @@ links <- do.call("list", mget(grep("paco_run_",names(.GlobalEnv),value=TRUE))) %
   group_by(genus) %>%
   mutate(mean_val = mean(values)) %>%
   mutate(signif = case_when(
-    upper < mean_val ~ 1,
-    upper > mean_val ~ 0
+    values < mean_val ~ 1,
+    values > mean_val ~ 0
   ))
 
 test <- colnames(coocur) %>%
@@ -1363,16 +1379,17 @@ test <- colnames(coocur) %>%
 links %>%
   dplyr::rename(label = joint) %>%
   mutate(label = as.factor(label),
-         label=fct_reorder(label, values, sum))%>%
-  arrange(-values) %>%
-  ggplot(aes(x=label, y=values, colour=as.factor(signif))) +
+         label=reorder_within(label, values, genus))%>%
+  #arrange(-values) %>%
+  ggplot(aes(x=label, y=values, colour=as.factor(signif))) + #
   geom_point(show.legend = FALSE) +
   facet_wrap(~genus, scales = "free")+
-  geom_errorbar(aes(ymin=values, ymax=upper)) +
+  #geom_errorbar(aes(ymin=values, ymax=upper)) +
   geom_hline(aes(yintercept = mean_val), lty=3) +
+  scale_x_reordered()+
   scale_color_manual(values=c("steelblue", "darkorange1"), name = "Significant") +
   theme_classic()+ 
-  theme(axis.text.x = element_blank())
+  theme(axis.text.x = element_blank(), legend.position = "right")
 
 #Get observed residuals of Procrustean superimposition 
 paco_residuals <- do.call("list", mget(grep("paco_run_",names(.GlobalEnv),value=TRUE))) %>%
@@ -1396,12 +1413,12 @@ ggplot(paco_residuals, aes(x=values))+
   ylab('Frequency')
 
 # Parafit run
-PF_run_trioza <- readRDS("output/cophylogeny/parafit_trioza_microbe_filtered.rds")
+PF_run_powellia <- readRDS("output/cophylogeny/parafit_powellia_microbe_filtered.rds")
 PF_run_cten <- readRDS("output/cophylogeny/parafit_ctenarytaina_microbe_filtered.rds")
 PF_run_psylla <- readRDS("output/cophylogeny/parafit_psylla_microbe_filtered.rds")
 
-PF_run_trioza$ParaFitGlobal
-PF_run_trioza$p.global
+PF_run_powellia$ParaFitGlobal
+PF_run_powellia$p.global
 
 PF_run_cten$ParaFitGlobal
 PF_run_cten$p.global
@@ -1410,7 +1427,6 @@ PF_run_psylla$ParaFitGlobal
 PF_run_psylla$p.global
 
 # Joining isnt working here because they were made separately - so getting the rownames from cooccur no logner works
-
 PF_links <- do.call("list", mget(grep("PF_run_",names(.GlobalEnv),value=TRUE))) %>%
   purrr::map(function(x){
     genus_name <- x$para.per.host[1] %>% str_remove("_.*$")
@@ -1539,7 +1555,6 @@ gg.heatmap <- heatmap_dat %>%
 gg.heatmap
 
 # Density plot of mismatch
-
 density_dat <-  heatmap_dat %>%
   left_join(p2$data %>% dplyr::select(OTU = label, y)) %>%
   group_by(OTU, y) %>%
@@ -1602,7 +1617,7 @@ pdf(file="figs/3genus_heatmaps.pdf",  width = 8, height = 11, paper="a4")
   plot(gg.treemap)
 try(dev.off(), silent=TRUE)
   
- # Make plot ranking links, and nodes
+# Make plot ranking links, and nodes
 
 gg.host_links <- heatmap_dat %>%
   dplyr::rename(label = Sample_Name) %>%
@@ -1734,14 +1749,15 @@ print(paco_run$gof)
 
 # Get interaction-specific cophylogenetic contributions using jacknifing
 paco_run <- paco_links(paco_run)
-links <- data.frame(joint=names(paco_run$jackknife$mean), #losing sv50 here?
-                    values=unname(paco_run$jackknife$mean),
-                    upper=unname(paco_run$jackknife$upper)) %>%
+links <- data.frame(joint=names(paco_run$jackknife), #losing sv50 here?
+                    values=unname(paco_run$jackknife)#,
+                    #upper=unname(paco_run$jackknife)
+                    ) %>%
   mutate(OTU = joint) %>%
  separate(OTU, into=c("Sample_Name", "OTU"), sep="-", extra="merge") %>%
   mutate(signif = case_when(
-    upper < mean(.$values) ~ 1,
-    upper > mean(.$values) ~ 0
+    values < mean(.$values) ~ 1,
+    values > mean(.$values) ~ 0
   ))
 
 # Plot links
@@ -1752,7 +1768,7 @@ links %>%
   arrange(-values) %>%
   ggplot(aes(x=label, y=values, colour=as.factor(signif))) +
   geom_point(show.legend = FALSE) +
-  geom_errorbar(aes(ymin=values, ymax=upper)) +
+  #geom_errorbar(aes(ymin=values, ymax=upper)) +
   geom_hline(yintercept = mean(links$values)) +
   scale_color_manual(values=c("steelblue", "darkorange1")) +
   theme_classic()+ 
@@ -1923,7 +1939,7 @@ try(dev.off(), silent=TRUE)
 ## Psyllid ~ Sodalis
 
 ```{r Sodalis cophylo}
-#Flag top abundance carsonella by sample
+#Flag top abundance sodalis by sample
 top_sodalis <- ps2 %>%
   transform_sample_counts(function (x) x/sum(x)) %>%
   speedyseq::psmelt() %>%
@@ -1951,25 +1967,6 @@ coocur <- ps2 %>%
     as.matrix() %>% 
   apply(2, function(x) ifelse(x > 0, 1, 0)) 
 
-
-
-#coocur <- ps2 %>%
-#  transform_sample_counts(function (x) x/sum(x)) %>%
-#  speedyseq::psmelt() %>%
-#  filter(genus %in% c("Sodalis")) %>%
-#  dplyr::select(OTU, psyllid_spp, SampleID, Abundance) %>%
-#  mutate(OTU = OTU %>%
-#           str_replace_all(" |-", "_")) %>%
-#  dplyr::group_by(OTU, psyllid_spp) %>%
-#    summarise(Abundance = sum(Abundance)) %>%
-#  pivot_wider(id_cols = psyllid_spp,
-#              names_from = OTU,
-#              values_from=Abundance,
-#              values_fill = list(Abundance = 0))  %>%
-#  column_to_rownames("psyllid_spp") %>%
-#    as.matrix() %>% 
-#  apply(2, function(x) ifelse(x > 0, 1, 0)) 
-#
 coocur <- coocur[ rowSums(coocur) > 0,colSums(coocur) > 0]
 
 # H cophenetic distance
@@ -2014,15 +2011,17 @@ print(paco_run$gof)
 
 # Get interaction-specific cophylogenetic contributions using jacknifing
 paco_run <- paco_links(paco_run)
-links <- data.frame(joint=names(paco_run$jackknife$mean), #losing sv50 here?
-                    values=unname(paco_run$jackknife$mean),
-                    upper=unname(paco_run$jackknife$upper)) %>%
+links <- data.frame(joint=names(paco_run$jackknife), #losing sv50 here?
+                    values=unname(paco_run$jackknife)#,
+                    #upper=unname(paco_run$jackknife$upper)
+                    ) %>%
   mutate(OTU = joint) %>%
  separate(OTU, into=c("Sample_Name", "OTU"), sep="-", extra="merge") %>%
   mutate(signif = case_when(
-    upper < mean(.$values) ~ 1,
-    upper > mean(.$values) ~ 0
+    values < mean(.$values) ~ 1,
+    values > mean(.$values) ~ 0
   ))
+
 # Plot links
 links %>%
   dplyr::rename(label = joint) %>%
@@ -2031,7 +2030,7 @@ links %>%
   arrange(-values) %>%
   ggplot(aes(x=label, y=values, colour=as.factor(signif))) +
   geom_point(show.legend = FALSE) +
-  geom_errorbar(aes(ymin=values, ymax=upper)) +
+ # geom_errorbar(aes(ymin=values, ymax=upper)) +
   geom_hline(yintercept = mean(links$values)) +
   scale_color_manual(values=c("steelblue", "darkorange1")) +
   theme_classic()+ 
@@ -2232,24 +2231,6 @@ coocur <- ps2 %>%
     as.matrix() %>% 
   apply(2, function(x) ifelse(x > 0, 1, 0)) 
 
-
-#coocur <- ps2 %>%
-#  transform_sample_counts(function (x) x/sum(x)) %>%
-#  speedyseq::psmelt() %>%
-#  filter(genus %in% c("Arsenophonus")) %>%
-#  dplyr::select(OTU, psyllid_spp, SampleID, Abundance) %>%
-#  mutate(OTU = OTU %>%
-#           str_replace_all(" |-", "_")) %>%
-#  dplyr::group_by(OTU, psyllid_spp) %>%
-#    summarise(Abundance = sum(Abundance)) %>%
-#  pivot_wider(id_cols = psyllid_spp,
-#              names_from = OTU,
-#              values_from=Abundance,
-#              values_fill = list(Abundance = 0))  %>%
-#  column_to_rownames("psyllid_spp") %>%
-#    as.matrix() %>% 
-#  apply(2, function(x) ifelse(x > 0, 1, 0)) 
-#
 coocur <- coocur[ rowSums(coocur) > 0,colSums(coocur) > 0]
 
 # H cophenetic distance
@@ -2294,15 +2275,17 @@ print(paco_run$gof)
 
 # Get interaction-specific cophylogenetic contributions using jacknifing
 paco_run <- paco_links(paco_run)
-links <- data.frame(joint=names(paco_run$jackknife$mean), #losing sv50 here?
-                    values=unname(paco_run$jackknife$mean),
-                    upper=unname(paco_run$jackknife$upper)) %>%
+links <- data.frame(joint=names(paco_run$jackknife),
+                    values=unname(paco_run$jackknife)#,
+                    #upper=unname(paco_run$jackknife$upper)
+                    ) %>%
   mutate(OTU = joint) %>%
  separate(OTU, into=c("Sample_Name", "OTU"), sep="-", extra="merge") %>%
   mutate(signif = case_when(
-    upper < mean(.$values) ~ 1,
-    upper > mean(.$values) ~ 0
+    values < mean(.$values) ~ 1,
+    values > mean(.$values) ~ 0
   ))
+
 # Plot links
 links %>%
   dplyr::rename(label = joint) %>%
@@ -2547,12 +2530,16 @@ print(paco_run$gof)
 paco_run <- paco_links(paco_run, .parallel = TRUE)
 
 # get links
-links <- data.frame(joint=names(paco_run$jackknife$mean), values=unname(paco_run$jackknife$mean), upper=unname(paco_run$jackknife$upper)) %>%
+links <- data.frame(
+  joint=names(paco_run$jackknife),
+  values=unname(paco_run$jackknife)#,
+  #upper=unname(paco_run$jackknife$upper)
+  ) %>%
  mutate(OTU = joint) %>%
  separate(OTU, into=c("hostplant_spp", "psyllid_spp"), sep="-", extra="merge") %>%
   mutate(signif = case_when(
-    upper < mean(.$values) ~ 1,
-    upper > mean(.$values) ~ 0
+    values < mean(.$values) ~ 1,
+    values > mean(.$values) ~ 0
   ))
 # Plot links
 links %>%
@@ -2562,7 +2549,7 @@ links %>%
   arrange(-values) %>%
   ggplot(aes(x=label, y=values, colour=as.factor(signif))) +
   geom_point(show.legend = FALSE) +
-  geom_errorbar(aes(ymin=values, ymax=upper)) +
+ # geom_errorbar(aes(ymin=values, ymax=upper)) +
   geom_hline(yintercept = mean(links$values)) +
   scale_color_manual(values=c("steelblue", "darkorange1")) +
   theme_classic()+ 
@@ -2809,14 +2796,17 @@ print(paco_run$gof)
 
 # Get interaction-specific cophylogenetic contributions using jacknifing
 paco_run <- paco_links(paco_run)
-links <- data.frame(joint=names(paco_run$jackknife$mean), #losing sv50 here?
-                    values=unname(paco_run$jackknife$mean), upper=unname(paco_run$jackknife$upper)) %>%
+links <- data.frame(joint=names(paco_run$jackknife), 
+                    values=unname(paco_run$jackknife)#, 
+                    #upper=unname(paco_run$jackknife$upper)
+                    ) %>%
   mutate(OTU = joint) %>%
  separate(OTU, into=c("Sample_Name", "OTU"), sep="-", extra="merge") %>%
   mutate(signif = case_when(
-    upper < mean(.$values) ~ 1,
-    upper > mean(.$values) ~ 0
+    values < mean(.$values) ~ 1,
+    values > mean(.$values) ~ 0
   ))
+
 # Plot links
 links %>%
   dplyr::rename(label = joint) %>%
@@ -2825,7 +2815,7 @@ links %>%
   arrange(-values) %>%
   ggplot(aes(x=label, y=values, colour=as.factor(signif))) +
   geom_point(show.legend = FALSE) +
-  geom_errorbar(aes(ymin=values, ymax=upper)) +
+  #geom_errorbar(aes(ymin=values, ymax=upper)) +
   geom_hline(yintercept = mean(links$values)) +
   scale_color_manual(values=c("steelblue", "darkorange1")) +
   theme_classic()+ 
@@ -2856,7 +2846,6 @@ ggplot(res, aes(x=values))+
 PF_run <- parafit(h_dist, s_dist, t(coocur), nperm=999, test.links=TRUE, silent=FALSE)
 PF_run$ParaFitGlobal
 PF_run$p.global
-
 
 PF_links <- as.data.frame(PF_run$link.table)  %>%
       left_join(enframe(names(PF_run$para.per.host), name = "Host", value="psyllid_spp") %>%
@@ -3063,13 +3052,18 @@ plot(paco_run$proc, kind=2)
 
 # Get interaction-specific cophylogenetic contributions using jacknifing
 paco_run <- paco_links(paco_run)
-links <- data.frame(joint=names(paco_run$jackknife$mean), values=unname(paco_run$jackknife$mean), upper=unname(paco_run$jackknife$upper)) %>%
+links <- data.frame(
+  joint=names(paco_run$jackknife),
+  values=unname(paco_run$jackknife)#,
+  #upper=unname(paco_run$jackknife$upper)
+  ) %>%
  mutate(OTU = joint) %>%
  separate(OTU, into=c("hostplant_spp", "psyllid_spp"), sep="-", extra="merge") %>%
   mutate(signif = case_when(
-    upper < mean(.$values) ~ 1,
-    upper > mean(.$values) ~ 0
+    values < mean(.$values) ~ 1,
+    values > mean(.$values) ~ 0
   ))
+
 # Plot links
 links %>%
   dplyr::rename(label = joint) %>%
@@ -3078,7 +3072,7 @@ links %>%
   arrange(-values) %>%
   ggplot(aes(x=label, y=values, colour=as.factor(signif))) +
   geom_point(show.legend = FALSE) +
-  geom_errorbar(aes(ymin=values, ymax=upper)) +
+  #geom_errorbar(aes(ymin=values, ymax=upper)) +
   geom_hline(yintercept = mean(links$values)) +
   scale_color_manual(values=c("steelblue", "darkorange1")) +
   theme_classic()+ 
@@ -3243,8 +3237,6 @@ try(dev.off(), silent=TRUE)
 
 ```{r Collection map}
 #Plot on map to confirm points
-library(rgeos)
-library(maptools)
 envData <- sample_data(ps2) %>%
   as_data_frame() %>%
   dplyr::select(Sample_Name,psyllid_spp, lat, long) %>%
@@ -3254,7 +3246,7 @@ envData <- sample_data(ps2) %>%
 xlim <- c(165,180)
 ylim <- c(-50,-30)
 
-nz <-map("worldHires", "New Zealand", fill=TRUE, xlim=xlim,
+nz <- map(database= "world", region= "New Zealand", fill=TRUE, xlim=xlim,
   ylim=ylim) #, mar=c(0,0,0,0)
 
 p1 <- ggtree(pruned.tree, ladderize=TRUE)
@@ -3277,6 +3269,7 @@ gg.nzmap <- ggplot(fortify(nz), aes(y=lat, x=long, group=group)) +
     scale_y_continuous(position = "right") +
   xlab("Longitude") + 
   ylab("Lattitude")
+
 gg.nzmap 
 
 #print(gg.nzmap, vp = viewport(width = .7, height = .7, angle = 35))

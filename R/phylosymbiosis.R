@@ -34,6 +34,11 @@ run_mantel_vegan <- function(x, dists, subsample, type="mantel"){
   return(out)
 }
 
+# Permustats
+#test <- vegan::mantel(veg.dist, env.dist)
+#perm <- vegan::permustats(test)
+#test3 <- summary(perm)
+
 # Run mantel ecodist ------------------------------------------------------
 # need to generalize to take in N matrices rather than just 3 
 run_mantel <- function(x, dists, subsample, type="mantel"){
@@ -69,7 +74,6 @@ run_mantel <- function(x, dists, subsample, type="mantel"){
   }
   return(out)
 }
-
 
 # compare_trees --------------------------------------------------------------
 compare_trees <- function(tree1, tree2, measure="all", runs=99){
