@@ -370,6 +370,17 @@ speedyseq::psmelt(ps2) %>%
   labs(x = "Psyllid Species",
        y = "Number of distinct ASVs")
 
+se <- function(x) sqrt(var(x)/length(x))
+
+# Mean abundance of  genera
+genera_abund <- speedyseq::psmelt(ps2) %>%
+  filter(Abundance > 0) %>%
+  group_by(SampleID) %>%
+    mutate_at(vars(Abundance), ~ . / sum(.) ) %>%
+  ungroup %>%
+  group_by(genus) %>%
+  summarise(mean_ra = mean(Abundance), upper = max(Abundance), lower = min(Abundance), se = se(Abundance)) 
+  
 ```
 
 ## Alpha diversity metrics
@@ -935,6 +946,7 @@ gg.spp <- sample_data(ps2) %>%
   filter(!is.na(y)) %>%
   ggplot(aes(x=y, y=1, fill=n_species)) +
     geom_tile() +
+    geom_text(aes(label=n_species))+
     coord_flip() +
     theme_void() +
     theme(legend.position = "bottom") +
@@ -1043,7 +1055,7 @@ subsample <- Reduce(intersect, list(rownames(otu_table(ps2)), colnames(phylo.dis
 mantel_results <- distlist %>%
   purrr::map(function(x){
     run_mantel(x, dists = c("phylo.dist", "plant.dist", "spat.dist"),
-               subsample = subsample, type  ="mantel")
+               subsample = subsample, type  ="mantel", nboot=1000)
   }) %>%
   bind_rows(.id="dist")
 
@@ -1056,7 +1068,7 @@ write_csv(mantel_results %>%
 pmantel_results <- distlist %>%
   purrr::map(function(x){
     run_mantel(x, dists = c("phylo.dist", "plant.dist", "spat.dist"),
-               subsample = subsample, type = "partial")
+               subsample = subsample, type = "partial", nboot=1000)
   }) %>%
   bind_rows(.id="dist") 
 
@@ -1085,6 +1097,11 @@ gg.mantels <- bind_rows(mantel_results, pmantel_results) %>%
   theme(legend.position = "none")
 
 gg.mantels
+
+pdf(file="figs/fig3_mantels.pdf",  width = 8, height = 6, paper="a4r")
+  plot(gg.mantels)
+try(dev.off(), silent=TRUE)
+  
 ```
 
 ### Without Gammaproteobacteria
@@ -1351,6 +1368,10 @@ paco_run_powellia$gof
 paco_run_cten$gof
 paco_run_psylla$gof
 
+z_trans <- function(x){
+  (x - mean(x, na.rm=TRUE)) / sd(x, na.rm=TRUE)
+}
+
 # Get link importance
 links <- do.call("list", mget(grep("paco_run_",names(.GlobalEnv),value=TRUE))) %>%
   purrr::map(function(x){
@@ -1365,15 +1386,19 @@ links <- do.call("list", mget(grep("paco_run_",names(.GlobalEnv),value=TRUE))) %
   bind_rows() %>%
  separate(joint, into=c("Sample_Name", "OTU"), sep="-", extra="merge", remove=FALSE) %>%
   group_by(genus) %>%
+  mutate(values = values^2)%>%
   mutate(mean_val = mean(values)) %>%
   mutate(signif = case_when(
     values < mean_val ~ 1,
     values > mean_val ~ 0
-  ))
-
-test <- colnames(coocur) %>%
-  enframe(name=NULL, value="OTU")%>%
-  left_join(links)
+  ))%>%
+  group_by(genus) %>%
+  mutate(
+    #st_dev = sd(values),
+    # z_values =  values/st_dev
+    z_values =  z_trans(values)
+    ) %>%
+  ungroup()
 
 # Plot links
 links %>%
@@ -1429,7 +1454,7 @@ PF_run_psylla$p.global
 # Joining isnt working here because they were made separately - so getting the rownames from cooccur no logner works
 PF_links <- do.call("list", mget(grep("PF_run_",names(.GlobalEnv),value=TRUE))) %>%
   purrr::map(function(x){
-    genus_name <- x$para.per.host[1] %>% str_remove("_.*$")
+    genus_name <- names(x$para.per.host[1]) %>% str_remove("_.*$")
     as.data.frame(x$link.table) %>%
       left_join(enframe(names(x$para.per.host), name = "Host", value="psyllid_spp") %>%
                   mutate(Host = as.numeric(Host))) %>%
@@ -1441,7 +1466,10 @@ PF_links <- do.call("list", mget(grep("PF_run_",names(.GlobalEnv),value=TRUE))) 
   mutate(signif = case_when(
     p.F1 < 0.05 ~ 1,
     p.F1 > 0.05 ~ 0
-  )) 
+  )) %>%
+  group_by(genus) %>%
+  mutate(z_values =  z_trans(F1.stat)) %>%
+  ungroup()
 
 
 # Cophyloplot
@@ -1456,8 +1484,9 @@ tree1 <- obj[["trees"]][[1]]
 p1 <- ggtree(tree1, ladderize=FALSE, aes(colour=links))
 weights_p1 <- p1$data %>%
   left_join(links %>%
-  group_by(Sample_Name) %>%
-  summarise(values = mean(signif)) %>%
+    group_by(Sample_Name) %>%
+    summarise(values = mean(signif)) %>%
+    #summarise(values = mean(z_values)) %>%
     dplyr::rename(label = Sample_Name)
     )  
 
@@ -1467,6 +1496,7 @@ weights_p1 <- weights_p1 %>%
 
 p1 <- p1 %<+% weights_p1 +
   scale_color_gradient(low="steelblue", high="darkorange1") +
+  #  scale_colour_gradient(high="steelblue", low="darkorange1", trans="log10") +
     theme(legend.position = "none")
 
 # OTU tree
@@ -1495,6 +1525,7 @@ weights_p2 <- p2$data %>%
   left_join(links %>% 
     group_by(OTU) %>%
     summarise(values = mean(signif)) %>%
+    #summarise(values = mean(z_values)) %>%
     dplyr::rename(label = OTU)
     ) 
 
@@ -1503,6 +1534,7 @@ weights_p2 <- weights_p2 %>%
   left_join(data.frame(node=weights_p2$node, links = weights_p2$node %>% purrr::map_dbl(average_descendants, tree=tree2, df=weights_p2)))
 
 p2 <- p2 %<+% weights_p2  +  
+  #scale_colour_gradient(high="steelblue", low="darkorange1", trans="log10") +
   scale_color_gradient(low="steelblue", high="darkorange1") +
   theme(legend.position = "none")
 
@@ -1512,9 +1544,9 @@ heatmap_dat <- obj$assoc %>%
   magrittr::set_colnames(c("label.x", "label.y")) %>%
   mutate(genus = label.x %>% str_remove("_.*$")) %>%
   left_join(links %>% 
-              dplyr::select(label.x = Sample_Name, label.y = OTU, signif_paco=signif)) %>%
+              dplyr::select(label.x = Sample_Name, label.y = OTU, signif_paco=signif, val_paco = z_values)) %>%
   left_join(PF_links %>% 
-              dplyr::select(label.x = psyllid_spp, label.y = OTU, signif_para=signif)) %>%
+              dplyr::select(label.x = psyllid_spp, label.y = OTU, signif_para=signif, val_para = z_values)) %>%
   left_join(p1$data %>% dplyr::select(label, y) %>% dplyr::rename(label.x = label), by="label.x") %>%
   left_join(p2$data %>% dplyr::select(label, y) %>% dplyr::rename(label.y = label), by="label.y") %>%
   rownames_to_column("assoc") %>%
@@ -1534,11 +1566,11 @@ heatmap_dat <- obj$assoc %>%
 gg.heatmap <- heatmap_dat %>%
     mutate(OTU = OTU %>% str_replace_all("_", " "),
          Sample_Name =  Sample_Name %>% str_replace_all("_"," ")) %>%
-  dplyr::select(Sample_Name, OTU, genus, highlight, pos_x, pos_y) %>%
+  dplyr::select(Sample_Name, OTU, genus, highlight, pos_x, pos_y, val_para, val_paco) %>%
   dplyr::mutate(Sample_Name = factor(Sample_Name),
                 OTU = factor(OTU),
                 genus=factor(genus, levels=c("Psylla" ,"Powellia", "Ctenarytaina")))  %>%
-   ggplot(aes(x= fct_reorder(Sample_Name, pos_x), y=fct_reorder(OTU, pos_y), fill=highlight)) +
+   ggplot(aes(x= fct_reorder(Sample_Name, pos_x), y=fct_reorder(OTU, pos_y), fill=highlight )) +
   geom_tile() +
   theme_bw() +
   facet_grid(~genus, drop = TRUE, scales="free", space ="free")+
@@ -1547,9 +1579,10 @@ gg.heatmap <- heatmap_dat %>%
         axis.text.y = element_blank(),
         axis.ticks.y = element_blank(),
         axis.title.y = element_blank(),
-        legend.position = "None") +
+        legend.position = "right") +
   scale_y_discrete(expand=c(0,0))+
-  scale_y_discrete(expand=c(0,0))+
+  scale_y_discrete(expand=c(0,0)) +
+  #scale_fill_gradient(high="steelblue", low="darkorange1") 
   scale_fill_manual(values=c("NS"="steelblue","paco"="darkorange1","para"="#da2b91", "both"="#91da2b"), na.translate=FALSE) 
 
 gg.heatmap
@@ -1560,6 +1593,7 @@ density_dat <-  heatmap_dat %>%
   group_by(OTU, y) %>%
   summarise(sum_paco = sum(signif_paco, na.rm=TRUE), sum_para = sum(signif_para, na.rm=TRUE)) %>%
   mutate(total_sum = sum(sum_paco, sum_para, na.rm=TRUE)) %>%
+  #summarise(total_sum = mean(val_paco, na.rm=TRUE)) %>%
   ungroup()
 
 density_labels <- density_dat %>%
@@ -1578,7 +1612,7 @@ density_labels <- density_labels_chunked %>%
   purrr::map(function(x){
     df <- x %>%
       mutate(zscore = (total_sum - mean(total_sum, na.rm=TRUE))/sd(total_sum, na.rm=TRUE)) %>%
-      filter(zscore  > 3, total_sum > 3)
+      filter( total_sum > 3, zscore  > 3,) #, 
     if(nrow(df) > 0){
         out <- df %>%
         summarise(y = mean(y), total_sum  = max(total_sum), annot =  case_when(
@@ -1588,7 +1622,6 @@ density_labels <- density_labels_chunked %>%
     }
   }) %>%
   bind_rows() 
-
 
 gg.density <- density_dat %>%
   filter(total_sum > 0) %>%
@@ -1604,6 +1637,7 @@ gg.density <- density_dat %>%
 
 gg.density
 
+# Instead of density could i label lineages with the greatest value?
 
 top <- wrap_elements(grid::textGrob('')) +(p1+ coord_flip() + scale_x_reverse(expand=c(0,0))+ scale_y_continuous(expand=c(0,0))) + wrap_elements(grid::textGrob('')) +plot_layout(widths=c(0.5,3, 0.1)) 
 
@@ -1674,6 +1708,7 @@ gg.host_links + gg.sym_links
 pdf(file="figs/3genus_fit_summary.pdf",  width = 8, height = 11, paper="a4")
   plot(gg.host_links + gg.sym_links)
 try(dev.off(), silent=TRUE)
+
 ```
 
 # Tanglegrams

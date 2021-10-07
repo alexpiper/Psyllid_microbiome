@@ -41,7 +41,7 @@ run_mantel_vegan <- function(x, dists, subsample, type="mantel"){
 
 # Run mantel ecodist ------------------------------------------------------
 # need to generalize to take in N matrices rather than just 3 
-run_mantel <- function(x, dists, subsample, type="mantel"){
+run_mantel <- function(x, dists, subsample, type="mantel", nboot=1000){
   if(type=="mantel" && class(dists)=="character"){
     dists <- enframe(dists) %>% dplyr::rename(dist1 = value)
   } else if (type=="partial" && class(dists)=="character"){
@@ -56,7 +56,9 @@ run_mantel <- function(x, dists, subsample, type="mantel"){
     out <- dists %>% 
       split(rownames(.)) %>%
       purrr::map(function(y){
-        as.data.frame(t(ecodist::mantel(as.dist(x[subsample, subsample]) ~ as.dist(get(y$dist1)[subsample, subsample])))) %>%
+        x_mat <- x[subsample, subsample]
+        y_mat <- get(y$dist1)[subsample, subsample]
+        as.data.frame(t(ecodist::mantel( lower(x_mat) ~ lower(y_mat), nboot=nboot))) %>%
           mutate(dist1 = y$dist1, type="mantel", nboot=1000) 
       })%>%
       bind_rows()
@@ -64,10 +66,12 @@ run_mantel <- function(x, dists, subsample, type="mantel"){
     out <- dists %>% 
       split(rownames(.)) %>%
       purrr::map(function(y){
-        as.data.frame(t(ecodist::mantel(as.dist(x[subsample, subsample]) ~ 
-                                          as.dist(get(y$V1)[subsample, subsample]) +
-                                          as.dist(get(y$V2)[subsample, subsample]) +
-                                          as.dist(get(y$V3)[subsample, subsample])))) %>%
+        x_mat <- x[subsample, subsample]
+        y_mat <- get(y$V1)[subsample, subsample]
+        z1_mat <- get(y$V2)[subsample, subsample]
+        z2_mat <- get(y$V3)[subsample, subsample]
+        
+        as.data.frame(t(ecodist::mantel(lower(x_mat) ~ lower(y_mat) + lower(z1_mat) + lower(z2_mat), nboot=nboot))) %>%
           mutate(dist1 = y$V1, dist2=y$V2, dist3=y$V3, type="partial_mantel") 
       }) %>%
       bind_rows()
