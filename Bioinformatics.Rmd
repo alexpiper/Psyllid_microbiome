@@ -608,7 +608,7 @@ gg.rare <- ggplot(data = rare)+
                group_by(sample) %>% 
                top_n(1, count),
              aes(x = count, y = OTU, colour=(count > threshold))) +
-  scale_x_continuous(labels =  scales::scientific_format()) +
+  scale_x_continuous(labels =  scales::label_number_si()) +
   geom_vline(xintercept=threshold, linetype="dashed") +
   labs(colour = "Sample kept?") +
   xlab("Sequence reads") +

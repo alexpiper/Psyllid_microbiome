@@ -1088,17 +1088,18 @@ gg.mantels <- bind_rows(mantel_results, pmantel_results) %>%
            str_replace("mantel", "Mantel") %>%
            str_replace("partial_Mantel", "Partial Mantel")) %>%
               ggplot(aes(x=mantelr, y=dist1, colour=dist1)) + 
+    geom_vline(xintercept = 0, colour="black", linetype=2) +
   geom_pointrange(aes(xmin=`llim.2.5%`, xmax=`ulim.97.5%`), size=1) +
-  geom_vline(xintercept = 0, colour="grey80", linetype=2) +
   scale_color_manual(values=c("Hostplant phylogeny"="#b2df8a","Spatial distance"="#a6cee3", "Psyllid phylogeny"="#1f78b4"))+
   facet_wrap(~type, ncol=2) +
   labs( x = "Mantel R", y = NULL, colour=NULL) +
   base_theme +
-  theme(legend.position = "none")
+  theme(legend.position = "none",
+        panel.grid.major = element_line())
 
 gg.mantels
 
-pdf(file="figs/fig3_mantels.pdf",  width = 8, height = 6, paper="a4r")
+pdf(file="figs/fig3_mantels.pdf",  width = 8, height = 4, paper="a4r")
   plot(gg.mantels)
 try(dev.off(), silent=TRUE)
   
@@ -1189,7 +1190,6 @@ gg.pca <- ggplot(data=pca_phylo, aes(x=PC2, y=PC1, colour=as.factor(cluster))) +
   theme(legend.position = "none") +
   scale_y_reverse(position = "right") 
   #coord_fixed(ratio=pc2/pc1) # Scale plot by variance explained
-print(gg.pca )
 
 p1 <- ggtree(pruned.tree) +
     scale_x_continuous(expand=c(0, 0.2)) + 
@@ -1199,10 +1199,12 @@ p1 <- ggtree(pruned.tree) +
 colours_p1 <- p1$data %>%
   left_join(membership %>%
   dplyr::rename(label = psyllid_spp)
-    )
+    ) %>%
+  mutate(new_label = label %>% str_replace_all("_", " "))
+
 p1 <- p1 %<+% colours_p1  + 
   geom_tippoint(aes(colour=as.factor(cluster)))  + 
-  geom_tiplab(aes(colour=as.factor(cluster)))+
+  geom_tiplab(aes(colour=as.factor(cluster), label=new_label))+
   scale_colour_brewer(palette="Paired") 
 
 gg.psyllid_pca <- p1 + gg.pca + plot_annotation(title="Psyllid phylogenetic distance")
@@ -1238,7 +1240,6 @@ gg.pca <- ggplot(data=pca_phylo, aes(x=PC2, y=PC1, colour=as.factor(cluster))) +
   theme(legend.position = "none") +
   scale_y_reverse(position = "right")
   #coord_fixed(ratio=pc2/pc1) # Scale plot by variance explained
-print(gg.pca )
 
 p2 <- ggtree(plant.tree) +
   scale_x_continuous(expand=c(0, 70)) + 
@@ -1248,10 +1249,12 @@ p2 <- ggtree(plant.tree) +
 colours_p2 <- p2$data %>%
   left_join(membership %>%
   dplyr::rename(label = hostplant_spp)
-    )
+    )%>%
+  mutate(new_label = label %>% str_replace_all("_", " "))
+
 p2 <- p2 %<+% colours_p2  + 
   geom_tippoint(aes(colour=as.factor(cluster)))  + 
-  geom_tiplab(aes(colour=as.factor(cluster)))+
+  geom_tiplab(aes(colour=as.factor(cluster), label=new_label))+
   scale_colour_brewer(palette="Paired") 
 
 gg.plant_pca <- p2 + gg.pca + plot_annotation(title="Plant phylogenetic distance")
@@ -1284,7 +1287,6 @@ gg.pca <- ggplot(data=pca_phylo, aes(x=PC2, y=PC1, colour=as.factor(cluster))) +
   theme(legend.position = "none") +
   scale_y_reverse(position = "right")
   #coord_fixed(ratio=pc2/pc1) # Scale plot by variance explained
-print(gg.pca )
 
 p3 <- ggtree(as.phylo(dend) )+
   scale_x_continuous(expand=c(0, 400)) +
@@ -1294,10 +1296,12 @@ p3 <- ggtree(as.phylo(dend) )+
 colours_p3 <- p3$data %>%
   left_join(membership %>%
   dplyr::rename(label = Sample_Name)
-    )
+    )%>%
+  mutate(new_label = label %>% str_replace_all("_", " "))
+
 p3 <- p3 %<+% colours_p3  + 
   geom_tippoint(aes(colour=as.factor(cluster)))  + 
-  geom_tiplab(aes(colour=as.factor(cluster)))+
+  #geom_tiplab(aes(colour=as.factor(cluster), label=new_label))+
   scale_colour_brewer(palette="Paired") 
 
 gg.spat_pca <- p3 + gg.pca + plot_annotation(title="Spatial Distance")
@@ -1471,6 +1475,10 @@ PF_links <- do.call("list", mget(grep("PF_run_",names(.GlobalEnv),value=TRUE))) 
   mutate(z_values =  z_trans(F1.stat)) %>%
   ungroup()
 
+# Proportion of significant links
+PF_links %>%
+  group_by(genus) %>%
+  summarise(s = count(signif > 0), ns = count(signif == 0)) 
 
 # Cophyloplot
 coocur.lut <- which(coocur ==1, arr.ind=TRUE)
@@ -1579,7 +1587,7 @@ gg.heatmap <- heatmap_dat %>%
         axis.text.y = element_blank(),
         axis.ticks.y = element_blank(),
         axis.title.y = element_blank(),
-        legend.position = "right") +
+        legend.position = "none") +
   scale_y_discrete(expand=c(0,0))+
   scale_y_discrete(expand=c(0,0)) +
   #scale_fill_gradient(high="steelblue", low="darkorange1") 
@@ -1662,7 +1670,9 @@ gg.host_links <- heatmap_dat %>%
                names_to="type",
                values_to="values") %>%
   mutate(type = type %>% str_remove("signif_")) %>%
-    mutate(label = label %>% str_replace_all("_", " "))%>%
+    mutate(label = label %>% 
+             str_replace_all("_", " ") %>%
+             str_replace(" sp", " sp."))%>%
   mutate(label = as.factor(label))%>%
   filter(values > 0) %>%
   arrange(-values) %>%
@@ -1685,6 +1695,11 @@ gg.sym_links <- heatmap_dat %>%
                names_to="type",
                values_to="values") %>%
   dplyr::rename(label = otu_genus) %>%
+  dplyr::mutate(label = label %>% 
+                  str_remove("\\/.*$") %>%
+                  str_replace("NA_canariense", "Bradyrhizobium_canariense") %>%
+                  str_remove("^s__")
+                  ) %>%
   mutate(type = type %>% str_remove("signif_")) %>%
   mutate(label = as.factor(label),
          label=fct_reorder(label, values, sum ))%>%
@@ -1720,6 +1735,7 @@ try(dev.off(), silent=TRUE)
 top_carson <- ps2 %>%
   transform_sample_counts(function (x) x/sum(x)) %>%
   speedyseq::psmelt() %>%
+  filter(psyllid_spp %in% pruned.tree$tip.label) %>%
   filter(genus=="Candidatus Carsonella") %>%
   group_by(Sample) %>%  
   filter(Abundance > 0) %>%
@@ -1729,6 +1745,7 @@ top_carson <- ps2 %>%
 coocur <- ps2 %>%
   transform_sample_counts(function (x) x/sum(x)) %>%
   speedyseq::psmelt() %>%
+    filter(psyllid_spp %in% pruned.tree$tip.label) %>%
   left_join(top_carson) %>%
   filter(genus=="Candidatus Carsonella", top==TRUE) %>%
   dplyr::select(OTU, psyllid_spp, SampleID, Abundance) %>%
@@ -1895,7 +1912,7 @@ p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=links)) +
 # OTU tree
 tree2 <- obj[["trees"]][[2]]
 s_tree <- drop.tip(tree2, setdiff(tree2$tip.label, obj$assoc[,2]))
-p2 <- ggtree(tree2 , ladderize=TRUE, aes(colour=links)) 
+p2 <- ggtree(tree2 , ladderize=FALSE, aes(colour=links)) 
 weights_p2 <- p2$data %>%
   left_join(links %>% 
     group_by(OTU) %>%
@@ -1945,7 +1962,8 @@ tangle <- obj$assoc %>%
            str_replace("y", "microbe")) %>%
   filter(!is.na(label))%>% 
   group_by(tree) %>%
-  mutate(y = y / max(y))
+  mutate(y = y / max(y)) %>%
+  mutate(label = label %>% str_replace_all("_", " ")) 
 
 
 gg.tangle <- ggplot(tangle, aes(x=tree, y=y, group=assoc, colour=as.factor(signif))) +
@@ -1978,6 +1996,7 @@ try(dev.off(), silent=TRUE)
 top_sodalis <- ps2 %>%
   transform_sample_counts(function (x) x/sum(x)) %>%
   speedyseq::psmelt() %>%
+  filter(psyllid_spp %in% pruned.tree$tip.label) %>%
   filter(genus=="Sodalis") %>%
   group_by(Sample) %>%  
   filter(Abundance > 0) %>%
@@ -1987,6 +2006,7 @@ top_sodalis <- ps2 %>%
 coocur <- ps2 %>%
   transform_sample_counts(function (x) x/sum(x)) %>%
   speedyseq::psmelt() %>%
+  filter(psyllid_spp %in% pruned.tree$tip.label) %>%
   left_join(top_sodalis) %>%
   filter(genus=="Sodalis", top==TRUE) %>%
   dplyr::select(OTU, psyllid_spp, SampleID, Abundance) %>%
@@ -2158,7 +2178,7 @@ p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=links)) +
 # OTU tree
 tree2 <- obj[["trees"]][[2]]
 s_tree <- drop.tip(tree2, setdiff(tree2$tip.label, obj$assoc[,2]))
-p2 <- ggtree(tree2 , ladderize=TRUE, aes(colour=links)) 
+p2 <- ggtree(tree2 , ladderize=FALSE, aes(colour=links)) 
 weights_p2 <- p2$data %>%
   left_join(links %>% 
     group_by(OTU) %>%
@@ -2208,7 +2228,8 @@ tangle <- obj$assoc %>%
            str_replace("y", "microbe")) %>%
   filter(!is.na(label))%>% 
   group_by(tree) %>%
-  mutate(y = y / max(y))
+  mutate(y = y / max(y))%>%
+  mutate(label = label %>% str_replace_all("_", " ")) 
 
 
 gg.tangle <- ggplot(tangle, aes(x=tree, y=y, group=assoc, colour=as.factor(signif))) +
@@ -2242,6 +2263,7 @@ try(dev.off(), silent=TRUE)
 top_arse <- ps2 %>%
   transform_sample_counts(function (x) x/sum(x)) %>%
   speedyseq::psmelt() %>%
+  filter(psyllid_spp %in% pruned.tree$tip.label) %>%
   filter(genus=="Arsenophonus") %>%
   group_by(Sample) %>%  
   filter(Abundance > 0) %>%
@@ -2251,6 +2273,7 @@ top_arse <- ps2 %>%
 coocur <- ps2 %>%
   transform_sample_counts(function (x) x/sum(x)) %>%
   speedyseq::psmelt() %>%
+  filter(psyllid_spp %in% pruned.tree$tip.label) %>%
   left_join(top_arse) %>%
   filter(genus=="Arsenophonus", top==TRUE) %>%
   dplyr::select(OTU, psyllid_spp, SampleID, Abundance) %>%
@@ -2422,7 +2445,7 @@ p1 <- p1 %<+% weights_p1 + geom_tippoint(aes(colour=links)) +
 # OTU tree
 tree2 <- obj[["trees"]][[2]]
 s_tree <- drop.tip(tree2, setdiff(tree2$tip.label, obj$assoc[,2]))
-p2 <- ggtree(tree2 , ladderize=TRUE, aes(colour=links)) 
+p2 <- ggtree(tree2 , ladderize=FALSE, aes(colour=links)) 
 weights_p2 <- p2$data %>%
   left_join(links %>% 
     group_by(OTU) %>%
@@ -2472,7 +2495,8 @@ tangle <- obj$assoc %>%
            str_replace("y", "microbe")) %>%
   filter(!is.na(label))%>% 
   group_by(tree) %>%
-  mutate(y = y / max(y))
+  mutate(y = y / max(y))%>%
+  mutate(label = label %>% str_replace_all("_", " ")) 
 
 
 gg.tangle <- ggplot(tangle, aes(x=tree, y=y, group=assoc, colour=as.factor(signif))) +
@@ -2730,7 +2754,8 @@ tangle <- obj$assoc %>%
            str_replace("y", "microbe")) %>%
   filter(!is.na(label))%>% 
   group_by(tree) %>%
-  mutate(y = y / max(y))
+  mutate(y = y / max(y))%>%
+  mutate(label = label %>% str_replace_all("_", " ")) 
 
 gg.tangle <- ggplot(tangle, aes(x=factor(tree, levels=c("microbe", "host")), y=y, group=assoc, colour=as.factor(signif))) +
     geom_line(alpha=0.8) +  
@@ -2764,6 +2789,7 @@ try(dev.off(), silent=TRUE)
 top_carson <- ps2 %>%
   transform_sample_counts(function (x) x/sum(x)) %>%
   speedyseq::psmelt() %>%
+  filter(psyllid_spp %in% pruned.tree$tip.label) %>%
   filter(genus=="Candidatus Carsonella") %>%
   group_by(Sample) %>%  
   filter(Abundance > 0) %>%
@@ -2775,6 +2801,7 @@ coocur <- ps2 %>%
   filter_taxa(function(x) mean(x) > 0, TRUE) %>%
   transform_sample_counts(function (x) x/sum(x)) %>%
   speedyseq::psmelt() %>%
+  filter(psyllid_spp %in% pruned.tree$tip.label) %>%
   left_join(top_carson) %>%
   filter(genus=="Candidatus Carsonella", top==TRUE) %>%
   dplyr::select(OTU, psyllid_spp, SampleID, Abundance) %>%
@@ -2992,7 +3019,8 @@ tangle <- obj$assoc %>%
            str_replace("y", "microbe")) %>%
   filter(!is.na(label))%>% 
   group_by(tree) %>%
-  mutate(y = y / max(y))
+  mutate(y = y / max(y))%>%
+  mutate(label = label %>% str_replace_all("_", " ")) 
 
 
 gg.tangle <- ggplot(tangle, aes(x=tree, y=y, group=assoc, colour=as.factor(signif))) +
@@ -3013,7 +3041,7 @@ gg.tangle <- ggplot(tangle, aes(x=tree, y=y, group=assoc, colour=as.factor(signi
 gg.trioza_carson_tangle <- p1 + gg.tangle + (p2 + scale_x_reverse()) 
 gg.trioza_carson_tangle
 
-pdf(file="figs/trioza_carsonella_tanglegram.pdf",  width = 8, height = 11, paper="a4")
+pdf(file="figs/powellia_carsonella_tanglegram.pdf",  width = 8, height = 11, paper="a4")
   plot(gg.trioza_carson_tangle)
 try(dev.off(), silent=TRUE)
 ```
@@ -3243,7 +3271,8 @@ tangle <- obj$assoc %>%
            str_replace("y", "microbe")) %>%
   filter(!is.na(label))%>% 
   group_by(tree) %>%
-  mutate(y = y / max(y))
+  mutate(y = y / max(y))%>%
+  mutate(label = label %>% str_replace_all("_", " ")) 
 
 gg.tangle <- ggplot(tangle, aes(x=factor(tree, levels=c("microbe", "host")), y=y, group=assoc, colour=as.factor(signif))) +
     geom_line(alpha=0.8) +  
@@ -3259,11 +3288,11 @@ gg.tangle <- ggplot(tangle, aes(x=factor(tree, levels=c("microbe", "host")), y=y
     theme_void() +
     theme(legend.position = "bottom") +
   labs(colour="Significance")
-gg.triozid_tangle <- p2 + gg.tangle + (p1 + scale_x_reverse()) 
-gg.triozid_tangle
+gg.powellia_tangle <- p2 + gg.tangle + (p1 + scale_x_reverse()) 
+gg.powellia_tangle
 
-pdf(file="figs/trioza_plant_tanglegram.pdf",  width = 8, height = 11, paper="a4")
-  plot(gg.triozid_tangle)
+pdf(file="figs/powellia_plant_tanglegram.pdf",  width = 8, height = 11, paper="a4")
+  plot(gg.powellia_tangle)
 try(dev.off(), silent=TRUE)
 ```
 
