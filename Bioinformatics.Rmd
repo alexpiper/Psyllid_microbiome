@@ -523,6 +523,21 @@ speedyseq::psmelt(ps) %>%
   dplyr::filter(Abundance > 0) %>%
   write.csv(file = "output/otu_tables/rawdata.csv")
 
+# Export unfiltered tables
+psmelt(ps) %>%
+  filter(Abundance > 0) %>%
+  write_csv("output/otu_tables/unfiltered/raw_data_table.csv")
+
+psmelt(ps) %>%
+  filter(Abundance > 0) %>%
+  dplyr::mutate(sample_name = paste0(psyllid_spp, "-",SampleID)) %>%
+  dplyr::select(OTU, sample_name, species, Abundance) %>%
+  dplyr::rename(microbe = species) %>%
+  pivot_wider(names_from = sample_name,
+              values_from = Abundance,
+              values_fill = list(Abundance=0)) %>%
+  write_csv("output/otu_tables/unfiltered/unfiltered_otu_table.csv")
+
 # Export species level summary
 seqateurs::summarise_taxa(ps, "species", "SampleID") %>%
   spread(key="SampleID", value="totalRA") %>%
@@ -555,7 +570,7 @@ get_taxa_unique(ps, "domain")
 ntaxa(ps) # Check the number of taxa prior to removal
 ps0 <- ps %>%
   subset_taxa(
-    domain == "Bacteria" & 
+    #domain == "Bacteria" & 
     family  != "Mitochondria" &
     order   != "Chloroplast" &
     phylum != "Cyanobacteria"
@@ -623,6 +638,9 @@ try(dev.off(), silent=TRUE)
 ps2 <- prune_samples(sample_sums(ps1)>=threshold, ps1) 
 ps2 <- filter_taxa(ps2, function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
 message(nsamples(ps1) - nsamples(ps2), " Samples and ", ntaxa(ps1) - ntaxa(ps2), " taxa under read threshold Dropped")
+
+saveRDS(ps2, "output/rds/ps2.rds")
+
 ```
 
 
@@ -652,12 +670,14 @@ as.data.frame(vegan::mantel(pre_filt_dist[subsample, subsample], post_filt_dist[
 ```{r Save fastas}
 #Write out fasta and align with silva online
 seqs <- refseq(ps2)
-writeXStringSet(seqs, "output/curated_asv.fasta", width=1000)
+writeXStringSet(seqs, "output/curated_asv_includeroot.fasta", width=1000)
 ```
 
 ## Align with SINA
 
 ```{bash align}
+cd /group/pathogens/IAWS/Personal/Alexp/Metabarcoding/Psyllid_microbiome
+
 #Create a virtual environment
 module load Python/3.8.2-GCCcore-9.3.0 
 virtualenv ~/SINA
@@ -670,19 +690,27 @@ cd sina-1.7.0-linux
 
 #Get referenceDB
 wget https://www.arb-silva.de/fileadmin/silva_databases/release_138/ARB_files/SILVA_138_SSURef_NR99_05_01_20_opt.arb.gz
+gunzip /group/pathogens/IAWS/Personal/Alexp/Metabarcoding/Psyllid_microbiome/SILVA_138_SSURef_NR99_05_01_20_opt.arb.gz
 
 
 #Run sina
 ~/sina-1.7.0-linux/sina --search --add-relatives=5 --meta-fmt=header --fields=acc \
--i /group/pathogens/Alexp/Metabarcoding/Psyllid_microbiome/output/curated_asv.fasta \
--r /group/pathogens/Alexp/Metabarcoding/Psyllid_microbiome/reference/SILVA_138_SSURef_NR99_05_01_20_opt.arb \
--o /group/pathogens/Alexp/Metabarcoding/Psyllid_microbiome/output/aligned_asv.fasta
+-i /group/pathogens/IAWS/Personal/Alexp/Metabarcoding/Psyllid_microbiome/output/curated_asv_includeroot.fasta \
+-r /group/pathogens/IAWS/Personal/Alexp/Metabarcoding/Psyllid_microbiome/SILVA_138_SSURef_NR99_05_01_20_opt.arb \
+-o /group/pathogens/IAWS/Personal/Alexp/Metabarcoding/Psyllid_microbiome/output/aligned_asv_includeroot.fasta \
+--outtype= 
+
+gzip /group/pathogens/IAWS/Personal/Alexp/Metabarcoding/Psyllid_microbiome/output/aligned_asv_includeroot.fasta
 ```
 
 ## Create phylogenetic tree with fasttreee
 ```{bash fastree}
 module load FastTree
-FastTree -gtr -cat 20 -quote -nt /group/pathogens/Alexp/Metabarcoding/Psyllid_microbiome/output/aligned_asv.fasta > /group/pathogens/Alexp/Metabarcoding/Psyllid_microbiome/output/sina_tree 
+FastTree -gtr -cat 20 -quote -nt /group/pathogens/IAWS/Personal/Alexp/Metabarcoding/Psyllid_microbiome/output/aligned_asv_includeroot.fasta > /group/pathogens/IAWS/Personal/Alexp/Metabarcoding/Psyllid_microbiome/output/sina_tree_includeroot
+
+# IQ Tree
+iqtree -s example.phy -m MFP
+
 ```
 
 ## Date tree with PATHd8
@@ -690,31 +718,35 @@ FastTree -gtr -cat 20 -quote -nt /group/pathogens/Alexp/Metabarcoding/Psyllid_mi
 ```{r PATHd8}
 # Date usign congruify
 #tree <- read.tree("arb-silva.de_2020-07-28_id860849/arb-silva.de_2020-07-28_id860849.tree")
-tree <- read.tree("output/sina_tree")
+tree <- read.tree("output/sina_tree_includeroot")
 tree$tip.label <- tree$tip.label %>%
+  #head()%>%
   str_split_fixed("\\[", n=Inf) %>%
   as.data.frame() %>%
   unite(V1, V2, col="name") %>%
   mutate(name = name %>%
            str_remove("_align.*$") %>%
-           str_remove("^.*_acc=") %>%
-           str_remove("\\]$")) %>%
+           str_remove("^.*_acc=")  %>%
+           trimws()%>%
+           str_remove("\\]$")%>%
+           str_remove("^'")) %>%
   pull(name)
 
 tree_pruned <- drop.tip(tree, tree$tip.label[duplicated(tree$tip.label)])
 
 #Reference tree
-ref_tree <- read.tree("bin/Dated trees/Bacteria_16S_SILVA_97sim_FastTree_PATHd8.tre")
+ref_tree <- read.tree("reference/Dated trees/Bacteria_16S_SILVA_97sim_FastTree_PATHd8.tre")
 
 ref_tree$tip.label <- ref_tree$tip.label %>% 
   str_extract("^(.*?)\\.") %>%
   str_remove("\\.$")
 
-#2881  congruent tips
+#2862  congruent tips
 table(tree$tip.label %in% ref_tree$tip.label)
 
 ref_tree_pruned <- drop.tip(ref_tree, c(ref_tree$tip.label[!ref_tree$tip.label %in% tree$tip.label],ref_tree$tip.label[duplicated(ref_tree$tip.label)]))
 
+#2762 congruent tips
 table(tree_pruned$tip.label %in% ref_tree_pruned$tip.label)
 
 res <- congruify.phylo(reference=ref_tree_pruned, target=tree_pruned, scale="PATHd8")
@@ -747,12 +779,12 @@ seqs <- refseq(ps2)
 tree <- read.tree("output/phytree.nwk")
 
 #make new phyloseq object
-ps2 <- phyloseq(tax_table(ps.merged),
+ps3 <- phyloseq(tax_table(ps.merged),
                sample_data(ps.merged),
                otu_table(otu_table(ps.merged), taxa_are_rows = FALSE),
                refseq(seqs),
                phy_tree(tree))
 
 
-saveRDS(ps2, "output/rds/ps2.rds")
+saveRDS(ps3, "output/rds/ps3.rds")
 ```

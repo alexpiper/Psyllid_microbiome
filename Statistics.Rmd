@@ -28,6 +28,7 @@ knitr::opts_chunk$set(echo = TRUE, eval=FALSE, message=FALSE, error=FALSE,fig.sh
 opts_chunk$set(dev = 'png')
 ```
 
+# Load packages
 
 ```{r load packages}
 # Load packages
@@ -78,19 +79,24 @@ if(any(!.inst)) {
 sapply(c(.cran_packages,.bioc_packages), require, character.only = TRUE)
 
 # Github packages
-devtools::install_github("alexpiper/taxreturn")
+#devtools::install_github("alexpiper/taxreturn")
 library(taxreturn)
-devtools::install_github("alexpiper/seqateurs")
+#devtools::install_github("alexpiper/seqateurs")
 library(seqateurs)
-devtools::install_github("mikemc/speedyseq")
+#devtools::install_github("mikemc/speedyseq")
 library(speedyseq)
-devtools::install_github('ggloor/CoDaSeq/CoDaSeq')
+#devtools::install_github('ggloor/CoDaSeq/CoDaSeq')
 library(CoDaSeq)
-devtools::install_github("easystats/report")
+#devtools::install_github("easystats/report")
 library(report)
 
 devtools::install_github("pmartinezarbizu/pairwiseAdonis/pairwiseAdonis")
 library(pairwiseAdonis)
+
+devtools::install_github("hmorlon/PANDA",ref="Benoit", dependencies = TRUE)
+devtools::install_github("BPerezLamarque/HOME", dependencies = TRUE)
+library(HOME)
+
 
 #Source internal functions
 source('R/BDTT.R')
@@ -103,23 +109,38 @@ options(stringsAsFactors = FALSE)
 # Read in phyloseq object
 
 ```{r read in phyloseq}
-ps2 <- readRDS("output/rds/ps2.rds")
+ps3 <- readRDS("output/rds/ps3.rds")
 
 # export filtered
 dir.create("output/otu_tables/filtered")
-seqateurs::summarise_taxa(ps2, "species", "SampleID") %>%
+
+psmelt(ps3) %>%
+  filter(Abundance > 0) %>%
+  write_csv("output/otu_tables/filtered/raw_data_table.csv")
+
+psmelt(ps3) %>%
+  filter(Abundance > 0) %>%
+  dplyr::mutate(sample_name = paste0(psyllid_spp, "-",SampleID)) %>%
+  dplyr::select(OTU, sample_name, species, Abundance) %>%
+  dplyr::rename(microbe = species) %>%
+  pivot_wider(names_from = sample_name,
+              values_from = Abundance,
+              values_fill = list(Abundance=0)) %>%
+  write_csv("output/otu_tables/filtered/otu_table.csv")
+
+seqateurs::summarise_taxa(ps3, "species", "SampleID") %>%
   spread(key="SampleID", value="totalRA") %>%
   write.csv(file = "output/otu_tables/filtered/filtered_spp_sum.csv")
 
-seqateurs::summarise_taxa(ps2, "genus", "SampleID") %>%
+seqateurs::summarise_taxa(ps3, "genus", "SampleID") %>%
   spread(key="SampleID", value="totalRA") %>%
   write.csv(file = "output/otu_tables/filtered/filtered_gen_sum.csv")
 
 #Rename taxa - only keep first 30 characters
-taxa_names(ps2) <- substr(paste0("SV", seq(ntaxa(ps2)),"-",tax_table(ps2)[,7]), 1,30)
+taxa_names(ps3) <- substr(paste0("SV", seq(ntaxa(ps3)),"-",tax_table(ps3)[,7]), 1,30)
 
 #Check carsonella presence
-cars <- speedyseq::psmelt(ps2) %>%
+cars <- speedyseq::psmelt(ps3) %>%
   filter(Abundance > 0) %>%
   group_by(psyllid_spp) %>%
   summarise(n = count(genus=="Candidatus Carsonella", na.rm = TRUE))
@@ -130,24 +151,26 @@ cars <- speedyseq::psmelt(ps2) %>%
 
 ```{r mergedspp}
 # Merge species for beta diversity
-ps.sppmerged <- ps2 %>%
+ps.sppmerged <- ps3 %>%
     merge_samples(group = "psyllid_spp", fun=mean)
 
 #This loses the sample metadata - Need to add it agian
-sample_data(ps.sppmerged) <- sample_data(ps2) %>%
+sample_data(ps.sppmerged) <- sample_data(ps3) %>%
   as("matrix") %>%
   as.data.frame() %>%
   filter(!duplicated(psyllid_spp)) %>%
   magrittr::set_rownames(.$psyllid_spp)
 
-seqs <- refseq(ps2)
-tree <- phy_tree(ps2)
+seqs <- refseq(ps3)
+tree <- phy_tree(ps3)
 #make new phyloseq object
-ps3 <- phyloseq(tax_table(ps.sppmerged),
+ps4 <- phyloseq(tax_table(ps.sppmerged),
                sample_data(ps.sppmerged),
                otu_table(otu_table(ps.sppmerged), taxa_are_rows = FALSE),
                refseq(seqs),
                phy_tree(tree))
+
+saveRDS(ps4, "output/rds/ps4.rds")
 
 ```
 
@@ -184,17 +207,20 @@ psyllid_tree$tip.label <- psyllid_tree$tip.label %>%
   str_replace_all(pattern="Powellia adventicia", replacement="Trioza adventicia") %>%
   str_replace_all(pattern="Powellia curta", replacement="Trioza curta") %>%
   str_replace_all(pattern=" ", replacement="_") %>%
+  str_remove_all(pattern="'") %>%
   trimws(which="right")
 
 
 # Subset to only those in sample data
-setdiff(psyllid_tree$tip.label,sample_data(ps2)$psyllid_spp)
-setdiff(sample_data(ps2)$psyllid_spp, psyllid_tree$tip.label)
+setdiff(psyllid_tree$tip.label,sample_data(ps3)$psyllid_spp)
+setdiff(sample_data(ps3)$psyllid_spp, psyllid_tree$tip.label)
 
-psyllid_tree$tip.label[!psyllid_tree$tip.label %in% sample_data(ps2)$psyllid_spp]
-psyllid_tree$tip.label[!sample_data(ps2)$psyllid_spp %in% psyllid_tree$tip.label ]
-pruned.tree <- drop.tip(psyllid_tree, psyllid_tree$tip.label[!psyllid_tree$tip.label %in% sample_data(ps2)$psyllid_spp] )
+psyllid_tree$tip.label[!psyllid_tree$tip.label %in% sample_data(ps3)$psyllid_spp]
+psyllid_tree$tip.label[!sample_data(ps3)$psyllid_spp %in% psyllid_tree$tip.label ]
+pruned.tree <- drop.tip(psyllid_tree, psyllid_tree$tip.label[!psyllid_tree$tip.label %in% sample_data(ps3)$psyllid_spp] )
 
+# write out pruned tree
+write.tree(pruned.tree, "output/rds/pruned_tree.nwk")
 ```
 
 
@@ -202,21 +228,22 @@ pruned.tree <- drop.tip(psyllid_tree, psyllid_tree$tip.label[!psyllid_tree$tip.l
 
 ```{r sum taxa}
 # N unique species and samples
-speedyseq::psmelt(ps2) %>%
+speedyseq::psmelt(ps3) %>%
   summarise(ntaxa= n_distinct(psyllid_spp), n_samples = n_distinct(Sample_Name), n_hostplants = n_distinct(hostplant_spp))
 
 # Spread of reads
-speedyseq::psmelt(ps2) %>%
+speedyseq::psmelt(ps3) %>%
   group_by(Sample_Name) %>%
   summarise(Abundance = sum(Abundance)) %>%
   ungroup() %>%
   summarise(mean = mean(Abundance), 
             se = sd(Abundance)/sqrt(length(Abundance)),
             max = max(Abundance),
-            min = min(Abundance))
+            min = min(Abundance),
+            total = sum(Abundance))
 
 # Spread of ASVs
-speedyseq::psmelt(ps2) %>%
+speedyseq::psmelt(ps3) %>%
   group_by(Sample_Name) %>%
   dplyr::filter(Abundance > 0) %>%
   summarise(counts = n_distinct(OTU)) %>%
@@ -226,31 +253,32 @@ speedyseq::psmelt(ps2) %>%
             max = max(counts),
             min = min(counts))
 
+
 #Fraction of reads assigned to each taxonomic rank
-speedyseq::psmelt(ps2) %>%
-  gather("Rank","Name",rank_names(ps2)) %>%
+speedyseq::psmelt(ps3) %>%
+  gather("Rank","Name",rank_names(ps3)) %>%
   group_by(Rank) %>% 
   mutate(Name = replace(Name, str_detect(Name, "__"),NA)) %>% # This line turns the "__" we added to lower ranks back to NA's
   dplyr::summarise(Reads_classified = sum(Abundance * !is.na(Name))) %>%
-  mutate(Frac_reads = Reads_classified / sum(sample_sums(ps2))) %>%
-  mutate(Rank = factor(Rank, rank_names(ps2))) %>%
+  mutate(Frac_reads = Reads_classified / sum(sample_sums(ps3))) %>%
+  mutate(Rank = factor(Rank, rank_names(ps3))) %>%
   arrange(Rank)
 
 #Fraction of ASV's assigned to each taxonomic rank
-tax_table(ps2) %>%
+tax_table(ps3) %>%
   as("matrix") %>%
   as_tibble(rownames="OTU") %>%
-  gather("Rank","Name",rank_names(ps2)) %>%
+  gather("Rank","Name",rank_names(ps3)) %>%
   group_by(Rank) %>%
   mutate(Name = replace(Name, str_detect(Name, "__"), NA)) %>% # This line turns the "__" we added to lower ranks back to NA's
   dplyr::summarise(OTUs_classified = sum(!is.na(Name))) %>%
-  mutate(Frac_OTUs = OTUs_classified / ntaxa(ps2)) %>%
-  mutate(Rank = factor(Rank, rank_names(ps2))) %>%
+  mutate(Frac_OTUs = OTUs_classified / ntaxa(ps3)) %>%
+  mutate(Rank = factor(Rank, rank_names(ps3))) %>%
   arrange(Rank)
 
 # Unique taxa at each rank
-speedyseq::psmelt(ps2) %>%
-  dplyr::select(rank_names(ps2)) %>%
+speedyseq::psmelt(ps3) %>%
+  dplyr::select(rank_names(ps3)) %>%
   pivot_longer(everything(),
                names_to = "Rank",
                values_to = "value") %>%
@@ -261,17 +289,16 @@ speedyseq::psmelt(ps2) %>%
   drop_na() %>%
   group_by(Rank) %>%
   summarise_all(funs(n_distinct)) %>%
-  mutate(Rank = factor(Rank, rank_names(ps2))) %>%
+  mutate(Rank = factor(Rank, rank_names(ps3))) %>%
   arrange(Rank)
 
 # Each different phylum ranked by its overall relative abundance
-sample_data(ps2) %>%
+sample_data(ps3) %>%
   as("matrix") %>%
   as.data.frame() %>%
   pull(psyllid_spp) %>%
   table() %>%
   sort()
-# Transform to per sample relative abundance, then transform to whole dataset relative abundance
 ```
 
 ## Prevalence / Abundance summary
@@ -280,13 +307,13 @@ View prevalence of different phyla across the dataset
 
 ```{r prevalence-assessment}
 # Calculate taxon prevalence across the data set at OTU level
-prevdf <- apply(X = otu_table(ps2), MARGIN = ifelse(taxa_are_rows(ps2), yes = 1, no = 2), FUN = function(x){sum(x > 0)})
+prevdf <- apply(X = otu_table(ps3), MARGIN = ifelse(taxa_are_rows(ps3), yes = 1, no = 2), FUN = function(x){sum(x > 0)})
 prevdf <- data.frame(Prevalence = prevdf, 
-                     TotalAbundance = taxa_sums(ps2),
-                     tax_table(ps2))
+                     TotalAbundance = taxa_sums(ps3),
+                     tax_table(ps3))
 #Prevalence plot
-gg.prev <- subset(prevdf, phylum %in% get_taxa_unique(ps2, "phylum")) %>%
-  ggplot(aes(TotalAbundance, Prevalence / nsamples(ps2),color=order)) +
+gg.prev <- subset(prevdf, phylum %in% get_taxa_unique(ps3, "phylum")) %>%
+  ggplot(aes(TotalAbundance, Prevalence / nsamples(ps3),color=order)) +
   geom_point(size = 3, alpha = 0.7) +
   scale_x_log10() +
   xlab("Total Abundance") + ylab("Prevalence [Frac. Samples]") +
@@ -300,7 +327,7 @@ try(dev.off(), silent=TRUE)
   
   
 # Prevalecne at phylum
-ps.phylum <- speedyseq::tax_glom(ps2, taxrank="phylum")
+ps.phylum <- speedyseq::tax_glom(ps3, taxrank="phylum")
 prevdf_phylum <- apply(X = otu_table(ps.phylum ), MARGIN = ifelse(taxa_are_rows(ps.phylum ), yes = 1, no = 2), FUN = function(x){sum(x > 0)})
 prevdf_phylum <- data.frame(Prevalence = prevdf_phylum, 
                      TotalAbundance = taxa_sums(ps.phylum),
@@ -311,7 +338,7 @@ prevdf_phylum <- data.frame(Prevalence = prevdf_phylum,
   dplyr::select(-rank_names(ps.phylum))
 
 # Prevalence within Proteobacteria
-ps.prot <- subset_taxa(ps2, phylum=="Proteobacteria") %>%
+ps.prot <- subset_taxa(ps3, phylum=="Proteobacteria") %>%
           speedyseq::tax_glom(taxrank="order")
 prevdf_prot <- apply(X = otu_table(ps.prot ), MARGIN = ifelse(taxa_are_rows(ps.prot ), yes = 1, no = 2), FUN = function(x){sum(x > 0)})
 prevdf_prot <- data.frame(Prevalence = prevdf_prot, 
@@ -323,18 +350,6 @@ prevdf_prot <- data.frame(Prevalence = prevdf_prot,
   dplyr::select(-rank_names(ps.prot))
   
 # Genus Prevalence
-ps.gen <- speedyseq::tax_glom(ps2, taxrank="genus") 
-prevdf_gen <- apply(X = otu_table(ps.gen ), MARGIN = ifelse(taxa_are_rows(ps.gen ), yes = 1, no = 2), FUN = function(x){sum(x > 0)})
-prevdf_gen <- data.frame(Prevalence = prevdf_gen, 
-                     TotalAbundance = taxa_sums(ps.gen),
-                     tax_table(ps.gen)) %>%
-  dplyr::mutate(RA = TotalAbundance / sum(TotalAbundance)) %>%
-  remove_rownames() %>%
-  mutate(genus = make.unique(genus)) %>%
-  magrittr::set_rownames(.$genus) %>%
-  dplyr::select(-rank_names(ps.gen))
-
-# Genus Prevalence across species rather than specimens
 ps.gen <- speedyseq::tax_glom(ps3, taxrank="genus") 
 prevdf_gen <- apply(X = otu_table(ps.gen ), MARGIN = ifelse(taxa_are_rows(ps.gen ), yes = 1, no = 2), FUN = function(x){sum(x > 0)})
 prevdf_gen <- data.frame(Prevalence = prevdf_gen, 
@@ -346,8 +361,20 @@ prevdf_gen <- data.frame(Prevalence = prevdf_gen,
   magrittr::set_rownames(.$genus) %>%
   dplyr::select(-rank_names(ps.gen))
 
+# Genus Prevalence across species rather than specimens
+ps.gen <- speedyseq::tax_glom(ps4, taxrank="genus") 
+prevdf_gen_spp <- apply(X = otu_table(ps.gen ), MARGIN = ifelse(taxa_are_rows(ps.gen ), yes = 1, no = 2), FUN = function(x){sum(x > 0)})
+prevdf_gen_spp <- data.frame(Prevalence = prevdf_gen, 
+                     TotalAbundance = taxa_sums(ps.gen),
+                     tax_table(ps.gen)) %>%
+  dplyr::mutate(RA = TotalAbundance / sum(TotalAbundance)) %>%
+  remove_rownames() %>%
+  mutate(genus = make.unique(genus)) %>%
+  magrittr::set_rownames(.$genus) %>%
+  dplyr::select(-rank_names(ps.gen))
+
 # Prevalence of symbionts across psyllid species
-speedyseq::psmelt(ps2) %>%
+speedyseq::psmelt(ps3) %>%
   mutate(total_spp  = n_distinct(psyllid_spp), total_specimen = n_distinct(Sample_Name)) %>%
   filter(Abundance > 0) %>%
   filter(genus %in% c("Candidatus Carsonella", "Arsenophonus", "Sodalis")) %>%
@@ -358,7 +385,7 @@ speedyseq::psmelt(ps2) %>%
          prop_specimen = n_specimen / total_specimen)
 
 # Number of symbiont OTUs per psyllid species
-speedyseq::psmelt(ps2) %>%
+speedyseq::psmelt(ps3) %>%
   filter(Abundance > 0) %>%
   filter(genus %in% c("Candidatus Carsonella", "Arsenophonus", "Sodalis")) %>%
   group_by(psyllid_spp, genus) %>%
@@ -373,7 +400,7 @@ speedyseq::psmelt(ps2) %>%
 se <- function(x) sqrt(var(x)/length(x))
 
 # Mean abundance of  genera
-genera_abund <- speedyseq::psmelt(ps2) %>%
+genera_abund <- speedyseq::psmelt(ps3) %>%
   filter(Abundance > 0) %>%
   group_by(SampleID) %>%
     mutate_at(vars(Abundance), ~ . / sum(.) ) %>%
@@ -388,7 +415,7 @@ genera_abund <- speedyseq::psmelt(ps2) %>%
 ```{r alpha diversity}
 dir.create("output/alpha")
 # Get richness measures
-richness <- phyloseq::estimate_richness(ps2, measures=c("Shannon")) %>%
+richness <- phyloseq::estimate_richness(ps3, measures=c("Shannon")) %>%
   rownames_to_column("Sample_Name") %>%
   mutate(Sample_Name = Sample_Name %>% 
            str_remove("^X") %>%
@@ -396,16 +423,16 @@ richness <- phyloseq::estimate_richness(ps2, measures=c("Shannon")) %>%
 
 #Set number of randomisations for calculating significance
 # Calculate Faith's PD-index & Species richness - with Standard errors
-#sespd <- picante::ses.pd(as(phyloseq::otu_table(ps2), "matrix"),  phyloseq::phy_tree(ps2), null.model = "taxa.labels", include.root = F, runs = 99)
+#sespd <- picante::ses.pd(as(phyloseq::otu_table(ps3), "matrix"),  phyloseq::phy_tree(ps3), null.model = "taxa.labels", include.root = F, runs = 99)
 
-pd <- picante::pd(as(phyloseq::otu_table(ps2), "matrix"),  phyloseq::phy_tree(ps2), include.root = FALSE)
+pd <- picante::pd(as(phyloseq::otu_table(ps3), "matrix"),  phyloseq::phy_tree(ps3), include.root = FALSE)
 
 # Join together
 div_table <- pd %>%
   rownames_to_column("Sample_Name") %>%
   dplyr::select(Sample_Name, alpha = SR, pd = PD) %>%
   left_join(richness, by="Sample_Name") %>%
-  left_join(sample_data(ps2) %>% 
+  left_join(sample_data(ps3) %>% 
               as("matrix") %>%
               as.data.frame() %>%
               filter(!duplicated(Sample_Name)) %>%
@@ -415,7 +442,6 @@ div_table <- pd %>%
 # Summarise means
 div_table %>%
   summarise_if(is.numeric, mean)
-
 
 
 # Difference between species for alpha diversity ANOVA
@@ -511,11 +537,11 @@ See if the pattern holds even with rarefaction to lowest sample
 
 ```{r alpha rarefied}
 # Rarefied richness
-ps2_rare <- rarefy_even_depth(ps2, sample.size = min(sample_sums(ps2)),
+ps3_rare <- rarefy_even_depth(ps3, sample.size = min(sample_sums(ps3)),
   rngseed = 666, replace = TRUE, trimOTUs = TRUE, verbose = TRUE)
 
 # Get richness measures
-richness_rare <- phyloseq::estimate_richness(ps2_rare, measures=c("Shannon")) %>%
+richness_rare <- phyloseq::estimate_richness(ps3_rare, measures=c("Shannon")) %>%
   rownames_to_column("Sample_Name") %>%
   mutate(Sample_Name = Sample_Name %>% 
            str_remove("^X") %>%
@@ -523,16 +549,16 @@ richness_rare <- phyloseq::estimate_richness(ps2_rare, measures=c("Shannon")) %>
 
 #Set number of randomisations for calculating significance
 # Calculate Faith's PD-index & Species richness - with Standard errors
-#sespd_rare <- picante::ses.pd(as(phyloseq::otu_table(ps2_rare), "matrix"),  phyloseq::phy_tree(ps2_rare), null.model = #"taxa.labels", include.root = F, runs = 99)
+#sespd_rare <- picante::ses.pd(as(phyloseq::otu_table(ps3_rare), "matrix"),  phyloseq::phy_tree(ps3_rare), null.model = #"taxa.labels", include.root = F, runs = 99)
 
-pd_rare <- picante::pd(as(phyloseq::otu_table(ps2_rare), "matrix"),  phyloseq::phy_tree(ps2_rare), include.root = FALSE)
+pd_rare <- picante::pd(as(phyloseq::otu_table(ps3_rare), "matrix"),  phyloseq::phy_tree(ps3_rare), include.root = FALSE)
 
 # Join together
 div_table_rare <- pd_rare %>%
   rownames_to_column("Sample_Name") %>%
   dplyr::select(Sample_Name, alpha = SR, pd = PD) %>%
   left_join(richness, by="Sample_Name") %>%
-  left_join(sample_data(ps2_rare) %>% 
+  left_join(sample_data(ps3_rare) %>% 
               as("matrix") %>%
               as.data.frame() %>%
               filter(!duplicated(Sample_Name)) %>%
@@ -619,14 +645,14 @@ write_csv(lipa_out_rare, "output/alpha/lipa_rarefied.csv")
 
 ```{r No gamma richness}
 # Rarefied richness
-ps2_subset <- ps2 %>%
- subset_taxa(class != "Gammaproteobacteria") %>% #is this working?
+ps3_subset <- ps3 %>%
+ subset_taxa(class != "Gammaproteobacteria") %>% 
  filter_taxa(function(x) mean(x) > 0, TRUE)#Drop missing taxa from table
-ps2_subset <- prune_samples(sample_sums(ps2_subset) >0 , ps2_subset)
-message(nsamples(ps2) - nsamples(ps2_subset), " Samples and ", ntaxa(ps2) - ntaxa(ps2_subset), " taxa Dropped")
+ps3_subset <- prune_samples(sample_sums(ps3_subset) >0 , ps3_subset)
+message(nsamples(ps3) - nsamples(ps3_subset), " Samples and ", ntaxa(ps3) - ntaxa(ps3_subset), " taxa Dropped")
 
 # Get richness measures
-richness_subset <- phyloseq::estimate_richness(ps2_subset, measures=c("Shannon")) %>%
+richness_subset <- phyloseq::estimate_richness(ps3_subset, measures=c("Shannon")) %>%
   rownames_to_column("Sample_Name") %>%
   mutate(Sample_Name = Sample_Name %>% 
            str_remove("^X") %>%
@@ -634,16 +660,16 @@ richness_subset <- phyloseq::estimate_richness(ps2_subset, measures=c("Shannon")
 
 #Set number of randomisations for calculating significance
 # Calculate Faith's PD-index & Species richness - with Standard errors
-#sespd_subset <- picante::ses.pd(as(phyloseq::otu_table(ps2_subset), "matrix"),  phyloseq::phy_tree(ps2_subset), null.model = "taxa.labels", include.root = F, runs = 99)
+#sespd_subset <- picante::ses.pd(as(phyloseq::otu_table(ps3_subset), "matrix"),  phyloseq::phy_tree(ps3_subset), null.model = "taxa.labels", include.root = F, runs = 99)
 
-pd_subset <- picante::pd(as(phyloseq::otu_table(ps2_subset), "matrix"),  phyloseq::phy_tree(ps2_subset), include.root = FALSE)
+pd_subset <- picante::pd(as(phyloseq::otu_table(ps3_subset), "matrix"),  phyloseq::phy_tree(ps3_subset), include.root = FALSE)
 
 # Join together
 div_table_subset <- pd_subset %>%
   rownames_to_column("Sample_Name") %>%
   dplyr::select(Sample_Name, alpha = SR, pd = PD) %>%
   left_join(richness, by="Sample_Name") %>%
-  left_join(sample_data(ps2_subset) %>% 
+  left_join(sample_data(ps3_subset) %>% 
               as("matrix") %>%
               as.data.frame() %>%
               filter(!duplicated(Sample_Name)) %>%
@@ -685,18 +711,18 @@ report::report(aov(alpha ~genus_geo, data=div_table_subset2))
 
 ## Microbe distances
 ```{r distlist}
-ps2_dist <- ps2
-#ps2_dist <- ps2_filt
+ps3_dist <- ps3
+#ps3_dist <- ps3_filt
 
 # Get OTU tables
-otutab <- otu_table(ps2_dist)
+otutab <- otu_table(ps3_dist)
 #Impute zeroes for compositional distances
 otutab_n0 <- as.matrix(zCompositions::cmultRepl(otutab, method="BL", output="p-counts"))
 
 #Root & label phylogenetic tree
-phy_tree(ps2_dist) <- multi2di(phy_tree(ps2_dist))
-phy_tree(ps2_dist) <- makeNodeLabel(phy_tree(ps2_dist), method="number", prefix='n')
-name.balance(phy_tree(ps2_dist), tax_table(ps2_dist), 'n1')
+phy_tree(ps3_dist) <- multi2di(phy_tree(ps3_dist))
+phy_tree(ps3_dist) <- makeNodeLabel(phy_tree(ps3_dist), method="number", prefix='n')
+name.balance(phy_tree(ps3_dist), tax_table(ps3_dist), 'n1')
 
 #Calculate different distance metrics
 metrics <- c("Bray", "Jaccard", "Aitchison","Philr", "Unifrac", "WUnifrac")  
@@ -706,30 +732,30 @@ names(distlist) <- metrics
 distlist$Jaccard <- as.matrix(vegdist(otutab, method="jac",binary = T))
 distlist$Bray <- as.matrix(vegdist(otutab, method="bray"))
 distlist$Aitchison <- as.matrix(vegdist(CoDaSeq::codaSeq.clr(otutab_n0), method="euclidean"))
-distlist$Philr <- as.matrix(vegdist(philr::philr(otutab_n0, phy_tree(ps2_dist),
+distlist$Philr <- as.matrix(vegdist(philr::philr(otutab_n0, phy_tree(ps3_dist),
                                                 part.weights='enorm.x.gm.counts',
                                                 ilr.weights='blw.sqrt'), method="euclidean", na.rm=TRUE))
-distlist$Unifrac <- as.matrix(phyloseq::UniFrac(ps2_dist, weighted=FALSE, parallel = TRUE))
-distlist$WUnifrac <- as.matrix(phyloseq::UniFrac(ps2_dist, weighted=TRUE, parallel = TRUE))
+distlist$Unifrac <- as.matrix(phyloseq::UniFrac(ps3_dist, weighted=FALSE, parallel = TRUE))
+distlist$WUnifrac <- as.matrix(phyloseq::UniFrac(ps3_dist, weighted=TRUE, parallel = TRUE))
 
 # Create low abundance filtered dataset
 filterfun1 <- function(x){
   x[(x / sum(x)) < (1e-4)] <- 0
   return(x)
 }
-ps2_filt  <- transform_sample_counts(ps2, fun = filterfun1) %>%
+ps3_filt  <- transform_sample_counts(ps3, fun = filterfun1) %>%
   filter_taxa(function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
 
-print(paste0((ntaxa(ps2)-ntaxa(ps2_filt)), " taxa under threshold removed"))
+print(paste0((ntaxa(ps3)-ntaxa(ps3_filt)), " taxa under threshold removed"))
 
 # Get OTU tables
-otutab <- otu_table(ps2_filt)
+otutab <- otu_table(ps3_filt)
 #Impute zeroes for compositional distances
 otutab_n0 <- as.matrix(zCompositions::cmultRepl(otutab, method="BL", output="p-counts"))
 #Root & label phylogenetic tree
-phy_tree(ps2_filt) <- multi2di(phy_tree(ps2_filt))
-phy_tree(ps2_filt) <- makeNodeLabel(phy_tree(ps2_filt), method="number", prefix='n')
-name.balance(phy_tree(ps2_filt), tax_table(ps2_filt), 'n1')
+phy_tree(ps3_filt) <- multi2di(phy_tree(ps3_filt))
+phy_tree(ps3_filt) <- makeNodeLabel(phy_tree(ps3_filt), method="number", prefix='n')
+name.balance(phy_tree(ps3_filt), tax_table(ps3_filt), 'n1')
 
 #Calculate different distance metrics
 metrics <- c("Bray", "Jaccard", "Aitchison","Philr", "Unifrac", "WUnifrac")  
@@ -739,27 +765,27 @@ names(distlist_filt) <- metrics
 distlist_filt$Jaccard <- as.matrix(vegdist(otutab, method="jac",binary = T))
 distlist_filt$Bray <- as.matrix(vegdist(otutab, method="bray"))
 distlist_filt$Aitchison <- as.matrix(vegdist(CoDaSeq::codaSeq.clr(otutab_n0), method="euclidean"))
-distlist_filt$Philr <- as.matrix(vegdist(philr::philr(otutab_n0, phy_tree(ps2_filt),
+distlist_filt$Philr <- as.matrix(vegdist(philr::philr(otutab_n0, phy_tree(ps3_filt),
                                                 part.weights='enorm.x.gm.counts',
                                                 ilr.weights='blw.sqrt'), method="euclidean", na.rm=TRUE))
-distlist_filt$Unifrac <- as.matrix(phyloseq::UniFrac(ps2_filt, weighted=FALSE, parallel = TRUE))
-distlist_filt$WUnifrac <- as.matrix(phyloseq::UniFrac(ps2_filt, weighted=TRUE, parallel = TRUE))
+distlist_filt$Unifrac <- as.matrix(phyloseq::UniFrac(ps3_filt, weighted=FALSE, parallel = TRUE))
+distlist_filt$WUnifrac <- as.matrix(phyloseq::UniFrac(ps3_filt, weighted=TRUE, parallel = TRUE))
 
 # Create dataset without gammaproteoba
-ps2_subset <- ps2 %>%
+ps3_subset <- ps3 %>%
  subset_taxa(class != "Gammaproteobacteria") %>% #is this working?
  filter_taxa(function(x) mean(x) > 0, TRUE)#Drop missing taxa from table
-ps2_subset <- prune_samples(sample_sums(ps2_subset) >0 , ps2_subset)
-message(nsamples(ps2) - nsamples(ps2_subset), " Samples and ", ntaxa(ps2) - ntaxa(ps2_subset), " taxa Dropped")
+ps3_subset <- prune_samples(sample_sums(ps3_subset) >0 , ps3_subset)
+message(nsamples(ps3) - nsamples(ps3_subset), " Samples and ", ntaxa(ps3) - ntaxa(ps3_subset), " taxa Dropped")
 
 # Get OTU tables
-otutab_subset <- otu_table(ps2_subset)
+otutab_subset <- otu_table(ps3_subset)
 #Impute zeroes for compositional distances
 otutab_subset_n0 <- as.matrix(zCompositions::cmultRepl(otutab_subset, method="BL", output="p-counts"))
 #Root phylogenetic tree
-phy_tree(ps2_subset) <- multi2di(phy_tree(ps2_subset))
-phy_tree(ps2_subset) <- makeNodeLabel(phy_tree(ps2_subset), method="number", prefix='n')
-name.balance(phy_tree(ps2_subset), tax_table(ps2_subset), 'n1')
+phy_tree(ps3_subset) <- multi2di(phy_tree(ps3_subset))
+phy_tree(ps3_subset) <- makeNodeLabel(phy_tree(ps3_subset), method="number", prefix='n')
+name.balance(phy_tree(ps3_subset), tax_table(ps3_subset), 'n1')
 
 #Calculate different distance metrics
 metrics <- c("Bray", "Jaccard", "Aitchison","Philr", "Unifrac", "WUnifrac")  
@@ -769,11 +795,11 @@ names(distlist_subset) <- metrics
 distlist_subset$Jaccard <- as.matrix(vegdist(otutab_subset, method="jac",binary = T))
 distlist_subset$Bray <- as.matrix(vegdist(otutab_subset, method="bray"))
 distlist_subset$Aitchison <- as.matrix(vegdist(CoDaSeq::codaSeq.clr(otutab_subset_n0), method="euclidean"))
-distlist_subset$Philr <- as.matrix(vegdist(philr::philr(otutab_subset_n0, phy_tree(ps2_subset),
+distlist_subset$Philr <- as.matrix(vegdist(philr::philr(otutab_subset_n0, phy_tree(ps3_subset),
                                                 part.weights='enorm.x.gm.counts',
                                                 ilr.weights='blw.sqrt'), method="euclidean", na.rm=TRUE))
-distlist_subset$Unifrac <- as.matrix(phyloseq::UniFrac(ps2_subset, weighted=FALSE, parallel = TRUE))
-distlist_subset$WUnifrac <- as.matrix(phyloseq::UniFrac(ps2_subset, weighted=TRUE, parallel = TRUE))
+distlist_subset$Unifrac <- as.matrix(phyloseq::UniFrac(ps3_subset, weighted=FALSE, parallel = TRUE))
+distlist_subset$WUnifrac <- as.matrix(phyloseq::UniFrac(ps3_subset, weighted=TRUE, parallel = TRUE))
 
 # Mantel test to check concordance of beta diversity pre and post filtering
 
@@ -799,7 +825,7 @@ purrr::map2(distlist, distlist_subset,~{
 # ADONIS is constructed heirarchially to marginalise techical variance then moving down the taxonomic ranks 
 
 # Adonis test
-metadata <- sample_data(ps2) %>%
+metadata <- sample_data(ps3) %>%
   as("data.frame")
 adonis_results <- distlist %>%
   purrr::map(function(x) {
@@ -840,28 +866,79 @@ write_csv(betadisper_results, "output/beta/betadisper_fulldata.csv")
 
 Look at the similarities in the microbiome of the psyllid specimens collected from the same host plant
 ```{r Avg Dissimiarity}
+# Outgroups should be other samples from that species
+
 hostplant_metadata <- metadata %>% mutate(ingroup = case_when(
+  Sample_Name %in% c("94","107", "113", "93","106", "112") ~ "fraxini-fraxinicola",
+  Sample_Name %in% c("200big", "201big", "200small", "201small") ~ "apicalis-frodobagginsi",
+  TRUE ~ "other"
+  ))
+
+asv_overlap <- ps3 %>%
+  #transform_sample_counts(fun = filterfun1)%>%
+ # filter_taxa(function(x) mean(x) > 0, TRUE) %>%
+  psmelt() %>%
+  filter(Abundance > 0) %>% mutate(ingroup = case_when(
   Sample_Name %in% c("94","107", "113","93","106", "112") ~ "fraxini-fraxinicola",
   Sample_Name %in% c("200big", "201big", "200small", "201small") ~ "apicalis-frodobagginsi",
   TRUE ~ "other"
   ))
 
-broom::tidy(adonis2(distlist$Aitchison~ingroup + psyllid_spp, method="euclidean",
-                   data=hostplant_metadata))
+# Test for differences in fraxini-fraxinicola
+test1 <- hostplant_metadata %>%
+  filter(ingroup == "fraxini-fraxinicola")
 
-pairwise.adonis2(distlist$Aitchison~ingroup + psyllid_spp, method="euclidean",
-                   data=hostplant_metadata)
+y <- as.dist(distlist$Aitchison[test1$Sample_Name, test1$Sample_Name])
+broom::tidy(adonis2(y~psyllid_spp, method="euclidean",
+                   data=test1))
+
+asv_overlap %>%
+  filter(ingroup ==  "fraxini-fraxinicola") %>%
+  dplyr::select(OTU, psyllid_spp, Sample_Name, Abundance) %>%
+  group_by(OTU, psyllid_spp) %>%
+  summarise(Abundance = sum(Abundance)) %>%
+  mutate(Abundance = as.numeric(Abundance > 0)) %>%
+  pivot_wider(names_from=psyllid_spp,
+              values_from=Abundance,
+              values_fill = list(Abundance = 0)) %>%
+  mutate(matching = sum(Psyllopsis_fraxinicola, Psyllopsis_fraxini) > 1) %>%
+  pull(matching) %>%
+  table()
+
+# Test for differences in fraxini-fraxinicola
+test2 <- hostplant_metadata %>%
+  filter(ingroup == "apicalis-frodobagginsi")
+
+y <- as.dist(distlist$Aitchison[test2$Sample_Name, test2$Sample_Name])
+broom::tidy(adonis2(y~psyllid_spp, method="euclidean",
+                   data=test2))
+
+asv_overlap %>%
+  filter(ingroup ==  "apicalis-frodobagginsi") %>%
+  dplyr::select(OTU, psyllid_spp, Sample_Name, Abundance) %>%
+  group_by(OTU, psyllid_spp) %>%
+  summarise(Abundance = sum(Abundance)) %>%
+  mutate(Abundance = as.numeric(Abundance > 0)) %>%
+  pivot_wider(names_from=psyllid_spp,
+              values_from=Abundance,
+              values_fill = list(Abundance = 0)) %>%
+  mutate(matching = sum(Psylla_apicalis, Psylla_frodobagginsi) > 1) %>%
+  pull(matching) %>%
+  table()
+
+  
+
 ```
 
 ## Barplot
 
 ```{r barplot}
 # Plot tree
-p <- ggtree(pruned.tree) + geom_tiplab(align=TRUE) + geom_nodelab(geom='label') +
+p <- ggtree(pruned.tree) + geom_tiplab(align=TRUE, fontface=3) + geom_nodelab(geom='label') +
     scale_x_continuous(expand=c(0, 0.1)) 
 
 # Plot bar
-ps3_bar <- ps3 %>%
+ps4_bar <- ps4 %>%
   speedyseq::tax_glom(taxrank = "order") %>%           # agglomerate at Order level
   transform_sample_counts(function(x) {x/sum(x)} ) %>% # Transform to rel. abundance
   speedyseq::psmelt() %>%
@@ -879,10 +956,10 @@ ps3_bar <- ps3 %>%
               dplyr::select(y, label) %>%
               dplyr::rename(psyllid_spp=label)) 
 
-gg.bar <- ggplot(ps3_bar, aes(x=y, y=Abundance, fill=plotlabel)) +
+gg.bar <- ggplot(ps4_bar, aes(x=y, y=Abundance, fill=plotlabel)) +
   geom_col()  + 
   coord_flip()+
-  scale_fill_manual(values=colorRampPalette(brewer.pal(9, "Set1"))(length(unique(ps3_bar$plotlabel))-1), na.value="grey") + 
+  scale_fill_manual(values=colorRampPalette(brewer.pal(9, "Set1"))(length(unique(ps4_bar$plotlabel))-1), na.value="grey") + 
     base_theme  +
     theme(legend.position = "bottom",
       #panel.grid.major.x = element_line(colour="grey92", size=0.5, linetype="dashed"),
@@ -916,8 +993,8 @@ gg.rich <-  div_table %>%
               dplyr::select(y, label) %>%
               dplyr::rename(psyllid_spp=label)) %>%
   mutate_at(vars(measure), funs(factor(., levels=c("alpha","Shannon","pd")))) %>%
-  ggplot(aes(x=y, y=value, fill=pval<0.05)) + 
-    geom_col() +
+  ggplot(aes(x=y, y=value)) + 
+    geom_col(fill="darkgray") +
     facet_grid(~measure, scales="free") + 
     coord_flip()+
     base_theme  +
@@ -928,14 +1005,15 @@ gg.rich <-  div_table %>%
     axis.text.y = element_blank(),
     axis.ticks.y=element_blank(),
     axis.title.y=element_blank(),
+    axis.title.x = element_blank(),
     axis.text.x = element_text(angle=45, hjust=1)) +
-    scale_fill_manual(values=c("darkgray", "darkred")) +
+    #scale_fill_manual(values=c("darkgray", "darkred")) +
     scale_x_continuous(breaks=scales::pretty_breaks(n=1))+
   scale_y_continuous(expand=c(0,0))+
   scale_x_continuous(expand=c(0,0))
 
 ## Collection_hist
-gg.spp <- sample_data(ps2) %>%
+gg.spp <- sample_data(ps3) %>%
   as("matrix") %>%
   as.data.frame() %>%
   dplyr::rename(label = psyllid_spp) %>%
@@ -978,13 +1056,13 @@ phylo.dist <- cophenetic(pruned.tree) %>%
   pivot_longer(cols=-psyllid_spp.x,
                names_to="psyllid_spp.y",
                values_to = "dist") %>%
-  right_join(sample_data(ps2) %>%
+  right_join(sample_data(ps3) %>%
                as("matrix") %>%
                as.data.frame() %>%
               dplyr::select(Sample_Name, psyllid_spp) %>%
               dplyr::rename(psyllid_spp.x = psyllid_spp, Sample_Name.x = Sample_Name),
             by="psyllid_spp.x")%>%
-  right_join(sample_data(ps2) %>%
+  right_join(sample_data(ps3) %>%
                as("matrix") %>%
                as.data.frame() %>%
               dplyr::select(Sample_Name, psyllid_spp) %>%
@@ -1004,13 +1082,13 @@ plant.dist <- cophenetic(plant.tree) %>%
   pivot_longer(cols=-hostplant_spp.x,
                names_to="hostplant_spp.y",
                values_to = "dist") %>%
-  right_join(sample_data(ps2) %>%
+  right_join(sample_data(ps3) %>%
                as("matrix") %>%
                as.data.frame() %>%
               dplyr::select(Sample_Name, hostplant_spp) %>%
               dplyr::rename(hostplant_spp.x = hostplant_spp, Sample_Name.x = Sample_Name),
             by="hostplant_spp.x")%>%
-  right_join(sample_data(ps2) %>%
+  right_join(sample_data(ps3) %>%
                as("matrix") %>%
                as.data.frame() %>%
               dplyr::select(Sample_Name, hostplant_spp) %>%
@@ -1023,7 +1101,7 @@ plant.dist <- cophenetic(plant.tree) %>%
   as.matrix()
 
 # Spatial distance matrix
-envData <- sample_data(ps2) %>%
+envData <- sample_data(ps3) %>%
   as("matrix") %>%
   as.data.frame() %>%
   dplyr::select(long, lat) %>%
@@ -1049,7 +1127,7 @@ dir.create("output/phylosymbiosis")
 
 # Matrix correlations
 #only use samples present in all
-subsample <- Reduce(intersect, list(rownames(otu_table(ps2)), colnames(phylo.dist), colnames(plant.dist), colnames(spat.dist)))
+subsample <- Reduce(intersect, list(rownames(otu_table(ps3)), colnames(phylo.dist), colnames(plant.dist), colnames(spat.dist)))
 
 # Mantel test
 mantel_results <- distlist %>%
@@ -1109,7 +1187,7 @@ try(dev.off(), silent=TRUE)
 
 ```{r phylosymbiosis no entero}
 # Adonis test
-metadata <- sample_data(ps2_subset) %>%
+metadata <- sample_data(ps3_subset) %>%
   as("data.frame")
 
 adonis_results <- distlist_subset %>%
@@ -1130,7 +1208,7 @@ write_csv(adonis_results, "output/beta/adonis_subset.csv")
 
 # Matrix correlations
 #only use samples present in all
-subsample <- Reduce(intersect, list(rownames(otu_table(ps2_subset)), colnames(phylo.dist), colnames(plant.dist), colnames(spat.dist)))
+subsample <- Reduce(intersect, list(rownames(otu_table(ps3_subset)), colnames(phylo.dist), colnames(plant.dist), colnames(spat.dist)))
 
 # Mantel test
 mantel_results <- distlist_subset %>%
@@ -1161,14 +1239,14 @@ pca_dist <- distlist$Aitchison
 #PCA 
 r.pcx <- prcomp(pca_dist)
 pc_samp <- data.frame(Sample_Name = rownames(r.pcx$x), r.pcx$x[, 1:2])%>%
-  left_join(sample_data(ps2) %>%
+  left_join(sample_data(ps3) %>%
               as("matrix") %>%
               as.data.frame(), by="Sample_Name")
 # calculate percent variance explained for the axis labels
 pc1 <- round(r.pcx$sdev[1]^2/sum(r.pcx$sdev^2),2)
 pc2 <- round(r.pcx$sdev[2]^2/sum(r.pcx$sdev^2),2)
-pc_ylab <- paste("PC1: ", pc1, sep="")
-pc_xlab <- paste("PC2: ", pc2, sep="")
+pc_ylab <- paste("PC1: ", scales::percent(pc1), sep="")
+pc_xlab <- paste("PC2: ", scales::percent(pc2), sep="")
 
 ## colour by psyllid phylogeny
 dend <- as.dendrogram(force.ultrametric(pruned.tree))
@@ -1204,10 +1282,10 @@ colours_p1 <- p1$data %>%
 
 p1 <- p1 %<+% colours_p1  + 
   geom_tippoint(aes(colour=as.factor(cluster)))  + 
-  geom_tiplab(aes(colour=as.factor(cluster), label=new_label))+
+  geom_tiplab(aes(colour=as.factor(cluster), label=new_label), fontface=3)+
   scale_colour_brewer(palette="Paired") 
 
-gg.psyllid_pca <- p1 + gg.pca + plot_annotation(title="Psyllid phylogenetic distance")
+gg.psyllid_pca <- p1 + gg.pca
 gg.psyllid_pca
 
 pdf(file="figs/psyllid_pca.pdf",  width = 8, height = 11, paper="a4")
@@ -1254,10 +1332,10 @@ colours_p2 <- p2$data %>%
 
 p2 <- p2 %<+% colours_p2  + 
   geom_tippoint(aes(colour=as.factor(cluster)))  + 
-  geom_tiplab(aes(colour=as.factor(cluster), label=new_label))+
+  geom_tiplab(aes(colour=as.factor(cluster), label=new_label), fontface=3)+
   scale_colour_brewer(palette="Paired") 
 
-gg.plant_pca <- p2 + gg.pca + plot_annotation(title="Plant phylogenetic distance")
+gg.plant_pca <- p2 + gg.pca 
 gg.plant_pca
 
 pdf(file="figs/plant_pca.pdf",  width = 8, height = 11, paper="a4")
@@ -1304,7 +1382,7 @@ p3 <- p3 %<+% colours_p3  +
   #geom_tiplab(aes(colour=as.factor(cluster), label=new_label))+
   scale_colour_brewer(palette="Paired") 
 
-gg.spat_pca <- p3 + gg.pca + plot_annotation(title="Spatial Distance")
+gg.spat_pca <- p3 + gg.pca
 gg.spat_pca
 
 pdf(file="figs/spatial_pca.pdf",  width = 8, height = 11, paper="a4")
@@ -1313,6 +1391,986 @@ try(dev.off(), silent=TRUE)
 ```
 
 # Cophylogeny
+
+
+## Find core OTUS
+
+```{r}
+
+filterfun1 <- function(x){
+  x[(x / sum(x)) < (1e-4)] <- 0 #1e-4 is 0.01% threshold
+  return(x)
+}
+ps_cophylo  <- transform_sample_counts(ps3, fun = filterfun1)%>%
+  filter_taxa(function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
+
+saveRDS(ps_cophylo, "output/rds/ps_cophylo.rds")
+
+# Cluster OTUS
+to_cluster <- ps_cophylo %>%
+  transform_sample_counts(function (x) x/sum(x)) %>%
+  speedyseq::psmelt() %>%
+  filter(psyllid_spp %in% pruned.tree$tip.label) %>%
+  filter(psyllid_genus %in% c("Powellia", "Ctenarytaina", "Psylla")) %>% # Restrict to main 3 genera
+  filter(Abundance > 0)%>%
+  left_join(as_tibble(refseq(ps3)) %>% magrittr::set_colnames(c("OTU", "sequence")))
+  
+
+set.seed(666)
+
+
+# SEE: https://onlinelibrary.wiley.com/doi/pdf/10.1002/ece3.9071 for guide
+
+# CLUSTER USING PHYLOGENY
+tree <- phy_tree(ps_cophylo)
+
+tree2 <- multi2di(drop.tip(tree, tree$tip.label[!tree$tip.label %in% to_cluster$OTU] ))
+
+tree.hclust <- as.hclust(tree2)  
+
+tree_height <- max(tree.hclust$height)
+
+# Counts from tips backwards towards root
+# The multiply 2 is to match the reformatting from hclust to phylo objects
+clust_thresh <- 0.68e+09*2
+
+clustered <- cutree(tree.hclust, h=clust_thresh) %>%
+  enframe(name="OTU", value="cluster") %>%
+  group_by(cluster)%>%
+  mutate(cluster_size = n_distinct(OTU))
+
+n_clust <- length(unique(clustered$cluster))
+n_clust
+
+
+# Plot clustering results
+p1 <- ggtree(as.phylo(tree.hclust), ladderize=TRUE)
+
+weights_p1 <- p1$data %>%
+  left_join(clustered %>% dplyr::rename(label = OTU)
+  )
+
+cols = rainbow(n_clust, s=.6, v=.9)[sample(1:n_clust,n_clust)]
+p2 <- p1 %<+% weights_p1 + 
+  geom_tippoint(aes(colour=as.factor(cluster))) +
+  geom_tiplab(size=1)+
+  geom_vline(xintercept =(tree_height/2)-(clust_thresh/2), colour="red")+
+  #geom_treescale()+
+  theme_tree2()+
+  theme(legend.position = "none")+
+  scale_colour_manual(values=cols)#+
+#scale_x_continuous(expand=c(0.1,1e+09))
+
+
+pdf(file="tree.pdf", width = 20, height = 200)
+p2
+dev.off()
+
+# NOTE - SOme carsonella /sodalis are split across multiple
+
+# Cluster members
+cluster_members <- clustered%>%
+  left_join(to_cluster)%>%
+  group_by(sequence)%>%
+  mutate(asv_n_spp = length(unique(psyllid_spp))) %>%
+  ungroup()%>%
+  group_by(cluster)%>%
+  mutate(cluster_n_spp = length(unique(psyllid_spp))) %>%
+  ungroup()
+  
+# Calculate presence of clusters across the main genera
+n_genera <- cluster_members %>%
+  group_by(psyllid_genus) %>% 
+  mutate(total = length(unique(psyllid_spp))) %>%
+  ungroup()%>%
+  group_by(psyllid_genus, cluster, total) %>%
+  summarise(n_spp = length(unique(psyllid_spp))) %>%
+  mutate(prop_spp = n_spp / total) %>%
+  dplyr::select(-n_spp, -total) %>%
+  pivot_wider(names_from=psyllid_genus,
+              values_from=prop_spp,
+              values_fill = list(prop_spp = 0))%>% 
+  setNames(paste0('prop_spp_', names(.))) %>%
+  dplyr::rename(cluster = prop_spp_cluster)
+
+# Calculate mean relative abundance
+ra_genera <- cluster_members %>%
+  group_by(psyllid_genus, cluster) %>%
+  summarise(mean_ra = mean(Abundance)) %>%
+  pivot_wider(names_from=psyllid_genus,
+              values_from=mean_ra,
+              values_fill = list(mean_ra = 0))%>% 
+  setNames(paste0('ra_', names(.))) %>%
+  dplyr::rename(cluster = ra_cluster)
+
+cluster_members2 <- cluster_members %>%
+  left_join(n_genera)  %>%
+  left_join(ra_genera) %>%
+  mutate(retain_spp = case_when(
+    prop_spp_Ctenarytaina > 0.25 | prop_spp_Powellia > 0.25 | prop_spp_Psylla > 0.25 ~ TRUE,
+    TRUE ~ FALSE
+  )) %>%
+  #mutate(retain_ra = case_when(
+  #  ra_Ctenarytaina > 0.0001 | ra_Powellia > 0.0001 | ra_Psylla > 0.0001 ~ TRUE,
+  #  TRUE ~ FALSE
+  #)) %>%
+  dplyr::filter(retain_spp, cluster_size >5) %>%
+group_by(cluster) %>%
+  dplyr::mutate(cluster = case_when(
+    any(str_detect(OTU, "SV2561-Candidatus Carsonella")) ~ "Carsonella",
+    any(str_detect(OTU, "SV2234-Wolbachia")) ~ "Wolbachia1",
+    any(str_detect(OTU, "SV2168-Wolbachia")) ~ "Wolbachia2",
+    any(str_detect(OTU, "SV2145-Wolbachia")) ~ "Wolbachia3",
+    any(str_detect(OTU, "SV3047-Sodalis")) ~ "Sodalis1",
+    any(str_detect(OTU, "SV3096-Sodalis")) ~ "Sodalis2",
+    any(str_detect(OTU, "SV651-Flavobacterium")) ~ "Flavobacterium",
+    any(str_detect(OTU, "SV3462-o__Enterobacterales")) ~ "Enterobacterales1",
+    any(str_detect(OTU, "SV3394-o__Enterobacterales")) ~ "Enterobacterales2",
+    any(str_detect(OTU, "SV3103-o__Enterobacterales")) ~ "Enterobacterales3",
+    any(str_detect(OTU, "SV2977-Escherichia-Shigella")) ~ "Enterobacterales4",
+    any(str_detect(OTU, "SV3280-f__Morganellaceae")) ~ "Morganellaceae1",
+    any(str_detect(OTU, "SV75-f__Morganellaceae")) ~ "Morganellaceae2",
+    any(str_detect(OTU, "SV3241-d__Bacteria")) ~ "Bacteria1",
+    any(str_detect(OTU, "SV3187-c__Gammaproteobacteria")) ~ "Gammaproteobacteria1",
+    any(str_detect(OTU, "SV2900-Arsenophonus")) ~ "Arsenophonus",
+    any(str_detect(OTU, "SV2753-Pseudomonas")) ~ "Pseudomonas",
+    any(str_detect(OTU, "SV2722-Acinetobacter")) ~ "Acinetobacter",
+    any(str_detect(OTU, "SV2036-Acidiphilium")) ~ "Acetobacteraceae",
+    any(str_detect(OTU, "SV1867-f__Rhizobiaceae")) ~ "Rhizobiaceae",
+    any(str_detect(OTU, "SV1378-f__Anaerococcus")) ~ "Anaerococcus",
+    any(str_detect(OTU, "SV694-Prevotella")) ~ "Prevotella",
+    any(str_detect(OTU, "SV619-Chryseobacterium")) ~ "Weeksellaceae",
+    any(str_detect(OTU, "SV596-Spirosoma")) ~ "Spirosoma",
+    any(str_detect(OTU, "SV532-Hymenobacter")) ~ "Hymenobacter",
+    any(str_detect(OTU, "SV432-Ferruginibacter")) ~ "Chitinophagaceae",
+    any(str_detect(OTU, "SV3720-Aquabacterium")) ~ "Comamonadaceae1",
+    any(str_detect(OTU, "SV3714-Pelomonas")) ~ "Comamonadaceae2",
+    any(str_detect(OTU, "SV34-f__Comamonadaceae")) ~ "Comamonadaceae3",
+    any(str_detect(OTU, "SV5-f__Comamonadaceae")) ~ "Comamonadaceae4",
+    any(str_detect(OTU, "SV3692-Neisseria")) ~ "Neisseriaceae",
+    any(str_detect(OTU, "SV3605-s__Janthinobacterium_li")) ~ "Burkholderiales",
+    any(str_detect(OTU, "SV3560-Sulfuritalea")) ~ "Sulfuritalea",
+    any(str_detect(OTU, "SV290-Mycoplasma")) ~ "Mycoplasma1",
+    any(str_detect(OTU, "SV247-Mycoplasma")) ~ "Mycoplasma2",
+    any(str_detect(OTU, "SV211-Staphylococcus")) ~ "Staphylococcus",
+    any(str_detect(OTU, "SV2862-Haemophilus")) ~ "Haemophilus",
+    any(str_detect(OTU, "SV2678-Moraxella")) ~ "Moraxellaceae",
+    any(str_detect(OTU, "SV1973-Reyranella")) ~ "Reyranella",
+    any(str_detect(OTU, "SV1908-Phenylobacterium")) ~ "Caulobacteraceae",
+    any(str_detect(OTU, "SV1882-c__Alphaproteobacteria")) ~ "Alphaproteobacteria",
+    any(str_detect(OTU, "SV1818-Methylobacterium-Methyl")) ~ "Methylobacterium",
+    any(str_detect(OTU, "SV1800-f__Beijerinckiaceae")) ~ "Beijerinckiaceae",
+    any(str_detect(OTU, "SV1719-f__Xanthobacteraceae")) ~ "Xanthobacteraceae",
+    any(str_detect(OTU, "SV1678-Novosphingobium")) ~ "Novosphingobium",
+    any(str_detect(OTU, "SV1600-Sphingomonas")) ~ "Sphingomonadaceae",
+    any(str_detect(OTU, "SV1563-f__Rhodobacteraceae")) ~ "Rhodobacteraceae",
+    any(str_detect(OTU, "SV1504-Granulicella")) ~ "Acidobacteriaceae",
+    any(str_detect(OTU, "SV1414-Veillonella")) ~ "Veillonella",
+    any(str_detect(OTU, "SV150-Rhodanobacter")) ~ "Xanthomonadales",
+    any(str_detect(OTU, "SV1333-Anoxybacillus")) ~ "Bacillaceae",
+    any(str_detect(OTU, "SV1266-Streptococcus")) ~ "Streptococcus",
+    any(str_detect(OTU, "SV1226-Fusobacterium")) ~ "Fusobacterium",
+    any(str_detect(OTU, "SV1152-Corynebacterium")) ~ "Corynebacteriaceae",
+    any(str_detect(OTU, "SV1129-Rhodococcus")) ~ "Nocardiaceae",
+    any(str_detect(OTU, "SV1092-Nocardioides")) ~ "Nocardioidaceae",
+    any(str_detect(OTU, "SV1065-s__Micrococcus_aloevera")) ~ "Micrococcales",
+    any(str_detect(OTU, "SV998-f__Sporichthyaceae")) ~ "Sporichthyaceae",
+    any(str_detect(OTU, "SV768-Pedobacter")) ~ "Sphingobacteriaceae",
+    TRUE ~ as.character(cluster)
+  ))
+  #dplyr::filter(cluster_n_spp > 5, cluster_size >5, mean_ra > 0.01) # Old filtering setup
+ 
+# Plot cluster names
+cluster_members2 %>%
+ungroup() %>%
+  ggplot(aes(x = psyllid_spp, y = as.factor(cluster), fill=Abundance))+
+  geom_tile() +
+ base_theme
+
+#Checl cluster members
+test <- cluster_members2 %>%
+  dplyr::filter(cluster == 295)
+
+types <- c("all", "Psylla", "Powellia", "Ctenarytaina")
+
+dir.create("cophylo")
+for (i in 1:length(types)){
+  if(types[i] == "all"){
+    target_members <- cluster_members2
+  } else if(!types[i] == "all"){
+    target_members <- cluster_members2 %>%
+      filter(psyllid_genus == types[i])
+  }
+  
+  target_members %>%
+  group_by(cluster) %>%
+  group_split() %>%
+  purrr::map(function(x){
+    out <- x %>%
+      dplyr::select(cluster, psyllid_genus, psyllid_spp, OTU)
+    write_csv(out, file=paste0("cophylo/",types[i],"_", unique(x$cluster), ".csv"))
+  }) %>%
+  unlist()
+  
+}
+
+
+```
+
+# RUN PACO AND PARAFIT
+Run the scripts in the R subdirectory
+
+```{bash submit paco jobs}
+cd /group/pathogens/IAWS/Personal/Alexp/Metabarcoding/Psyllid_microbiome
+dos2unix submit_cophylo.sh
+dos2unix cophylo.R
+find $(/usr/bin/ls -d $PWD/cophylo/) -name '*.csv' -type f | sort | uniq > cophylo_job_index.txt
+joblength=$(cat cophylo_job_index.txt | wc -l)
+sbatch --array=1-$joblength submit_cophylo.sh 
+
+
+# Run the modified functions
+cd /group/pathogens/IAWS/Personal/Alexp/Metabarcoding/Psyllid_microbiome
+dos2unix submit_cophylo_newfunctions.sh
+dos2unix cophylo_newfunctions.R
+find $(/usr/bin/ls -d $PWD/cophylo/) -name '*.csv' -type f | sort | uniq > cophylo_job_index.txt
+joblength=$(cat cophylo_job_index.txt | wc -l)
+sbatch --array=1-$joblength submit_cophylo_newfunctions.sh 
+```
+
+# Analyse para results
+```{r}
+parafit_res <- fs::dir_ls("cophylo/output", glob = "*_parafit.rds") %>%
+  #head()%>%
+  purrr::map(readRDS) %>%
+  purrr::map(function(x){
+    tibble(statistic=x$ParaFitGlobal,
+           pval = x$p.global,
+           nperm = x$nperm,
+           links=list(as.data.frame(x$link.table) %>%
+      left_join(enframe(names(x$para.per.host), name = "Host", value="psyllid_spp") %>%
+                  mutate(Host = as.numeric(Host)), by = "Host") %>%
+      left_join(enframe(names(x$host.per.para), name = "Parasite", value="OTU") %>%
+                  mutate(Parasite = as.numeric(Parasite)), by = "Parasite"))
+           )
+  }) %>%
+  bind_rows(.id="source") %>%
+  mutate(source = basename(source),
+         type = source %>%
+           str_remove("_.*$"),
+         cluster = source %>% 
+           str_remove("_parafit.*$") %>%
+           str_remove("^.*_") 
+           ) %>%
+  dplyr::select(-source) %>%
+    group_by(type) %>%
+  mutate(adj_pval = p.adjust(pval)) %>%
+  ungroup() 
+
+# Read in cluster members
+cluster_members <- fs::dir_ls("cophylo", glob = "*.csv") %>%
+  #head()%>%
+  vroom::vroom(id="source") %>%
+  mutate(source = basename(source),
+         type = source %>%
+           str_remove("_.*$"),
+           ) %>%
+  dplyr::select(-source)
+
+parafit_res %>% 
+  group_by(type) %>%
+  mutate(adj_pval = p.adjust(pval)) %>%
+  ungroup() %>%
+  left_join(cluster_members)%>%
+  mutate(signif = adj_pval < 0.05) %>%
+  ggplot(aes(x = type, y = cluster, fill=signif))+
+  geom_tile()+
+  ggtitle("PARAFIT")
+```
+
+
+# NEW para results
+```{r}
+new_parafit_res <- fs::dir_ls("cophylo_newfunc/output", glob = "*_parafit.rds") %>%
+  #head()%>%
+  purrr::map(readRDS) %>%
+  purrr::map(function(x){
+    tibble(statistic=x$ParaFitGlobal,
+           pval = x$p.global,
+           nperm = x$nperm
+    )
+  }) %>%
+  bind_rows(.id="source") %>%
+  mutate(source = basename(source),
+         type = source %>%
+           str_remove("_.*$"),
+         cluster = source %>% 
+           str_remove("_parafit.*$") %>%
+           str_remove("^.*_") 
+           ) %>%
+  dplyr::select(-source) %>%
+    group_by(type) %>%
+  mutate(adj_pval = p.adjust(pval)) %>%
+  ungroup() 
+
+# Read in cluster members
+cluster_members <- fs::dir_ls("cophylo", glob = "*.csv") %>%
+  #head()%>%
+  vroom::vroom(id="source") %>%
+  mutate(source = basename(source),
+         type = source %>%
+           str_remove("_.*$"),
+           ) %>%
+  dplyr::select(-source)
+
+new_parafit_res %>%
+  group_by(type) %>%
+  mutate(adj_pval = p.adjust(pval)) %>%
+  ungroup() %>%
+  left_join(cluster_members)%>%
+  mutate(signif = adj_pval < 0.05) %>%
+  ggplot(aes(x = type, y = cluster, fill=signif))+
+  geom_tile()+
+  ggtitle("PARAFIT")
+```
+
+
+# Analyse paco results
+```{r}
+paco_res <- fs::dir_ls("cophylo/output", glob = "*_paco.rds") %>%
+  #head()%>%
+  purrr::map(readRDS) %>%
+  purrr::map(function(x){
+    res <- residuals_paco(x$proc, type = "interaction")
+    tibble(statistic=x$gof$ss,
+           pval = x$gof$p,
+           nperm = x$gof$n,
+           links=list(
+             data.frame(
+               joint = names(x$jackknife),
+               psyllid_spp = names(x$jackknife) %>% str_remove("-.*$"),
+               OTU = names(x$jackknife) %>% str_remove("^.*-"),
+               values=unname(x$jackknife),
+               res = res
+               )
+             ),
+           method="paco"
+           )
+  }) %>%
+  bind_rows(.id="source") %>%
+  mutate(source = basename(source),
+         type = source %>%
+           str_remove("_.*$"),
+         cluster = source %>% 
+           str_remove("_paco.*$") %>%
+           str_remove("^.*_")
+           ) %>%
+  dplyr::select(-source) %>%
+  group_by(type) %>%
+  mutate(adj_pval = p.adjust(pval)) %>%
+  ungroup() 
+
+# Read in cluster members
+cluster_members <- fs::dir_ls("cophylo", glob = "*.csv") %>%
+  #head()%>%
+  vroom::vroom(id="source") %>%
+  mutate(source = basename(source),
+         type = source %>%
+           str_remove("_.*$"),
+           ) %>%
+  dplyr::select(-source)
+
+paco_res %>%
+  group_by(type) %>%
+  mutate(adj_pval = p.adjust(pval)) %>%
+  ungroup() %>%
+  left_join(cluster_members)%>%
+  mutate(signif = adj_pval < 0.05) %>%
+  ggplot(aes(x = type, y = cluster, fill=signif))+
+  geom_tile()+
+  ggtitle("PACO")
+```
+
+
+
+# NEW paco results
+```{r}
+new_paco_res <- fs::dir_ls("cophylo_newfunc/output", glob = "*_paco.rds") %>%
+  #head()%>%
+  purrr::map(readRDS) %>%
+  purrr::map(function(x){
+    res <- residuals_paco(x$proc, type = "interaction")
+    tibble(statistic=x$gof$ss,
+           pval = x$gof$p,
+           nperm = x$gof$n,
+           method="paco"
+           )
+  }) %>%
+  bind_rows(.id="source") %>%
+  mutate(source = basename(source),
+         type = source %>%
+           str_remove("_.*$"),
+         cluster = source %>% 
+           str_remove("_paco.*$") %>%
+           str_remove("^.*_") 
+           ) %>%
+  dplyr::select(-source) %>%
+  group_by(type) %>%
+  mutate(adj_pval = p.adjust(pval)) %>%
+  ungroup() 
+
+# Read in cluster members
+cluster_members <- fs::dir_ls("cophylo", glob = "*.csv") %>%
+  #head()%>%
+  vroom::vroom(id="source") %>%
+  mutate(source = basename(source),
+         type = source %>%
+           str_remove("_.*$"),
+           ) %>%
+  dplyr::select(-source)
+
+new_paco_res %>%
+
+  left_join(cluster_members)%>%
+  mutate(signif = adj_pval < 0.05) %>%
+  left_join(cluster_members)%>%
+  ggplot(aes(x = type, y = cluster, fill=signif))+
+  geom_tile()+
+  ggtitle("PACO")
+```
+
+# NEW 3 genera heatmap
+
+```{r all microbe}
+# Global fit summary
+global_fit_res <- parafit_res %>%
+  group_by(type) %>%
+  mutate(adj_pval = p.adjust(pval)) %>%
+  ungroup() %>%
+  mutate(pf_signif = adj_pval < 0.05)%>%
+  dplyr::select(pf_signif, type, cluster) %>%
+  left_join(paco_res %>%
+      group_by(type) %>%
+      mutate(adj_pval = p.adjust(pval)) %>%
+      ungroup() %>%
+      mutate(paco_signif = adj_pval < 0.05)%>%
+      dplyr::select(paco_signif, type, cluster)) %>%
+  mutate(signif = case_when(
+    paco_signif & pf_signif ~ "both",
+    paco_signif & !pf_signif ~ "paco",
+    !paco_signif & pf_signif ~ "para",
+    TRUE ~ "NS"
+  )) %>%
+  filter(!type == "all") %>%
+  dplyr::select(cluster, genus=type, signif)
+
+
+# Read in cluster members
+runfile_members <- fs::dir_ls("cophylo", glob = "*.csv") %>%
+  #head()%>%
+  vroom::vroom(id="source")%>%
+  mutate(source = basename(source),
+         type = source %>%
+           str_remove("_.*$")) %>%
+  left_join(global_fit_res %>% mutate(type = genus))%>%
+  filter(!type == "all") %>%
+  filter(!signif == "NS") %>%
+  dplyr::select(psyllid_spp, OTU, cluster) %>%
+  distinct()
+
+all_clusters <- runfile_members %>% 
+                  dplyr::select(label.y = OTU, new_cluster = cluster) %>%
+                  filter(!is.na(new_cluster))%>% 
+                  distinct() %>%
+                  mutate(
+                    label.y = label.y %>% str_replace_all("-", "_") %>%
+                    str_replace_all(" ", "_"))
+
+subset_ps <- ps4 %>%
+  subset_taxa(colnames(otu_table(ps4)) %in% unique(runfile_members$OTU)) %>%
+  subset_samples(psyllid_spp %in% unique(runfile_members$psyllid_spp)) %>%
+  filter_taxa(function(x) mean(x) > 0, TRUE) 
+
+coocur <- subset_ps %>%
+  otu_table %>%
+  as.matrix() %>% 
+  apply(2, function(x) ifelse(x > 0, 1, 0))
+
+colnames(coocur) <- colnames(coocur) %>%
+  str_replace_all(" |-", "_")
+rownames(coocur) <- rownames(coocur) %>%
+  str_replace_all(" |-", "_")
+
+pruned.tree2 <- drop.tip(pruned.tree, "Atmetocranium_myersi" )
+
+# H cophenetic distance
+h_tree <- pruned.tree2
+h_tree$tip.label <- h_tree$tip.label %>%
+  str_replace_all(" |-", "_")
+h_tree <- drop.tip(h_tree, setdiff(h_tree$tip.label, rownames(coocur)))
+
+# P cophenetic distance
+s_tree <- phy_tree(subset_ps)
+s_tree$tip.label <- s_tree$tip.label %>%
+  str_replace_all(" |-", "_")
+
+s_tree <- drop.tip(s_tree, setdiff(s_tree$tip.label, colnames(coocur)))
+
+coocur <- coocur[h_tree$tip.label, s_tree$tip.label]
+
+# Get link importance
+paco_links <- paco_res %>%
+  unnest(links) %>%
+  filter(!type == "all") %>%
+  mutate(genus = psyllid_spp %>% str_remove("_.*$")) %>%
+  group_by(genus) %>%
+  mutate(values = values^2)%>%
+  mutate(mean_val = mean(values)) %>%
+  mutate(signif = case_when(
+    values < mean_val ~ 1,
+    values > mean_val ~ 0
+  ))%>%
+  left_join(runfile_members %>% dplyr::select(OTU, cluster))
+
+# Plot links
+paco_links %>%
+  dplyr::rename(label = joint) %>%
+  mutate(label = as.factor(label),
+         label=reorder_within(label, values, genus))%>%
+  #arrange(-values) %>%
+  ggplot(aes(x=label, y=values, colour=as.factor(signif))) + #
+  geom_point(show.legend = FALSE) +
+  facet_wrap(~genus, scales = "free")+
+  #geom_errorbar(aes(ymin=values, ymax=upper)) +
+  geom_hline(aes(yintercept = mean_val), lty=3) +
+  scale_x_reordered()+
+  scale_color_manual(values=c("steelblue", "darkorange1"), name = "Significant") +
+  theme_classic()+ 
+  theme(axis.text.x = element_blank(), legend.position = "right")
+
+# Plot residuals
+paco_links %>%
+ggplot(aes(x=res))+
+  geom_density(fill='grey70')+
+  theme_bw()+
+  facet_grid(genus~.) +
+  xlab('Procrustes residuals')+
+  ylab('Frequency')
+
+# Parafit run
+PF_links <- parafit_res %>%
+    unnest(links) %>%
+  filter(!type == "all") %>%
+    mutate(genus = psyllid_spp %>% str_remove("_.*$")) %>%
+  mutate(signif = case_when(
+    p.F1 < 0.05 ~ 1,
+    p.F1 > 0.05 ~ 0
+  )) %>%
+  left_join(runfile_members %>% dplyr::select(OTU, cluster))
+
+
+# Proportion of significant links
+PF_links %>%
+  group_by(genus) %>%
+  summarise(s = count(signif > 0), ns = count(signif == 0)) 
+
+# Plot links
+PF_links %>%
+  mutate(joint = paste0(psyllid_spp, "-", OTU))%>%
+  dplyr::rename(label = joint,
+                values = F1.stat) %>%
+  mutate(label = as.factor(label),
+         label=reorder_within(label, values, genus))%>%
+  #arrange(-values) %>%
+  ggplot(aes(x=label, y=values, colour=as.factor(signif))) + #
+  geom_point(show.legend = FALSE) +
+  facet_wrap(~genus, scales = "free")+
+  #geom_errorbar(aes(ymin=values, ymax=upper)) +
+  #geom_hline(aes(yintercept = mean_val), lty=3) +
+  scale_x_reordered()+
+  scale_color_manual(values=c("steelblue", "darkorange1"), name = "Significant") +
+  theme_classic()+ 
+  theme(axis.text.x = element_blank(), legend.position = "right")
+
+# Cophyloplot
+coocur.lut <- which(coocur ==1, arr.ind=TRUE)
+assoc <- cbind(rownames(coocur)[coocur.lut[,1]], colnames(coocur)[coocur.lut[,2]])
+
+# Rotate the nodes using phytools
+library(phytools)
+obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=FALSE) 
+
+# Create a colour list for the cliusters
+col <- colorRampPalette(brewer.pal(12, "Paired"))(length(unique(runfile_members$cluster)))
+names(col) <- unique(runfile_members$cluster)
+
+# Psyllid tree
+tree1 <- obj[["trees"]][[1]]
+p1 <- ggtree(tree1, ladderize=FALSE, size=0.3)+
+    theme(legend.position = "none")
+
+# OTU tree
+tree2 <- obj[["trees"]][[2]]
+
+# make a clade label list
+tax_groups <- as.data.frame(tax_table(ps4)) %>%
+  rownames_to_column("label") %>%
+  dplyr::mutate(label = label %>% str_replace_all("-", "_") %>%
+                  str_replace_all(" ", "_")) %>%
+  dplyr::select(label, genus) %>%
+  filter(label %in% tree2$tip.label) %>%
+  group_by(genus) 
+
+tax_groups <- runfile_members %>%
+   dplyr::mutate(label = OTU %>% str_replace_all("-", "_") %>%
+                  str_replace_all(" ", "_")) %>%
+  dplyr::select(label, cluster) %>%
+  filter(label %in% tree2$tip.label) %>%
+  group_by(cluster) 
+
+group_name <- group_keys(tax_groups)  %>%
+  mutate(group_name = cluster)
+
+cls <- tax_groups %>% 
+  group_split() %>% 
+  purrr::map(pull, label) %>%
+  set_names(group_name$group_name)
+
+newtree <- groupOTU(tree2, cls)
+p2 <- ggtree(newtree, ladderize=TRUE, size=0.2)  + # aes(colour=group),
+  scale_colour_manual(values=col)+
+  theme(legend.position = "none")# +
+  #scale_size_manual(values=c(0.1, 0.1))
+
+# Plot heatmaps
+heatmap_dat <- obj$assoc %>%
+  as_data_frame() %>%
+  magrittr::set_colnames(c("label.x", "label.y")) %>%
+  mutate(genus = label.x %>% str_remove("_.*$")) %>%
+  left_join(runfile_members %>% 
+              mutate(label.y = OTU %>% str_replace_all("-", "_") %>%
+                  str_replace_all(" ", "_")) %>%
+              dplyr::select(label.y, cluster)%>%
+              left_join(global_fit_res))%>%
+  left_join(paco_links %>% 
+              dplyr::select(label.x = psyllid_spp, label.y = OTU, signif_paco=signif)) %>%
+  left_join(PF_links %>% 
+              dplyr::select(label.x = psyllid_spp, label.y = OTU, signif_para=signif)) %>%
+  left_join(p1$data %>% dplyr::select(label, y) %>% dplyr::rename(label.x = label), by="label.x") %>%
+  left_join(p2$data %>% dplyr::select(label, y) %>% dplyr::rename(label.y = label), by="label.y") %>%
+  left_join(all_clusters)%>% # Fix those that were dropped because less than 3 ASVs for that genus
+  mutate(cluster = new_cluster)%>%
+  dplyr::select(-new_cluster) %>%
+  rownames_to_column("assoc") %>%
+  dplyr::rename(psyllid_spp = label.x,
+                OTU = label.y,
+                pos_x = y.x,
+                pos_y = y.y) %>%
+  mutate(signif = case_when(
+   is.na(signif) ~ "NS",
+   TRUE ~ signif
+  )) %>%
+  dplyr::rename(highlight = signif)
+
+# Get the arrangement of the tips
+tree_orders <- p2$data %>%
+  dplyr::select(group, y) %>%
+  group_by(group)%>%
+  summarise(y = mean(y)) %>%
+  arrange(y)
+
+gg.heatmap <- heatmap_dat %>%
+    mutate(OTU = OTU %>% str_replace_all("_", " "),
+         psyllid_spp =  psyllid_spp %>% str_replace_all("_"," ")) %>%
+  dplyr::select(psyllid_spp, OTU, genus, highlight, pos_x, pos_y, cluster) %>%
+  dplyr::mutate(psyllid_spp = factor(psyllid_spp),
+                OTU = factor(OTU),
+                genus=factor(genus, levels=c("Psylla" ,"Powellia", "Ctenarytaina")),
+                cluster = factor(cluster, levels = rev(tree_orders$group)))  %>%
+   ggplot(aes(x= fct_reorder(psyllid_spp, pos_x), y=fct_reorder(OTU, pos_y), fill =highlight)) + # fill=highlight 
+  geom_tile() +
+  theme_bw() +
+  facet_grid(cluster~genus, drop = TRUE, scales="free", space ="free")+
+  theme(axis.text.x = element_text(angle=45, hjust=1),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.title.y = element_blank(),
+        panel.spacing.y = unit(0, "mm"),
+        panel.spacing.x = unit(0, "mm"),
+        panel.border = element_rect(colour="black", fill=NA, size=0.1),
+        strip.text.y.right = element_text(angle=0),
+        strip.background =element_rect(colour="black", fill="grey85", size=0.1),
+        legend.position = "bottom") +
+  scale_y_discrete(expand=c(0,0))+
+  scale_x_discrete(expand=c(0,0)) +
+  #scale_fill_manual(values=col)
+  #scale_fill_gradient(high="steelblue", low="darkorange1") 
+  scale_fill_manual(values=c("NS"="steelblue","paco"="darkorange1","para"="#da2b91", "both"="#91da2b"), na.value = "black") 
+
+gg.heatmap
+
+
+top <- wrap_elements(grid::textGrob('')) +(p1+ coord_flip() + scale_x_reverse(expand=c(0,0))+ scale_y_continuous(expand=c(0,0)))  +plot_layout(widths=c(0.5,3)) 
+
+bottom <- p2+ scale_y_continuous(expand=c(0,0)) + gg.heatmap +  plot_layout(widths=c(0.5,3))
+
+gg.treemap <- top / bottom + plot_layout(heights=c(0.5,3))  
+
+gg.treemap
+
+pdf(file="figs/3genus_heatmaps.pdf",  width = 10, height = 11)
+  plot(gg.treemap)
+try(dev.off(), silent=TRUE)
+  
+
+# Supplementary heatmap of all core OTUs tested
+gg.supp_heatmap <- global_fit_res %>%
+   ggplot(aes(x= genus, y=cluster, fill = signif)) + 
+  geom_tile() +
+  theme_bw() +
+  facet_grid(cluster~genus, drop = TRUE, scales="free", space ="free")+
+  theme(axis.text.x = element_text(angle=45, hjust=1),
+        axis.title.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.title.y = element_blank(),
+        panel.spacing.y = unit(0, "mm"),
+        panel.spacing.x = unit(0, "mm"),
+        panel.border = element_rect(colour="black", fill=NA, size=0.1),
+        strip.text.y.right = element_text(angle=0),
+        strip.background =element_rect(colour="black", fill="grey85", size=0.1),
+        legend.position = "bottom") +
+  scale_y_discrete(expand=c(0,0))+
+  scale_x_discrete(expand=c(0,0))+
+  #scale_fill_manual(values=col)
+  #scale_fill_gradient(high="steelblue", low="darkorange1") 
+  scale_fill_manual(values=c("NS"="steelblue","paco"="darkorange1","para"="#da2b91", "both"="#91da2b"), na.value = "black") +
+  labs(fill = "Significance")
+
+gg.supp_heatmap
+
+pdf(file="figs/coreotu_heatmaps.pdf",  width = 8, height = 11, paper="a4")
+  plot(gg.supp_heatmap)
+try(dev.off(), silent=TRUE)
+  
+  
+# Output summary table of OTU members, their sequence, and whether they were called as significant
+cophylo_summary <- fs::dir_ls("cophylo", glob = "*.csv") %>%
+  vroom::vroom(id="source")%>%
+  mutate(source = basename(source),
+         type = source %>%
+           str_remove("_.*$")) %>%
+  left_join(global_fit_res %>% mutate(type = genus))%>%
+  filter(!type == "all") %>%
+  dplyr::select(OTU, cluster) %>%
+  distinct() %>%
+  left_join(global_fit_res)  %>%
+  pivot_wider(names_from=genus,
+              values_from=signif,
+              values_fill= list(signif="NS")) %>%
+  left_join(refseq(ps3) %>%
+              as.character()%>%
+              enframe(name="OTU", value="sequence")
+    ) %>%
+  dplyr::select(ASV = OTU, 
+                sequence,
+                OTU = cluster,
+                signif_ctenarytaina = Ctenarytaina,
+                signif_powellia = Powellia,
+                signif_psylla = Psylla)
+
+write_csv(cophylo_summary, "output/cophylo_summary.csv")
+
+```
+
+# New Tanglegrams
+
+```{r carsonella cophylo}
+# Read in cluster members
+runfile_members <- fs::dir_ls("cophylo", glob = "*.csv") %>%
+  #head()%>%
+  vroom::vroom(id="source")%>%
+  mutate(source = basename(source),
+         type = source %>%
+           str_remove("_.*$")) %>%
+  filter(type == "all") %>%
+  dplyr::select(psyllid_spp, OTU, cluster, type) %>%
+  distinct()
+
+
+cophylo_summary_tangle <- global_fit_res %>%
+  group_by(cluster) %>%
+  mutate(signif2 = any(!signif == "NS"))%>%
+  mutate(name = paste0("all_", cluster))
+
+
+to_loop <- runfile_members %>%
+  dplyr::select(cluster, type) %>%
+  distinct()
+
+out_plots <- vector("list", length=nrow(to_loop))
+names(out_plots) <- paste0(to_loop$type,"_", to_loop$cluster)
+# Symmetrical alternative to setdiff
+symdiff <- function( x, y) { setdiff( union(x, y), intersect(x, y))}
+
+i=1
+for (i in 1:nrow(to_loop)){
+  print(i)
+  # Subset runfile
+  subset_runfile <- runfile_members %>%
+    dplyr::filter(cluster == to_loop$cluster[i], type == to_loop$type[i])
+
+   # Subset phyloseq object
+   filterfun1 <- function(x){
+     x[(x / sum(x)) < (1e-4)] <- 0 #1e-4 is 0.01% threshold
+     return(x)
+   }
+  
+   subset_ps <- transform_sample_counts(ps4, fun = filterfun1)%>%
+     subset_taxa(colnames(otu_table(ps4)) %in% unique(subset_runfile$OTU)) %>%
+     subset_samples(psyllid_spp %in% unique(subset_runfile$psyllid_spp)) 
+   
+    if (any(rowSums(otu_table(subset_ps)) > 0)){
+    subset_ps <- subset_ps%>%
+      filter_taxa(function(x) mean(x) > 0, TRUE) 
+    subset_ps <- prune_samples(sample_sums(subset_ps) >0 , subset_ps)
+  
+    if((ntaxa(subset_ps) > 1) & (nsamples(subset_ps) > 1)){
+
+      coocur <- subset_ps %>%
+        otu_table %>%
+        as.matrix() %>% 
+        apply(2, function(x) ifelse(x > 0, 1, 0))
+      
+      colnames(coocur) <- colnames(coocur) %>%
+        str_replace_all(" |-", "_")
+      rownames(coocur) <- rownames(coocur) %>%
+        str_replace_all(" |-", "_")
+      
+      pruned.tree2 <- drop.tip(pruned.tree, "Atmetocranium_myersi" )
+      
+      # H cophenetic distance
+      h_tree <- pruned.tree2
+      h_tree$tip.label <- h_tree$tip.label %>%
+        str_replace_all(" |-", "_")
+      h_tree <- drop.tip(h_tree, symdiff(h_tree$tip.label, rownames(coocur)))
+      
+      # P cophenetic distance
+      s_tree <- phy_tree(subset_ps)
+      s_tree$tip.label <- s_tree$tip.label %>%
+        str_replace_all(" |-", "_")
+      
+      s_tree <- drop.tip(s_tree, symdiff(s_tree$tip.label, colnames(coocur)))
+      
+      coocur <- coocur[h_tree$tip.label, s_tree$tip.label]
+      
+      # Cophyloplot
+      coocur.lut <- which(coocur ==1, arr.ind=TRUE)
+      assoc <- cbind(rownames(coocur)[coocur.lut[,1]], colnames(coocur)[coocur.lut[,2]])
+    
+      # Rotate the nodes using phytools
+      obj <- cophylo(tr1=h_tree, tr2=s_tree, assoc=assoc, rotate=TRUE) 
+      
+      # psyllid_tree
+      tree1 <- obj[["trees"]][[1]]
+      
+      p1 <- ggtree(tree1)
+      atmeto_node <- p1$data %>% 
+        filter(str_detect(label, "Atmeto")) %>%
+        pull(node)
+      root_node <- p1$data %>% 
+        filter(str_detect(label, "Atmeto")) %>%
+        pull(parent)
+      
+      tree1 <- groupOTU(tree1, .node=atmeto_node) # Make the atmeto dotted to indicate outgroup was rescaled
+      
+      p1 <- ggtree(tree1, ladderize=FALSE, aes(linetype=group))+ 
+        theme(rect = element_rect(fill = "transparent", colour="transparent"))+
+        coord_cartesian(clip="off")
+      
+      #Scale the atmetocranium and root nodes to be shorter
+      p1$data[p1$data$node %in% atmeto_node, "x"] <- max(p1$data$x)
+      p1$data[p1$data$node %in% root_node, "x"] <- 0.2 #root
+      
+      p1$data$node[p1$data$node]
+      
+      p1 <- p1 + geom_tippoint() +
+        theme(legend.position = "none")
+      
+      # OTU tree
+      tree2 <- obj[["trees"]][[2]]
+      s_tree <- drop.tip(tree2, symdiff(tree2$tip.label, obj$assoc[,2]))
+      p2 <- ggtree(tree2 , ladderize=FALSE)  + 
+        geom_tippoint() + 
+        theme(legend.position = "none")+ 
+        theme(rect = element_rect(fill = "transparent", colour="transparent"))+
+        coord_cartesian(clip="off")
+      
+      # Tanglegram 
+      tangle <- obj$assoc %>%
+        as_data_frame() %>%
+        magrittr::set_colnames(c("label.x", "label.y")) %>%
+        left_join(p1$data %>% dplyr::select(label, y) %>% dplyr::rename(label.x = label), by="label.x") %>%
+        left_join(p2$data %>% dplyr::select(label, y) %>% dplyr::rename(label.y = label), by="label.y") %>%
+        rownames_to_column("assoc") %>%
+        rename_all(~str_replace(.x,pattern="\\.", replacement="_")) %>%
+        mutate(genus = label_x %>% str_remove("_.*$")) %>%
+        left_join(cophylo_summary_tangle %>% filter(cluster == to_loop$cluster[i])) %>%
+        mutate(signif = replace_na(signif, "NS")) %>%
+        pivot_longer(ends_with(c("_x", "_y")),
+                     names_to=c(".value", "tree"), 
+                     names_sep = "_"
+                    )  %>%
+        mutate(tree = tree %>% 
+                 str_replace("x", "host")%>%
+                 str_replace("y", "microbe")) %>%
+        filter(!is.na(label))%>% 
+        group_by(tree) %>%
+        mutate(y = y / max(y)) %>%
+        mutate(label = label %>% str_replace_all("_", " ")) 
+    
+      
+      gg.tangle <- ggplot(tangle, aes(x=tree, y=y, group=assoc, colour=signif)) +
+          geom_line(alpha=0.8) +  
+        geom_text(data = tangle %>% 
+                    filter(tree=="host"),
+                  aes(label=label),stat = 'unique', hjust=1, check_overlap = TRUE)+
+        geom_text(data = tangle %>% 
+                    filter(tree=="microbe"),
+                  aes(label=label),stat = 'unique', hjust=0, check_overlap = TRUE)+
+        scale_colour_manual(values=c("NS"="steelblue", "paco"="darkorange1", "para"="#da2b91", "both"="#91da2b"), na.translate=FALSE)+
+          scale_x_discrete(expand = expansion(add=c(2,2))) + 
+          theme_void() +
+          scale_y_continuous(expand=c(0.005,0.005))+
+          theme(legend.position = "bottom",
+                rect = element_rect(fill = "transparent",colour = "transparent")) +
+        coord_cartesian(clip="off")
+      
+      gg_tanglegram <- p1 + gg.tangle + (p2 + scale_x_reverse()) + plot_annotation(title=names(out_plots)[i])+ plot_layout(widths = c(1, 4, 1))
+      out_plots[[i]] <- gg_tanglegram
+      } else{
+        out_plots[i] <- list(NULL)
+      }
+  } else{
+    out_plots[i] <- list(NULL)
+  }
+}
+
+
+# Output plots of just significant ones
+pdf(file="figs/signif_tanglegrams.pdf",  width = 8, height = 11, paper="a4")
+    out_plots[names(out_plots) %in% (cophylo_summary_tangle %>% filter(signif2) %>% pull(name) %>% unique())]
+try(dev.off(), silent=TRUE)
+
+    
+# Output plots of just non-significant ones
+pdf(file="figs/NS_tanglegrams.pdf",  width = 8, height = 11, paper="a4")
+    out_plots[names(out_plots) %in% (cophylo_summary_tangle %>% filter(!signif2) %>% pull(name) %>% unique())]
+try(dev.off(), silent=TRUE)
+```
+
+
 
 Run the scripts in the R subdirectory
 
@@ -1331,13 +2389,13 @@ filterfun1 <- function(x){
   x[(x / sum(x)) < (1e-4)] <- 0 #1e-4 is 0.01% threshold
   return(x)
 }
-ps3_filt  <- transform_sample_counts(ps3, fun = filterfun1)%>%
+ps4_filt  <- transform_sample_counts(ps4, fun = filterfun1)%>%
   filter_taxa(function(x) mean(x) > 0, TRUE) #Drop missing taxa from table
 
-print(paste0((ntaxa(ps3)-ntaxa(ps3_filt)), " taxa under threshold removed"))
+print(paste0((ntaxa(ps4)-ntaxa(ps4_filt)), " taxa under threshold removed"))
 
 #Get co-occurance matrix
-coocur <- ps3_filt %>%
+coocur <- ps4_filt %>%
     subset_samples(psyllid_genus %in% c("Powellia", "Ctenarytaina", "Psylla")) %>%
     filter_taxa(function(x) mean(x) > 0, TRUE) %>%
     otu_table %>%
@@ -1356,7 +2414,7 @@ h_tree$tip.label <- h_tree$tip.label %>%
 h_tree <- drop.tip(h_tree, setdiff(h_tree$tip.label, rownames(coocur)))
 
 # P cophenetic distance
-s_tree <- phy_tree(ps3)
+s_tree <- phy_tree(ps4)
 s_tree$tip.label <- s_tree$tip.label %>%
            str_replace_all(" |-", "_")
 s_tree <- drop.tip(s_tree, setdiff(s_tree$tip.label, colnames(coocur)))
@@ -1511,7 +2569,7 @@ p1 <- p1 %<+% weights_p1 +
 tree2 <- obj[["trees"]][[2]]
 
 # make a clade label list
-tax_groups <- as.data.frame(tax_table(ps3)) %>%
+tax_groups <- as.data.frame(tax_table(ps4)) %>%
   rownames_to_column("label") %>%
   dplyr::mutate(label = label %>% str_replace_all("-", "_") %>%
                   str_replace_all(" ", "_")) %>%
@@ -1605,7 +2663,7 @@ density_dat <-  heatmap_dat %>%
   ungroup()
 
 density_labels <- density_dat %>%
-  left_join(tax_table(ps3) %>%
+  left_join(tax_table(ps4) %>%
               as("matrix") %>%
               as_tibble(rownames="OTU") %>% 
               mutate(OTU = OTU %>% str_replace_all(" |-", "_")))%>%
@@ -1732,7 +2790,7 @@ try(dev.off(), silent=TRUE)
 
 ```{r carsonella cophylo}
 #Flag top abundance carsonella by sample
-top_carson <- ps2 %>%
+top_carson <- ps3 %>%
   transform_sample_counts(function (x) x/sum(x)) %>%
   speedyseq::psmelt() %>%
   filter(psyllid_spp %in% pruned.tree$tip.label) %>%
@@ -1742,7 +2800,7 @@ top_carson <- ps2 %>%
   top_n(1, wt=Abundance) %>%
   mutate(top = TRUE) 
 
-coocur <- ps2 %>%
+coocur <- ps3 %>%
   transform_sample_counts(function (x) x/sum(x)) %>%
   speedyseq::psmelt() %>%
     filter(psyllid_spp %in% pruned.tree$tip.label) %>%
@@ -1769,7 +2827,7 @@ h_tree <- drop.tip(h_tree, setdiff(h_tree$tip.label, rownames(coocur)))
 h_dist <- sqrt(cophenetic(h_tree))
 
 # P cophenetic distance
-s_tree <- phy_tree(ps3)
+s_tree <- phy_tree(ps4)
 s_tree$tip.label <- s_tree$tip.label %>%
            str_replace_all(" |-", "_")
 s_tree <- drop.tip(s_tree, setdiff(s_tree$tip.label, colnames(coocur)))
@@ -1993,7 +3051,7 @@ try(dev.off(), silent=TRUE)
 
 ```{r Sodalis cophylo}
 #Flag top abundance sodalis by sample
-top_sodalis <- ps2 %>%
+top_sodalis <- ps3 %>%
   transform_sample_counts(function (x) x/sum(x)) %>%
   speedyseq::psmelt() %>%
   filter(psyllid_spp %in% pruned.tree$tip.label) %>%
@@ -2003,7 +3061,7 @@ top_sodalis <- ps2 %>%
   top_n(1, wt=Abundance) %>%
   mutate(top = TRUE) 
 
-coocur <- ps2 %>%
+coocur <- ps3 %>%
   transform_sample_counts(function (x) x/sum(x)) %>%
   speedyseq::psmelt() %>%
   filter(psyllid_spp %in% pruned.tree$tip.label) %>%
@@ -2032,7 +3090,7 @@ h_tree <- drop.tip(h_tree, setdiff(h_tree$tip.label, rownames(coocur)))
 h_dist <- sqrt(cophenetic(h_tree))
 
 # P cophenetic distance
-s_tree <- phy_tree(ps3)
+s_tree <- phy_tree(ps4)
 s_tree$tip.label <- s_tree$tip.label %>%
            str_replace_all(" |-", "_")
 s_tree <- drop.tip(s_tree, setdiff(s_tree$tip.label, colnames(coocur)))
@@ -2260,7 +3318,7 @@ try(dev.off(), silent=TRUE)
 
 ```{r Arsenophonus cophylo}
 # Subset to top arsenophonus
-top_arse <- ps2 %>%
+top_arse <- ps3 %>%
   transform_sample_counts(function (x) x/sum(x)) %>%
   speedyseq::psmelt() %>%
   filter(psyllid_spp %in% pruned.tree$tip.label) %>%
@@ -2270,7 +3328,7 @@ top_arse <- ps2 %>%
   top_n(1, wt=Abundance) %>%
   mutate(top = TRUE) 
 
-coocur <- ps2 %>%
+coocur <- ps3 %>%
   transform_sample_counts(function (x) x/sum(x)) %>%
   speedyseq::psmelt() %>%
   filter(psyllid_spp %in% pruned.tree$tip.label) %>%
@@ -2299,7 +3357,7 @@ h_tree <- drop.tip(h_tree, setdiff(h_tree$tip.label, rownames(coocur)))
 h_dist <- sqrt(cophenetic(h_tree))
 
 # P cophenetic distance
-s_tree <- phy_tree(ps3)
+s_tree <- phy_tree(ps4)
 s_tree$tip.label <- s_tree$tip.label %>%
            str_replace_all(" |-", "_")
 s_tree <- drop.tip(s_tree, setdiff(s_tree$tip.label, colnames(coocur)))
@@ -2529,7 +3587,7 @@ plant.tree <- read.tree("sample_data/plant_tree.nwk")
 plant.tree  <- drop.tip(plant.tree , "Sophora_microphylla_-kowhai" )
 
 #Prepare co-occurance matrix
-coocur <- sample_data(ps2) %>%
+coocur <- sample_data(ps3) %>%
   as_tibble() %>%
   dplyr::select(psyllid_spp, hostplant_spp) %>%
   filter(!is.na(psyllid_spp)) %>%
@@ -2786,7 +3844,7 @@ try(dev.off(), silent=TRUE)
 
 ```{r Powellia carsonella}
 #Flag top abundance carsonella by sample
-top_carson <- ps2 %>%
+top_carson <- ps3 %>%
   transform_sample_counts(function (x) x/sum(x)) %>%
   speedyseq::psmelt() %>%
   filter(psyllid_spp %in% pruned.tree$tip.label) %>%
@@ -2796,7 +3854,7 @@ top_carson <- ps2 %>%
   top_n(1, wt=Abundance) %>%
   mutate(top = TRUE) 
 
-coocur <- ps2 %>%
+coocur <- ps3 %>%
   subset_samples(psyllid_genus == "Powellia") %>%
   filter_taxa(function(x) mean(x) > 0, TRUE) %>%
   transform_sample_counts(function (x) x/sum(x)) %>%
@@ -2825,7 +3883,7 @@ h_tree <- drop.tip(h_tree, setdiff(h_tree$tip.label, rownames(coocur)))
 h_dist <- sqrt(cophenetic(h_tree))
 
 # P cophenetic distance
-s_tree <- phy_tree(ps3)
+s_tree <- phy_tree(ps4)
 s_tree$tip.label <- s_tree$tip.label %>%
            str_replace_all(" |-", "_")
 s_tree <- drop.tip(s_tree, setdiff(s_tree$tip.label, colnames(coocur)))
@@ -3053,7 +4111,7 @@ plant.tree <- read.tree("sample_data/plant_tree.nwk")
 plant.tree  <- drop.tip(plant.tree , "Sophora_microphylla_-kowhai" )
 
 #Prepare co-occurance matrix
-coocur <- sample_data(ps2) %>%
+coocur <- sample_data(ps3) %>%
   as_tibble() %>%
   filter(psyllid_genus == "Powellia") %>%
   dplyr::select(psyllid_spp, hostplant_spp) %>%
@@ -3301,7 +4359,7 @@ try(dev.off(), silent=TRUE)
 
 ```{r Collection map}
 #Plot on map to confirm points
-envData <- sample_data(ps2) %>%
+envData <- sample_data(ps3) %>%
   as_data_frame() %>%
   dplyr::select(Sample_Name,psyllid_spp, lat, long) %>%
   tibble::column_to_rownames("Sample_Name") %>%
@@ -3347,6 +4405,179 @@ gg.phylomap <- p1 + gg.nzmap
 pdf(file="figs/phylomap.pdf",  width = 15, height = 15, paper="a4r")
   plot(gg.phylomap)
 try(dev.off(), silent=TRUE)
+```
+
+# HOME analysis
+
+In order to run HOME, you need first to make the microbial alignments for each OTU of your empirical microbiota. The first step consists in the usual clustering of the raw reads into OTUs. Thus, the second step makes the OTU alignments for running HOME on them (using our own bash script: for each core OTU, it picks the most abundant sequence for every host and align them).
+
+A one-to-one correspondance between host tips in the tree and the fasta header of each OTU alignment is mandatory. If multiple sequences correspond to a unique host, there are several solutions : (1) you can only keep one sequence (the most abundant, and assumes that the other sequences are likely to come from PCR/sequencing errors); but if you really want to keep these sequences in the analyses, you have to add new tips in the host tree: (2) either by adding new tips with zero branch lengths to match the number of sequences
+
+## Output alignments of OTUs to process
+
+```{r}
+
+# Cluster OTUS
+to_cluster <- ps3 %>%
+  transform_sample_counts(function (x) x/sum(x)) %>%
+  speedyseq::psmelt() %>%
+  filter(psyllid_spp %in% pruned.tree$tip.label) %>%
+ # filter(order == "Enterobacterales" | genus == "Candidatus Carsonella") %>%
+  #filter(class=="Gammaproteobacteria") %>%
+  filter(Abundance > 0) 
+
+dir.create("HOME")
+
+set.seed(666)
+
+seqs <- refseq(ps3)[names(refseq(ps3)) %in% to_cluster$OTU]
+
+#Clusteirng threshold values to test 
+thresholds <- c(0.95, 0.97)
+name_OTU <- vector("list", length=length(thresholds))
+for (i in 1:length(thresholds)){
+  thresh <- thresholds[i]
+  clustered <- cluster_otus(seqs, similarity = thresh) %>%
+    mutate(label = paste0(thresh,"_OTU",sprintf("%03d", cluster)))
+  # Cluster members
+  cluster_members <- clustered%>%
+    left_join(to_cluster %>%
+    left_join(as.data.frame(seqs) %>%
+                as_tibble(rownames="OTU") %>%
+                dplyr::rename(sequence = x)))%>%
+    dplyr::select(label, sequence, species)
+  
+  cluster_members %>%
+    write_csv(paste0("HOME/", thresh,"%_cluster_members.csv"))
+  # Align and write out fastas for each OTU
+  name_OTU[[i]] <- clustered %>%
+    left_join(to_cluster %>%
+    left_join(as.data.frame(seqs) %>%
+                as_tibble(rownames="OTU") %>%
+                dplyr::rename(sequence = x)) %>%
+    dplyr::select(sequence, psyllid_spp)) %>%
+    group_by(cluster) %>%
+    group_split() %>%
+    purrr::map(function(x){
+      out_name <- unique(x$label)
+      out_seqs <- DNAStringSet(x$sequence)
+      names(out_seqs) <- x$psyllid_spp
+      if(length(out_seqs) > 1){
+        aln <- AlignSeqs(out_seqs) 
+        names(aln) <- make.unique(names(aln), sep="_")
+        writeXStringSet(aln, paste0("HOME/alignment_gamma_",out_name,".fas"))
+        return(out_name)
+      }
+    }) %>%
+    unlist()
+}
+
+```
+
+## Submit home script on BASC
+```{bash}
+cd /group/pathogens/IAWS/Personal/Alexp/Metabarcoding/Psyllid_microbiome
+dos2unix submit_home.sh
+dos2unix run_home2.R
+find $(/usr/bin/ls -d $PWD/HOME/) -name '*.fas' -type f | sort | uniq  > HOME_job_index.txt
+joblength=$(cat HOME_job_index.txt | wc -l)
+sbatch --array=1-$joblength submit_home.sh 
+
+```
+
+## HOME results
+```{r}
+
+# Results under independent transmission
+home_res <- fs::dir_ls(path = "HOME/results", glob = "*results_*") %>%
+  #head()%>%
+  purrr::map(read_tsv)%>% 
+  bind_rows(.id="OTU") %>%
+  mutate(
+    threshold = OTU %>% 
+      str_remove("^.*gamma_") %>%
+      str_remove("_OTU.*$"),OTU = OTU %>% 
+           str_remove("^.*_") %>%
+           str_remove(".txt"))
+
+cluster_members <- fs::dir_ls(path = "HOME", glob = "*cluster_members*")  %>%
+  read_csv() %>%
+  mutate(threshold = label %>% str_remove("_.*$"),
+         OTU = label %>% str_remove("^.*_"))# %>%
+  group_by(label, threshold) %>%
+  summarise(tax = paste0(sort(unique(species))))
+
+test <- cluster_members %>%
+  group_by(OTU, label) %>%
+  add_tally() %>%
+  filter(n > 1)%>%
+  left_join(home_res) %>%
+  mutate(failed = is.na(mu))# 
+
+test%>%
+  group_by(threshold, n)%>%
+  summarise(passed = !failed
+            ) %>%
+  ggplot(aes(x = n, fill=passed)) +
+  geom_histogram() +
+  facet_grid(threshold~.)
+
+# LAbel each OTU by the unique taxonomy within them
+
+# Minus log likelihood as a function of the number of host-switches 
+home_res %>%
+  filter(threshold == "0.97")%>%
+  ggplot(aes(x = ksi, y=minloglik, colour=OTU))+
+  #geom_line()+
+  geom_point(data = home_res %>% group_by(OTU) %>% slice_min(minloglik))+
+  #facet_wrap(~OTU) +
+  theme(legend.position = "none")+
+  labs(x = "Number of host switches",
+       y= "-log(Likelihood)")
+
+# Estimated substitution rate as a function of the number of switches:
+home_res %>%
+    filter(threshold == "0.97")%>%
+  ggplot(aes(x = ksi, y=mu, colour=OTU))+
+  geom_line()+
+    theme(legend.position = "none")+
+  #facet_wrap(~OTU) +
+  labs(x = "Number of host switches",
+       y= "Mutation rate")
+
+# Find those taxa with no host switches
+test <- home_res %>%
+  group_by(OTU) %>% 
+  slice_min(minloglik) %>%
+    left_join(cluster_members %>% dplyr::rename(OTU = label)) %>%
+  mutate(vert =  ksi == 0)
+
+# Strict vertical transmission model
+vert_res <- fs::dir_ls(path = "HOME/result", glob = "*model_selection_vertical*") %>%
+  purrr::map(read_tsv) %>% 
+  bind_rows(.id="OTU") %>%
+  mutate(OTU = OTU %>% 
+           str_remove("^.*_") %>%
+           str_remove(".txt"))
+
+vert_res %>%
+  ggplot()+
+  stat_function(fun = dchisq, args = list(df = 1)) +
+  geom_vline(aes(xintercept = `-2log(Likelihood_ratio)`), linetype = "dashed", size = 1.5, colour = "#d35400")+
+  geom_vline(xintercept = qchisq(0.95, df = 1), size = 0.8, colour = "#154360") + 
+  geom_vline(xintercept = qchisq(0.99, df = 1), size = 0.8, colour = "#5499c7") +
+  facet_wrap(~OTU, ncol=1) 
+
+# Find those OTUs that are strictly inherited
+final_home_res <- vert_res %>%
+  left_join(home_res %>%
+    group_by(OTU) %>% 
+    slice_min(minloglik)) %>%
+  mutate(signif = case_when(
+    `p-value` > qchisq(0.95, df = 1) ~ TRUE,
+    TRUE ~ FALSE
+  ))
+
 ```
 
 # Sessioninfo
