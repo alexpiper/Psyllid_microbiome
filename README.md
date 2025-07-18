@@ -1,6 +1,6 @@
 # Psyllid_microbiome
 
-This repository hosts the R based reproducible workflow that performed the microbiome analyses presented for the manuscript: Martoni et al 2020
+This repository hosts the R based reproducible workflow that performed the microbiome analyses presented for the manuscript: _Martoni, F., Bulman, S. R., Piper, A. M., Pitman, A., Taylor, G. S., & Armstrong, K. F. (2023). Insect phylogeny structures the bacterial communities in the microbiome of psyllids (Hemiptera: Psylloidea) in Aotearoa New Zealand. PLoS One, 18(5), e0285587._
 
 The reproducible workflow to conduct the analyses is seperated into 2 components, firstly the [bioinformatic](https://alexpiper.github.io/Psyllid_microbiome/Bioinformatics.html) processing of sequencing reads, and then the [statistical](https://alexpiper.github.io/Psyllid_microbiome/Statistics.html) analyses.
 
